@@ -2,7 +2,6 @@ import time
 
 class FallRecovery:
     def __init__(self, session):
-        # Store services as class attributes
         self.motion = session.service("ALMotion")
         self.posture = session.service("ALRobotPosture")
         self.tts = session.service("ALTextToSpeech")
@@ -25,10 +24,10 @@ class FallRecovery:
                     success = self.posture.goToPosture("StandInit", 0.6)
 
                     if success:
-                        print("NAO successfully recovered from the fall!")
+                        print("Fall recovered!")
                         self.tts.say("I am back on my feet and ready to go.")
                     else:
-                        print("Recovery failed. Motors may have overheated or jammed.")
+                        print("Recovery failed.")
                         self.tts.say("I could not stand up. Please check my joints.")
 
                 time.sleep(1.0)
