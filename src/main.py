@@ -5,15 +5,16 @@ import qi
 from modules.fall_recovery import FallRecovery
 from modules.voice_recognition import VoiceRecognition
 
-ip = "192.168.0.105"
-port = 9559
+IP = "192.168.0.105"
+PORT = 9559
 
-# Example command callback
+
 def handle_hello():
     print("Executing hello action!")
 
+
 def main():
-    connection_url = f"tcp://{ip}:{port}"
+    connection_url = f"tcp://{IP}:{PORT}"
     session = qi.Session()
 
     try:
@@ -21,27 +22,31 @@ def main():
         session.connect(connection_url)
         print("Successfully connected.")
     except Exception as e:
-        print(f"Failed to connect to NAO at: {connection_url}")
+        print(f"Failed to connect to NAO at: {connection_url}\nError: {e}")
         sys.exit(1)
 
+    # 1. Start Fall Recovery in background thread
     fall = FallRecovery(session)
-    fall.run()
+    fall.start()
 
+    # 2. Start Voice Recognition module
     voice = VoiceRecognition(session)
-
-    # FIX 1: Register at least one command before starting
     voice.register_command("hello", handle_hello)
-
     voice.start()
 
-    # FIX 2: Keep the main thread alive so event listeners remain active
-    print("\n[System] Voice recognition running. Press Ctrl+C to stop.")
+    # 3. Main thread sleep loop keeps process alive indefinitely
+    print("\n[System] All modules initialized and running continuously.")
+    print("[System] Press Ctrl+C to stop.")
+
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\n[System] Stopping...")
+        print("\n[System] Shutting down services...")
+        fall.stop()
         voice.stop()
+        print("[System] Closed successfully.")
+
 
 if __name__ == "__main__":
     main()

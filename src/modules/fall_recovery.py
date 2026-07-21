@@ -1,36 +1,45 @@
+import threading
 import time
 
-class FallRecovery:
+
+class FallRecovery(threading.Thread):
     def __init__(self, session):
+        super(FallRecovery, self).__init__()
+        self.daemon = True  # Allows thread to close automatically when main program exits
         self.motion = session.service("ALMotion")
         self.posture = session.service("ALRobotPosture")
         self.tts = session.service("ALTextToSpeech")
+        self.running = False
 
     def run(self):
-        print("Fall Recovery Daemon is now monitoring the robot...")
-        try:
-            while True:
-                # Check the general category of the robot's physical layout
+        """Runs concurrently in the background."""
+        self.running = True
+        print("[FallRecovery] Daemon started. Monitoring posture in background...")
+
+        while self.running:
+            try:
+                # Check current posture family
                 current_family = self.posture.getPostureFamily()
 
-                # If NAO is detected lying down on the ground
                 if current_family in ["LyingBelly", "LyingBack"]:
-                    print(f"Fall detected! Current posture family: {current_family}")
+                    print(f"[FallRecovery] Fall detected! Posture: {current_family}")
                     self.tts.say("Oops! I have fallen down. Give me a second to stand back up.")
 
                     self.motion.wakeUp()
-
-                    # Trigger the intelligent get-up sequence (blocking call)
                     success = self.posture.goToPosture("StandInit", 0.6)
 
                     if success:
-                        print("Fall recovered!")
+                        print("[FallRecovery] Fall recovered successfully!")
                         self.tts.say("I am back on my feet and ready to go.")
                     else:
-                        print("Recovery failed.")
+                        print("[FallRecovery] Recovery failed.")
                         self.tts.say("I could not stand up. Please check my joints.")
 
-                time.sleep(1.0)
+            except Exception as e:
+                print(f"[FallRecovery] Error during monitor loop: {e}")
 
-        except KeyboardInterrupt:
-            print("\nFall Recovery Daemon stopped by user.")
+            time.sleep(1.0)
+
+    def stop(self):
+        """Stops the monitoring loop gracefully."""
+        self.running = False

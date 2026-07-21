@@ -21,6 +21,7 @@ class VoiceRecognition(object):
         # Internal State Management
         self.state = "WAITING_FOR_WAKE"  # 'WAITING_FOR_WAKE' or 'WAITING_FOR_COMMAND'
         self.timeout_timer = None
+        self.subscriber = None
 
     def register_command(self, phrase, callback_function):
         """Register a command keyword and its corresponding function."""
@@ -42,7 +43,7 @@ class VoiceRecognition(object):
 
         self.asr.subscribe(self.service_name)
         self.is_listening = True
-        print("[Voice] Listening... Say 'Hey Nao' to wake me up.")
+        print("[Voice] Listening active. Say 'Hey Nao' to activate commands.")
 
     def _set_wake_mode(self):
         """State 1: Listen ONLY for 'Hey Nao'."""
@@ -67,21 +68,23 @@ class VoiceRecognition(object):
 
         # Set eye LEDs to Bright Green (Active Listening)
         self.leds.fadeRGB("FaceLeds", 0x00FF00, 0.2)
-        self.asr.pause(False)
 
-        # Audio Feedback
+        # FIX 1: Speak FIRST while speech recognition is paused
         self.tts.say("Yes?")
 
-        # Start a 6-second timeout timer in case the user doesn't say a command
+        # FIX 2: Unpause ASR ONLY AFTER NAO finishes speaking
+        self.asr.pause(False)
+
+        # Start the 6-second timeout timer after speaking completes
         if self.timeout_timer:
             self.timeout_timer.cancel()
         self.timeout_timer = Timer(6.0, self._on_command_timeout)
         self.timeout_timer.start()
 
     def _on_command_timeout(self):
-        """Triggered if user says 'Hey Nao' but doesn't give a command within 6s."""
+        """Triggered if user doesn't give a command within 6s."""
         print("[Voice] Command timeout reached.")
-        self.tts.say("Oops!. I didn't hear a command.")
+        self.tts.say("Oops! I didn't hear a command.")
         self._set_wake_mode()
 
     def _on_word_recognized(self, value):
@@ -89,36 +92,28 @@ class VoiceRecognition(object):
         if not value or len(value) < 2:
             return
 
-        # Strip out NAOqi word-spotting markers (<...>) and trim whitespace
         phrase = value[0].lower().replace("<...>", "").strip()
         confidence = value[1]
 
-        # Ignore low-confidence hits
-        if confidence < 0.45:
+        # Debug print so you can see exactly what NAO hears in console
+        print(f"[Voice Debug] [{self.state}] Detected: '{phrase}' (Confidence: {confidence:.2f})")
+
+        # FIX 3: Lower confidence requirement for short commands like 'exit'
+        threshold = 0.35 if self.state == "WAITING_FOR_COMMAND" else 0.45
+        if confidence < threshold:
             return
 
-        print(
-            f"[Voice] [{self.state}] Heard: '{phrase}' (Confidence: {confidence:.2f})"
-        )
-
-        # ----------------------------------------------------
         # STATE 1: Waiting for 'Hey Nao'
-        # ----------------------------------------------------
         if self.state == "WAITING_FOR_WAKE":
-            # Check if wake word is in the cleaned phrase
             if self.wake_word in phrase:
                 print("[Voice] Wake word detected!")
                 self._set_command_mode()
 
-        # ----------------------------------------------------
         # STATE 2: Waiting for Command
-        # ----------------------------------------------------
         elif self.state == "WAITING_FOR_COMMAND":
-            # Cancel timer since user said something
             if self.timeout_timer:
                 self.timeout_timer.cancel()
 
-            # Check matching command keys
             matched_command = None
             for cmd in self.commands:
                 if cmd in phrase:
@@ -127,23 +122,22 @@ class VoiceRecognition(object):
 
             if matched_command:
                 self.asr.pause(True)
-                # Change eyes to White while processing action
                 self.leds.fadeRGB("FaceLeds", 0xFFFFFF, 0.1)
 
-                # Execute registered callback function
-                self.commands[matched_command]()
+                try:
+                    self.commands[matched_command]()
+                except Exception as e:
+                    print(f"[Voice] Callback execution error: {e}")
 
-                # Return back to wake mode after action finishes
                 self._set_wake_mode()
 
             elif "cancel" in phrase:
-                self.tts.say("Cancelled.")
+                self.tts.say("Command cancelled.")
                 self._set_wake_mode()
 
             elif "exit" in phrase:
                 self.tts.say("Goodbye!")
-                self.stop()
-                sys.exit(0)
+                self._set_wake_mode()
 
     def stop(self):
         """Cleanup resources."""
