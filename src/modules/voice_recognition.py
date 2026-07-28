@@ -98,7 +98,7 @@ class VoiceRecognition(object):
         # Debug print so you can see exactly what NAO hears in console
         print(f"[Voice Debug] [{self.state}] Detected: '{phrase}' (Confidence: {confidence:.2f})")
 
-        # FIX 3: Lower confidence requirement for short commands like 'exit'
+        # Lower confidence requirement for short commands like 'exit'
         threshold = 0.35 if self.state == "WAITING_FOR_COMMAND" else 0.45
         if confidence < threshold:
             return
