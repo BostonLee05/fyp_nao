@@ -11,12 +11,6 @@ app = Flask(__name__)
 IP = "192.168.0.106"
 PORT = 9559
 
-# Global references for your robot services
-session = None
-fall = None
-voice = None
-
-
 def handle_hello():
     print("Executing hello action!")
 
