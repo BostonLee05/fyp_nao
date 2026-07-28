@@ -3,7 +3,6 @@ import time
 import qi
 from flask import Flask, render_template, request, jsonify
 
-# Import your custom modules
 from modules.fall_recovery import FallRecovery
 from modules.voice_recognition import VoiceRecognition
 
@@ -23,8 +22,6 @@ def handle_hello():
 
 
 def initialize_robot():
-    """Initializes the qi session and starts background modules."""
-    global session, fall, voice
 
     connection_url = f"tcp://{IP}:{PORT}"
     session = qi.Session()
@@ -77,7 +74,6 @@ if __name__ == "__main__":
     initialize_robot()
 
     # Second, hand over control to Flask.
-    # Flask replaces your `while True` loop and keeps the script alive indefinitely.
     print("[System] Launching web server. Press Ctrl+C to stop.")
     try:
         app.run(host='0.0.0.0', port=5000, debug=False)
