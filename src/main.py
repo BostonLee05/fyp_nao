@@ -22,6 +22,7 @@ def handle_hello():
 
 
 def initialize_robot():
+    global session
 
     connection_url = f"tcp://{IP}:{PORT}"
     session = qi.Session()
