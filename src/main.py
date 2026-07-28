@@ -1,19 +1,31 @@
 import sys
 import time
 import qi
+from flask import Flask, render_template, request, jsonify
 
+# Import your custom modules
 from modules.fall_recovery import FallRecovery
 from modules.voice_recognition import VoiceRecognition
 
-IP = "192.168.0.105"
+app = Flask(__name__)
+
+IP = "192.168.0.106"
 PORT = 9559
+
+# Global references for your robot services
+session = None
+fall = None
+voice = None
 
 
 def handle_hello():
     print("Executing hello action!")
 
 
-def main():
+def initialize_robot():
+    """Initializes the qi session and starts background modules."""
+    global session, fall, voice
+
     connection_url = f"tcp://{IP}:{PORT}"
     session = qi.Session()
 
@@ -34,19 +46,48 @@ def main():
     voice.register_command("hello", handle_hello)
     voice.start()
 
-    # 3. Main thread sleep loop keeps process alive indefinitely
-    print("\n[System] All modules initialized and running continuously.")
-    print("[System] Press Ctrl+C to stop.")
+    print("\n[System] All robot modules initialized and running continuously.")
+
+
+# --- Flask Web Routes ---
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+
+@app.route('/say', methods=['POST'])
+def say_something():
+    data = request.get_json()
+    text = data.get('text', '')
 
     try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\n[System] Shutting down services...")
-        fall.stop()
-        voice.stop()
-        print("[System] Closed successfully.")
+        # Pull the ALTextToSpeech service using the global qi session
+        tts = session.service("ALTextToSpeech")
+        tts.say(str(text))
+        return jsonify({"status": "success", "message": "NAO spoke."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to speak: {e}"})
 
+
+# --- Application Entry Point ---
 
 if __name__ == "__main__":
-    main()
+    # First, spin up all robot configurations and background threads
+    initialize_robot()
+
+    # Second, hand over control to Flask.
+    # Flask replaces your `while True` loop and keeps the script alive indefinitely.
+    print("[System] Launching web server. Press Ctrl+C to stop.")
+    try:
+        app.run(host='0.0.0.0', port=5000, debug=False)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # Triggers cleanly when you shut down the Flask server
+        print("\n[System] Shutting down services...")
+        if fall:
+            fall.stop()
+        if voice:
+            voice.stop()
+        print("[System] Closed successfully.")
