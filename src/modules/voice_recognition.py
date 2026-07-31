@@ -1,25 +1,28 @@
 import sys
+import threading
 from threading import Timer
 
 class VoiceRecognition(object):
-
-    def __init__(self, session):
+    def __init__(self, session, speaker):
         self.session = session
+        self.speaker = speaker
 
-        self.asr = self.session.service("ALSpeechRecognition")
         self.memory = self.session.service("ALMemory")
-        self.tts = self.session.service("ALTextToSpeech")
         self.leds = self.session.service("ALLeds")
+
+        # Check if running in Virtual Mode
+        self.is_virtual = self.speaker.is_virtual
+        try:
+            self.asr = self.session.service("ALSpeechRecognition")
+        except Exception:
+            self.asr = None
+            print("[Voice] Virtual NAO detected.")
 
         self.service_name = "VoiceRecognitionModule"
         self.is_listening = False
-
-        # Wake Word and Command Storage
-        self.wake_word = "heynao"
+        self.wake_words = ["hey nao", "hey now", "hi nao", "hey know"]
         self.commands = {}
-
-        # Internal State Management
-        self.state = "WAITING_FOR_WAKE"  # 'WAITING_FOR_WAKE' or 'WAITING_FOR_COMMAND'
+        self.state = "WAITING_FOR_WAKE"
         self.timeout_timer = None
         self.subscriber = None
 
@@ -32,60 +35,69 @@ class VoiceRecognition(object):
         """Starts the speech recognition service."""
         if not self.commands:
             print("[WARN] No commands registered!")
-            return
 
-        # Connect ALMemory event
         self.subscriber = self.memory.subscriber("WordRecognized")
         self.subscriber.signal.connect(self._on_word_recognized)
-
-        # Set initial mode to listen for Wake Word only
         self._set_wake_mode()
-
-        self.asr.subscribe(self.service_name)
         self.is_listening = True
         print("[Voice] Listening active. Say 'Hey Nao' to activate commands.")
 
     def _set_wake_mode(self):
-        """State 1: Listen ONLY for 'Hey Nao'."""
         self.state = "WAITING_FOR_WAKE"
 
-        self.asr.pause(True)
-        self.asr.setLanguage("English")
-        self.asr.setVocabulary([self.wake_word], True)  # Word spotting enabled
+        if self.asr:
+            try:
+                self.asr.pause(True)
+                self.asr.setLanguage("English")
+                self.asr.setVocabulary(self.wake_words, True)
+                self.asr.pause(False)
+            except Exception:
+                pass
 
-        # Set eye LEDs to Dim Blue (Standby Mode)
-        self.leds.fadeRGB("FaceLeds", 0x0000FF, 0.2)
-        self.asr.pause(False)
+        try:
+            self.leds.fadeRGB("FaceLeds", 0x0000FF, 0.2)
+        except Exception:
+            pass
 
     def _set_command_mode(self):
-        """State 2: Listen for registered commands."""
+        """State 2: Listen for commands."""
         self.state = "WAITING_FOR_COMMAND"
+        print("\n[Voice State] ---> WAITING_FOR_COMMAND")
 
-        cmd_vocabulary = list(self.commands.keys()) + ["cancel", "exit"]
+        if self.asr:
+            try:
+                cmd_vocabulary = list(self.commands.keys()) + ["cancel", "exit"]
+                self.asr.pause(True)
+                self.asr.setVocabulary(cmd_vocabulary, True)
+            except Exception:
+                pass
 
-        self.asr.pause(True)
-        self.asr.setVocabulary(cmd_vocabulary, True)
+        try:
+            self.leds.fadeRGB("FaceLeds", 0x00FF00, 0.2)
+        except Exception:
+            pass
 
-        # Set eye LEDs to Bright Green (Active Listening)
-        self.leds.fadeRGB("FaceLeds", 0x00FF00, 0.2)
+        # Speaks 'Yes?' without blocking
+        self.speaker.speak("Yes?")
 
-        # FIX 1: Speak FIRST while speech recognition is paused
-        self.tts.say("Yes?")
+        if self.asr:
+            try:
+                self.asr.pause(False)
+            except Exception:
+                pass
 
-        # FIX 2: Unpause ASR ONLY AFTER NAO finishes speaking
-        self.asr.pause(False)
-
-        # Start the 6-second timeout timer after speaking completes
+        # 10 second window to hear command
         if self.timeout_timer:
             self.timeout_timer.cancel()
-        self.timeout_timer = Timer(6.0, self._on_command_timeout)
+        self.timeout_timer = Timer(10.0, self._on_command_timeout)
         self.timeout_timer.start()
 
     def _on_command_timeout(self):
-        """Triggered if user doesn't give a command within 6s."""
-        print("[Voice] Command timeout reached.")
-        self.tts.say("Oops! I didn't hear a command.")
-        self._set_wake_mode()
+        """Triggered if user doesn't give a command within 10s."""
+        if self.state == "WAITING_FOR_COMMAND":
+            print("[Voice] Command timeout reached.")
+            self.speaker.speak("Oops! I didn't hear a command.")
+            self._set_wake_mode()
 
     def _on_word_recognized(self, value):
         """Callback triggered whenever NAO detects speech."""
@@ -95,24 +107,23 @@ class VoiceRecognition(object):
         phrase = value[0].lower().replace("<...>", "").strip()
         confidence = value[1]
 
-        # Debug print so you can see exactly what NAO hears in console
         print(f"[Voice Debug] [{self.state}] Detected: '{phrase}' (Confidence: {confidence:.2f})")
 
-        # Lower confidence requirement for short commands like 'exit'
         threshold = 0.35 if self.state == "WAITING_FOR_COMMAND" else 0.45
         if confidence < threshold:
             return
 
         # STATE 1: Waiting for 'Hey Nao'
         if self.state == "WAITING_FOR_WAKE":
-            if self.wake_word in phrase:
+            if any(w in phrase for w in self.wake_words):
                 print("[Voice] Wake word detected!")
                 self._set_command_mode()
 
         # STATE 2: Waiting for Command
         elif self.state == "WAITING_FOR_COMMAND":
-            if self.timeout_timer:
-                self.timeout_timer.cancel()
+            # Ignore NAO's own 'yes' audio picked up by mic
+            if phrase == "yes":
+                return
 
             matched_command = None
             for cmd in self.commands:
@@ -121,8 +132,15 @@ class VoiceRecognition(object):
                     break
 
             if matched_command:
-                self.asr.pause(True)
-                self.leds.fadeRGB("FaceLeds", 0xFFFFFF, 0.1)
+                if self.timeout_timer:
+                    self.timeout_timer.cancel()
+
+                print(f"[Voice] Executing command: '{matched_command}'")
+
+                try:
+                    self.leds.fadeRGB("FaceLeds", 0xFFFFFF, 0.1)
+                except Exception:
+                    pass
 
                 try:
                     self.commands[matched_command]()
@@ -132,11 +150,15 @@ class VoiceRecognition(object):
                 self._set_wake_mode()
 
             elif "cancel" in phrase:
-                self.tts.say("Command cancelled.")
+                if self.timeout_timer:
+                    self.timeout_timer.cancel()
+                self.speaker.speak("Command cancelled.")
                 self._set_wake_mode()
 
             elif "exit" in phrase:
-                self.tts.say("Goodbye!")
+                if self.timeout_timer:
+                    self.timeout_timer.cancel()
+                self.speaker.speak("Goodbye!")
                 self._set_wake_mode()
 
     def stop(self):
@@ -145,10 +167,14 @@ class VoiceRecognition(object):
             self.timeout_timer.cancel()
 
         if self.is_listening:
+            if self.asr:
+                try:
+                    self.asr.unsubscribe(self.service_name)
+                except Exception:
+                    pass
             try:
-                self.asr.unsubscribe(self.service_name)
-                self.is_listening = False
                 self.leds.reset("FaceLeds")
-                print("[Voice] Unsubscribed speech recognition service.")
-            except Exception as e:
-                print(f"[Voice] Cleanup error: {e}")
+            except Exception:
+                pass
+            self.is_listening = False
+            print("[Voice] Unsubscribed speech recognition service.")
