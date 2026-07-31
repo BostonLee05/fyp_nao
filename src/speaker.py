@@ -4,88 +4,88 @@ import threading
 import pyttsx3
 
 
-class Speaker(object):
-    """Centralized, thread-safe speech module for Virtual and Real NAO."""
+class Speaker:
+    """Thread-safe speech module for Virtual and Real NAO."""
 
     def __init__(self, session, force_virtual=None):
-        self.session = session
-        self.tts = self.session.service("ALTextToSpeech")
+        # Always try to fetch ALTextToSpeech for visual bubbles (if session exists)
+        self.tts = None
+        if session:
+            try:
+                self.tts = session.service("ALTextToSpeech")
+            except Exception:
+                self.tts = None
 
-        # Detect Virtual NAOqi
-        if force_virtual is not None:
-            self.is_virtual = force_virtual
+        # Determine virtual status
+        if force_virtual is True:
+            self.is_virtual = True
         else:
             try:
-                self.session.service("ALSpeechRecognition")
+                # Check for real robot service availability
+                session.service("ALSpeechRecognition")
                 self.is_virtual = False
             except Exception:
                 self.is_virtual = True
 
         if self.is_virtual:
-            print(
-                "[Speaker] Virtual NAO detected: Laptop speaker audio active."
-            )
             self.speech_queue = queue.Queue()
-            self.worker_thread = threading.Thread(
+            # Start the persistent loop worker once during initialization
+            threading.Thread(
                 target=self._laptop_tts_worker, daemon=True
-            )
-            self.worker_thread.start()
-        else:
-            print("[Speaker] Real NAO detected: Hardware speakers active.")
+            ).start()
 
     def _laptop_tts_worker(self):
-        """Single worker thread processing laptop speech sequentially."""
-        # Initialize COM on Windows background thread to prevent sapi5 locks
+        """Worker thread processing laptop speech sequentially and looping forever."""
         if sys.platform.startswith("win"):
-            try:
-                import ctypes
+            import ctypes
 
+            try:
                 ctypes.windll.ole32.CoInitialize(None)
             except Exception:
                 pass
 
-        # Initialize pyttsx3 engine ONCE for the worker thread lifetime
-        engine = None
-        try:
-            engine = pyttsx3.init()
-            engine.setProperty("rate", 160)
-        except Exception as e:
-            print(f"[Speaker Error] Could not initialize pyttsx3: {e}")
-
         while True:
+            # This blocks and loops indefinitely, waiting for new text in the queue
             text = self.speech_queue.get()
-            if text is None:
-                break
-
-            if engine:
-                try:
-                    engine.say(str(text))
-                    engine.runAndWait()
-                except Exception as e:
-                    print(f"[Speaker Error] Laptop TTS failed: {e}")
-                    # Re-initialize engine if COM pipe broke
-                    try:
-                        engine = pyttsx3.init()
-                        engine.setProperty("rate", 160)
-                        engine.say(str(text))
-                        engine.runAndWait()
-                    except Exception:
-                        pass
-
-            self.speech_queue.task_done()
+            try:
+                engine = pyttsx3.init()
+                engine.setProperty("rate", 160)
+                engine.say(str(text))
+                engine.runAndWait()
+                # Explicitly delete the engine object to release the COM system lock
+                del engine
+            except Exception as e:
+                print(f"[Speaker Error] pyttsx3 failed: {e}")
+            finally:
+                self.speech_queue.task_done()
 
     def speak(self, text):
-        """Non-blocking speech trigger: works across all modules."""
-
-        # 1. Trigger NAOqi speech bubble / real robot hardware speaker
-        def _nao_say():
-            try:
-                self.tts.say(str(text))
-            except Exception as e:
-                print(f"[Speaker Error] NAOqi TTS failed: {e}")
-
-        threading.Thread(target=_nao_say, daemon=True).start()
-
-        # 2. Add to laptop audio queue if running in Virtual Mode
+        """Non-blocking speech trigger across all environments."""
         if self.is_virtual:
+            # 1. Trigger laptop audio via pyttsx3
             self.speech_queue.put(text)
+
+            # 2. Trigger NAOqi speech bubble on the virtual robot avatar
+            if self.tts:
+
+                def _virtual_bubble():
+                    try:
+                        self.tts.say(str(text))
+                    except Exception as e:
+                        print(
+                            f"[Speaker Error] Virtual speech bubble failed: {e}"
+                        )
+
+                threading.Thread(
+                    target=_virtual_bubble, daemon=True
+                ).start()
+        else:
+            # For Real NAO: spawn a background thread only for the NAOqi driver
+            def _nao_say():
+                try:
+                    if self.tts:
+                        self.tts.say(str(text))
+                except Exception as e:
+                    print(f"[Speaker Error] NAOqi TTS failed: {e}")
+
+            threading.Thread(target=_nao_say, daemon=True).start()
