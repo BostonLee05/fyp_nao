@@ -69,7 +69,7 @@ def main():
                 print(f" Error: {e}")
 
     except KeyboardInterrupt:
-        print("\n Stopped microphone bridge. Goodbye!")
+        print("\n Stopped microphone bridge.")
 
 
 if __name__ == "__main__":

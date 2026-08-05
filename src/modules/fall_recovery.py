@@ -28,40 +28,56 @@ class FallRecovery(threading.Thread):
                     self.is_recovering = True
                     print(f"[FallRecovery] ALERT: Fall detected! Posture: {current_family}")
 
-                    # killAll Running Tasks
+                    # 1. Stop active behaviors
                     try:
                         bm = self.session.service("ALBehaviorManager")
                         if bm.getRunningBehaviors():
-                            print("[FallRecovery] Stopping active behaviors ...")
+                            print("[FallRecovery] Stopping active behaviors...")
                             bm.stopAllBehaviors()
                     except Exception as e:
                         print(f"[FallRecovery] Error stopping behaviors: {e}")
 
+                    # 2. Kill active motion tasks
                     try:
                         self.motion.killAll()
                     except Exception as e:
                         print(f"[FallRecovery] Error killing motions: {e}")
 
-                    self.speaker.speak("Oops! I have fallen down. Stopping all movements to stand up.")
-
                     time.sleep(0.5)
-                    self.motion.wakeUp()
 
-                    # Attempt standing posture
-                    success = self.posture.goToPosture("StandInit", 0.6)
+                    # 3. Notify user
+                    try:
+                        self.speaker.speak("Oops! I have fallen down. Stopping all movements to stand up.")
+                    except Exception as e:
+                        print(f"[FallRecovery] Error speaking: {e}")
 
-                    if success:
-                        print("[FallRecovery] Fall recovered successfully!")
-                        self.speaker.speak("I am back on my feet and ready to go.")
-                    else:
-                        print("[FallRecovery] Recovery failed.")
-                        self.speaker.speak("I could not stand up. Please check my joints.")
+                    # 4. Turn stiffness back ON directly (Replaces wakeUp)
+                    print("[FallRecovery] Enabling motor stiffness...")
+                    try:
+                        self.motion.setStiffnesses("Body", 1.0)
+                        time.sleep(0.5)
+                    except Exception as e:
+                        print(f"[FallRecovery] Error setting stiffness: {e}")
+
+                    # 5. Attempt standing posture (ALRobotPosture handles recovery routines)
+                    print("[FallRecovery] Attempting stand recovery...")
+                    try:
+                        success = self.posture.goToPosture("StandInit", 0.6)
+
+                        if success:
+                            print("[FallRecovery] Fall recovered successfully!")
+                            self.speaker.speak("I am back on my feet and ready to go.")
+                        else:
+                            print("[FallRecovery] Recovery failed.")
+                            self.speaker.speak("I could not stand up. Please check my joints.")
+                    except Exception as e:
+                        print(f"[FallRecovery] Error during posture recovery: {e}")
 
                     time.sleep(5.0)
                     self.is_recovering = False
 
             except Exception as e:
-                print(f"[FallRecovery] Error: {e}")
+                print(f"[FallRecovery] Loop Error: {e}")
 
             time.sleep(1.0)
 

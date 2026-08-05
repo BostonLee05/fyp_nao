@@ -5,16 +5,15 @@ import pyttsx3
 
 
 class Speaker:
-    """Thread-safe speech module for Virtual and Real NAO."""
-
     def __init__(self, session, force_virtual=None):
-        # Always try to fetch ALTextToSpeech for visual bubbles (if session exists)
         self.tts = None
+
         if session:
             try:
                 self.tts = session.service("ALTextToSpeech")
             except Exception:
                 self.tts = None
+
 
         # Determine virtual status
         if force_virtual is True:
@@ -29,13 +28,11 @@ class Speaker:
 
         if self.is_virtual:
             self.speech_queue = queue.Queue()
-            # Start the persistent loop worker once during initialization
             threading.Thread(
                 target=self._laptop_tts_worker, daemon=True
             ).start()
 
     def _laptop_tts_worker(self):
-        """Worker thread processing laptop speech sequentially and looping forever."""
         if sys.platform.startswith("win"):
             import ctypes
 

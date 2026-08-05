@@ -1,11 +1,24 @@
 import sys
+import time
 import threading
 from threading import Timer
 
+try:
+    from modules.gemini_service import GeminiService
+except ImportError:
+    from gemini_service import GeminiService
+
 class VoiceRecognition(object):
-    def __init__(self, session, speaker):
+    def __init__(self, session, speaker, gemini_service=None):
         self.session = session
         self.speaker = speaker
+
+        if gemini_service is not None:
+            self.gemini_service = gemini_service
+            print("[Voice] Linked provided GeminiService instance.")
+        else:
+            print("[Voice] No Gemini instance provided. Creating default GeminiService...")
+            self.gemini_service = GeminiService()
 
         self.memory = self.session.service("ALMemory")
         self.leds = self.session.service("ALLeds")
@@ -20,6 +33,7 @@ class VoiceRecognition(object):
 
         self.service_name = "VoiceRecognitionModule"
         self.is_listening = False
+
         self.wake_words = ["hey nao", "hey now", "hi nao", "hey know"]
         self.commands = {}
         self.state = "WAITING_FOR_WAKE"
@@ -59,7 +73,7 @@ class VoiceRecognition(object):
         except Exception:
             pass
 
-    def _set_command_mode(self):
+    def _set_command_mode(self, prompt=True):
         """State 2: Listen for commands."""
         self.state = "WAITING_FOR_COMMAND"
         print("\n[Voice State] ---> WAITING_FOR_COMMAND")
@@ -77,8 +91,9 @@ class VoiceRecognition(object):
         except Exception:
             pass
 
-        # Speaks 'Yes?' without blocking
-        self.speaker.speak("Yes?")
+        # Only speak "Yes?" on the initial wake-up trigger
+        if prompt:
+            self.speaker.speak("Yes?")
 
         if self.asr:
             try:
@@ -96,7 +111,7 @@ class VoiceRecognition(object):
         """Triggered if user doesn't give a command within 10s."""
         if self.state == "WAITING_FOR_COMMAND":
             print("[Voice] Command timeout reached.")
-            self.speaker.speak("Oops! I didn't hear a command.")
+            self.speaker.speak("Oops! I didn't hear a command. Please say it again.")
             self._set_wake_mode()
 
     def _on_word_recognized(self, value):
@@ -117,12 +132,19 @@ class VoiceRecognition(object):
         if self.state == "WAITING_FOR_WAKE":
             if any(w in phrase for w in self.wake_words):
                 print("[Voice] Wake word detected!")
-                self._set_command_mode()
+                self._set_command_mode(prompt=True)
 
         # STATE 2: Waiting for Command
         elif self.state == "WAITING_FOR_COMMAND":
             # Ignore NAO's own 'yes' audio picked up by mic
             if phrase == "yes":
+                return
+
+            if "exit" in phrase:
+                if self.timeout_timer:
+                    self.timeout_timer.cancel()
+                self.speaker.speak("Goodbye!")
+                self._set_wake_mode()
                 return
 
             matched_command = None
@@ -147,19 +169,33 @@ class VoiceRecognition(object):
                 except Exception as e:
                     print(f"[Voice] Callback execution error: {e}")
 
-                self._set_wake_mode()
+                self._set_command_mode(prompt=False)
 
-            elif "cancel" in phrase:
+            else:
+                query_prompt = phrase.replace("yes", "").strip()
+
+                if not query_prompt:
+                    return
+
                 if self.timeout_timer:
                     self.timeout_timer.cancel()
-                self.speaker.speak("Command cancelled.")
-                self._set_wake_mode()
 
-            elif "exit" in phrase:
-                if self.timeout_timer:
-                    self.timeout_timer.cancel()
-                self.speaker.speak("Goodbye!")
-                self._set_wake_mode()
+                    self.state = "PROCESSING_GEMINI"
+
+                def handle_gemini_query():
+                    print(f"[Voice -> Gemini] Processing query: '{query_prompt}'")
+                    self.speaker.speak("I'm thinking...")
+
+                    if self.gemini_service:
+                        ai_reply = self.gemini_service.ask(query_prompt)
+                        print(f"[Gemini Response] {ai_reply}")
+                        self.speaker.speak(ai_reply)
+                    else:
+                        print("[Voice Error] Failed to generate Gemini response.")
+
+                    self._set_command_mode(prompt=False)
+
+                threading.Thread(target=handle_gemini_query).start()
 
     def stop(self):
         """Cleanup resources."""

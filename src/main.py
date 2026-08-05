@@ -6,6 +6,7 @@ from flask import Flask, render_template, request, jsonify
 from speaker import Speaker
 from modules.fall_recovery import FallRecovery
 from modules.voice_recognition import VoiceRecognition
+from modules.gemini_service import GeminiService
 
 app = Flask(__name__)
 
@@ -16,70 +17,69 @@ session = None
 speaker = None
 fall = None
 voice = None
-
+gemini = None
 
 def say_hello():
-    speaker.speak("Hello there! I am talking to you through your laptop.")
+    speaker.speak("Hello there! I'm Great!")
 
-
-def start_dance():
-    print("[Dance] Checking for installed behaviors...")
+def sit_down():
 
     try:
-        bm = session.service("ALBehaviorManager")
         posture = session.service("ALRobotPosture")
-        installed_behaviors = bm.getInstalledBehaviors()
+        current_posture = posture.getPosture()
+        print(f"[Posture] Current posture: {current_posture}")
 
-        taichi_behavior = None
+        if current_posture in ["Sit"]:
+            print("[Posture] Robot is already sitted. Skipping task.")
+            speaker.speak("I am already in siting posture.")
+            return
 
-        # 1. Search for explicit 'taichi' keyword in behavior names
-        for b in installed_behaviors:
-            if any(
-                keyword in b.lower()
-                for keyword in ["taichi", "tai-chi", "tai_chi"]
-            ):
-                taichi_behavior = b
-                break
+        print("[Posture] Changing posture to 'Sit'...")
+        speaker.speak("Sitting down.")
 
-        # 2. Fallback: Grab the Choregraphe uploaded behavior
-        if not taichi_behavior:
-            for b in installed_behaviors:
-                if (
-                    "lastuploadedchoregraphebehavior" in b.lower()
-                    or "behavior_1" in b.lower()
-                ):
-                    taichi_behavior = b
-                    break
+        success = posture.goToPosture("Sit", 0.5)
 
-        if taichi_behavior:
-            if bm.isBehaviorRunning(taichi_behavior):
-                print(f"[Dance] Restarting running behavior '{taichi_behavior}'...")
-                bm.stopBehavior(taichi_behavior)
-                time.sleep(0.5)
-
-            speaker.speak("Starting Tai Chi routine! Stand back.")
-            print(f"[Dance] Running behavior: '{taichi_behavior}'")
-
-            try:
-                # Execute behavior (blocks until finished)
-                bm.runBehavior(taichi_behavior)
-                speaker.speak("Finished my Tai Chi routine!")
-            finally:
-                # Ensure NAO always returns to default posture regardless of success or error
-                print("[Dance] Resetting posture to StandInit...")
-                posture.goToPosture("StandInit", 0.5)
-
+        if success:
+            print("[Posture] Robot successfully sit.")
         else:
-            print("[Dance] No dance behavior found.")
-            speaker.speak("The Tai Chi behavior is not installed on this robot.")
+            print("[Posture] Failed to reach standing posture.")
+            speaker.speak("I couldn't sit down.")
 
     except Exception as e:
-        print(f"[Dance Error] {e}")
-        speaker.speak("Sorry, I encountered an error while trying to dance.")
+        print(f"[Posture Error] {e}")
+        speaker.speak("Sorry, I encountered an error trying to sit down.")
+
+def stand_up():
+
+    try:
+        posture = session.service("ALRobotPosture")
+        current_posture = posture.getPosture()
+        print(f"[Posture] Current posture: {current_posture}")
+
+        if current_posture in ["StandInit", "Stand"]:
+            print("[Posture] Robot is already standing. Skipping task.")
+            speaker.speak("I am already standing.")
+            return
+
+        print("[Posture] Changing posture to 'StandInit'...")
+        speaker.speak("Standing up.")
+
+        # "StandInit" is the ideal balanced posture for walking/moving
+        success = posture.goToPosture("StandInit", 0.5)
+
+        if success:
+            print("[Posture] Robot successfully stood up.")
+        else:
+            print("[Posture] Failed to reach standing posture.")
+            speaker.speak("I couldn't stand up.")
+
+    except Exception as e:
+        print(f"[Posture Error] {e}")
+        speaker.speak("Sorry, I encountered an error trying to stand up.")
 
 
 def initialize_robot():
-    global session, speaker, fall, voice
+    global session, speaker, fall, voice, gemini
 
     connection_url = f"tcp://{IP}:{PORT}"
     session = qi.Session()
@@ -94,6 +94,9 @@ def initialize_robot():
 
     speaker = Speaker(session)
 
+    gemini = GeminiService()
+    print(f"[System] Gemini Service status: {'Ready' if gemini.client else 'No API Key'}")
+
     # 1. Start Fall Recovery in background thread
     fall = FallRecovery(session, speaker)
     fall.start()
@@ -101,7 +104,8 @@ def initialize_robot():
     # Start Voice Recognition module
     voice = VoiceRecognition(session, speaker)
     voice.register_command("hello", say_hello)
-    voice.register_command("tai chi", start_dance)
+    voice.register_command("sit down", sit_down)
+    voice.register_command("stand up", stand_up)
     voice.start()
 
     print("\n[System] All robot modules initialized and running continuously.")
