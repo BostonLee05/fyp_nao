@@ -2,23 +2,14 @@ import sys
 import time
 import threading
 from threading import Timer
+from modules.gemini_service import GeminiService
 
-try:
-    from modules.gemini_service import GeminiService
-except ImportError:
-    from gemini_service import GeminiService
 
 class VoiceRecognition(object):
-    def __init__(self, session, speaker, gemini_service=None):
+    def __init__(self, session, speaker):
         self.session = session
         self.speaker = speaker
-
-        if gemini_service is not None:
-            self.gemini_service = gemini_service
-            print("[Voice] Linked provided GeminiService instance.")
-        else:
-            print("[Voice] No Gemini instance provided. Creating default GeminiService...")
-            self.gemini_service = GeminiService()
+        self.gemini_service = GeminiService()
 
         self.memory = self.session.service("ALMemory")
         self.leds = self.session.service("ALLeds")
@@ -40,6 +31,16 @@ class VoiceRecognition(object):
         self.timeout_timer = None
         self.subscriber = None
 
+    def _start_timeout_timer(self, duration=20.0):
+        self._stop_timeout_timer()
+        self.timeout_timer = Timer(duration, self._on_command_timeout)
+        self.timeout_timer.start()
+
+    def _stop_timeout_timer(self):
+        if self.timeout_timer:
+            self.timeout_timer.cancel()
+            self.timeout_timer = None
+
     def register_command(self, phrase, callback_function):
         """Register a command keyword and its corresponding function."""
         self.commands[phrase.lower()] = callback_function
@@ -57,6 +58,8 @@ class VoiceRecognition(object):
         print("[Voice] Listening active. Say 'Hey Nao' to activate commands.")
 
     def _set_wake_mode(self):
+        """State 1: Sleep mode waiting for wake word."""
+        self._stop_timeout_timer()
         self.state = "WAITING_FOR_WAKE"
 
         if self.asr:
@@ -69,29 +72,30 @@ class VoiceRecognition(object):
                 pass
 
         try:
-            self.leds.fadeRGB("FaceLeds", 0x0000FF, 0.2)
+            self.leds.fadeRGB("FaceLeds", 0xFFFFFF, 0.2)  # White LEDs
         except Exception:
             pass
 
     def _set_command_mode(self, prompt=True):
-        """State 2: Listen for commands."""
+        """State 2: Active chat mode waiting for commands/queries."""
+        self._stop_timeout_timer()
         self.state = "WAITING_FOR_COMMAND"
         print("\n[Voice State] ---> WAITING_FOR_COMMAND")
 
         if self.asr:
             try:
-                cmd_vocabulary = list(self.commands.keys()) + ["cancel", "exit"]
+                cmd_vocabulary = list(self.commands.keys()) + ["exit"]
                 self.asr.pause(True)
                 self.asr.setVocabulary(cmd_vocabulary, True)
             except Exception:
                 pass
 
         try:
-            self.leds.fadeRGB("FaceLeds", 0x00FF00, 0.2)
+            self.leds.fadeRGB("FaceLeds", 0x0000FF, 0.2)  # Blue LEDs
         except Exception:
             pass
 
-        # Only speak "Yes?" on the initial wake-up trigger
+        # Speak "Yes?" only on the initial wake word trigger
         if prompt:
             self.speaker.speak("Yes?")
 
@@ -101,17 +105,14 @@ class VoiceRecognition(object):
             except Exception:
                 pass
 
-        # 10 second window to hear command
-        if self.timeout_timer:
-            self.timeout_timer.cancel()
-        self.timeout_timer = Timer(10.0, self._on_command_timeout)
-        self.timeout_timer.start()
+        # Start 10s idle timer after speaking is done and mic is live
+        self._start_timeout_timer(20.0)
 
     def _on_command_timeout(self):
-        """Triggered if user doesn't give a command within 10s."""
+        """Triggered if user is silent for 10s in WAITING_FOR_COMMAND state."""
         if self.state == "WAITING_FOR_COMMAND":
             print("[Voice] Command timeout reached.")
-            self.speaker.speak("Oops! I didn't hear a command. Please say it again.")
+            self.speaker.speak("Oops! Command timeout. Call me again when you need me!")
             self._set_wake_mode()
 
     def _on_word_recognized(self, value):
@@ -128,25 +129,32 @@ class VoiceRecognition(object):
         if confidence < threshold:
             return
 
-        # STATE 1: Waiting for 'Hey Nao'
+        # STATE 1: Waiting for wake phrase ("Hey Nao")
         if self.state == "WAITING_FOR_WAKE":
             if any(w in phrase for w in self.wake_words):
                 print("[Voice] Wake word detected!")
                 self._set_command_mode(prompt=True)
 
-        # STATE 2: Waiting for Command
+        # STATE 2: Active Chat Loop
         elif self.state == "WAITING_FOR_COMMAND":
-            # Ignore NAO's own 'yes' audio picked up by mic
+
+            # Ignore NAO's own prompt audio
             if phrase == "yes":
                 return
 
+            # Explicit Exit Command: Return to wake word state
             if "exit" in phrase:
-                if self.timeout_timer:
-                    self.timeout_timer.cancel()
+                self._stop_timeout_timer()
+                if self.asr:
+                    try:
+                        self.asr.pause(True)
+                    except Exception:
+                        pass
                 self.speaker.speak("Goodbye!")
                 self._set_wake_mode()
                 return
 
+            # Match registered Python commands
             matched_command = None
             for cmd in self.commands:
                 if cmd in phrase:
@@ -154,13 +162,12 @@ class VoiceRecognition(object):
                     break
 
             if matched_command:
-                if self.timeout_timer:
-                    self.timeout_timer.cancel()
+                self._stop_timeout_timer()
 
                 print(f"[Voice] Executing command: '{matched_command}'")
 
                 try:
-                    self.leds.fadeRGB("FaceLeds", 0xFFFFFF, 0.1)
+                    self.leds.fadeRGB("FaceLeds", 0x00FF00, 0.2)  # Green LEDs
                 except Exception:
                     pass
 
@@ -169,21 +176,34 @@ class VoiceRecognition(object):
                 except Exception as e:
                     print(f"[Voice] Callback execution error: {e}")
 
+                # Stay in command mode & listen for the next interaction
                 self._set_command_mode(prompt=False)
 
+            # Continuous Gemini Chat Query
             else:
                 query_prompt = phrase.replace("yes", "").strip()
 
                 if not query_prompt:
                     return
 
-                if self.timeout_timer:
-                    self.timeout_timer.cancel()
+                # Pause timer and ASR while Gemini processes and speaks
+                self._stop_timeout_timer()
+                self.state = "PROCESSING_GEMINI"
 
-                    self.state = "PROCESSING_GEMINI"
+                if self.asr:
+                    try:
+                        self.asr.pause(True)
+                    except Exception:
+                        pass
 
                 def handle_gemini_query():
                     print(f"[Voice -> Gemini] Processing query: '{query_prompt}'")
+
+                    try:
+                        self.leds.fadeRGB("FaceLeds", 0xFFFF00, 0.2)  # Yellow LEDs
+                    except Exception:
+                        pass
+
                     self.speaker.speak("I'm thinking...")
 
                     if self.gemini_service:
@@ -193,6 +213,7 @@ class VoiceRecognition(object):
                     else:
                         print("[Voice Error] Failed to generate Gemini response.")
 
+                    # Loop back to command mode: enable mic and start 10s timer NOW
                     self._set_command_mode(prompt=False)
 
                 threading.Thread(target=handle_gemini_query).start()

@@ -12,29 +12,31 @@ class GeminiService(object):
         if not self.api_key:
             print("[Gemini WARN] GEMINI_API_KEY not found.")
             self.client = None
+            self.chat = None
         else:
             self.client = genai.Client(api_key=self.api_key)
-
-        self.system_instruction = system_instruction or (
-            "You are NAO, a friendly humanoid robot. "
-            "Keep all answers very short, concise, and direct (1 to 2 sentences maximum) "
-            "Use simple language suitable for a general class audience"
-        )
-
-    def ask(self, prompt):
-        if not self.client:
-            return "My Gemini API key is missing."
-
-        try:
-            response = self.client.models.generate_content(
+            self.system_instruction = system_instruction or (
+                "You are NAO, a friendly humanoid robot. "
+                "Keep all answers very short, concise, and direct (1 to 2 sentences maximum). "
+                "Use simple language suitable for a general class audience with a natural tone."
+            )
+            # Initialize a persistent chat session
+            self.chat = self.client.chats.create(
                 model="gemini-3.1-flash-lite",
-                contents=prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=self.system_instruction,
                     temperature=0.7,
                     max_output_tokens=100,
                 )
             )
+
+    def ask(self, prompt):
+        if not self.chat:
+            return "My Gemini API key is missing."
+
+        try:
+            # send_message preserves context across turns automatically
+            response = self.chat.send_message(prompt)
             return response.text.strip()
         except Exception as e:
             print(f"[Gemini Error] {e}")

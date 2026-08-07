@@ -3,7 +3,6 @@ import sys
 import threading
 import pyttsx3
 
-
 class Speaker:
     def __init__(self, session, force_virtual=None):
         self.tts = None
