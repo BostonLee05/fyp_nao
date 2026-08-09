@@ -200,7 +200,7 @@ class VoiceRecognition(object):
                     print(f"[Voice -> Gemini] Processing query: '{query_prompt}'")
 
                     try:
-                        self.leds.fadeRGB("FaceLeds", 0xFFFF00, 0.2)  # Yellow LEDs
+                        self.leds.fadeRGB("FaceLeds", 0x00FF00, 0.2)  # Yellow LEDs
                     except Exception:
                         pass
 
