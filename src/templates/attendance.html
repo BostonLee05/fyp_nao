@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance{% endblock %}
+{% block page_title %}Attendance{% endblock %}
+
+{% block content %}
+
+<div class="panel">
+
+    <h2><i class="fa-solid fa-user-check"></i> Attendance Management</h2>
+
+    <div class="attendance-toolbar">
+
+        <div>
+            <label>Subject</label>
+            <select id="subjectSelect">
+                <option value="">Select Subject</option>
+            </select>
+        </div>
+
+        <div>
+            <label>Date</label>
+            <input type="date" id="attendanceDate">
+        </div>
+
+        <div>
+            <label>Current Session</label>
+            <div id="attendanceSessionStatus">🔴 No Active Session</div>
+        </div>
+
+    </div>
+
+    <div class="button-group">
+        <button id="startSessionBtn">🟢 Start Attendance Session</button>
+        <button id="endSessionBtn">🔴 End Attendance Session</button>
+        <button id="exportAttendanceBtn">Export CSV</button>
+    </div>
+
+</div>
+
+<div class="stats">
+
+    <div class="stat">
+        <h4>Total Students</h4>
+        <h2 id="totalStudents">0</h2>
+    </div>
+
+    <div class="stat">
+        <h4>Present</h4>
+        <h2 id="presentStudents">0</h2>
+    </div>
+
+    <div class="stat">
+        <h4>Absent</h4>
+        <h2 id="absentStudents">0</h2>
+    </div>
+
+    <div class="stat">
+        <h4>Attendance Rate</h4>
+        <h2 id="attendanceRate">0%</h2>
+    </div>
+
+</div>
+
+<div class="panel">
+
+    <h2>Live Attendance</h2>
+
+    <table class="attendance-table">
+        <thead>
+            <tr>
+                <th>Student ID</th>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Time</th>
+                <th>Similarity</th>
+            </tr>
+        </thead>
+
+        <tbody id="attendanceBody">
+            <tr>
+                <td colspan="5" style="text-align:center;">No attendance records.</td>
+            </tr>
+        </tbody>
+
+    </table>
+
+</div>
+
+<script>
+
+const startUrl="{{ url_for('attendance.start_attendance_session') }}";
+const endUrl="{{ url_for('attendance.end_session') }}";
+const statusUrl="{{ url_for('attendance.attendance_status') }}";
+const currentUrl="{{ url_for('attendance.current_attendance') }}";
+
+document.getElementById("attendanceDate").value =
+new Date().toISOString().split("T")[0];
+
+async function refreshStatus(){
+
+    const r = await fetch(statusUrl);
+    const data = await r.json();
+
+    const status = document.getElementById("attendanceSessionStatus");
+
+    if(data.active){
+        status.innerHTML = `🟢 ${data.session.class_code} - ${data.session.session_name}`;
+    }else{
+        status.innerHTML = "🔴 No Active Session";
+    }
+}
+
+async function refreshAttendance(){
+
+    const r = await fetch(currentUrl);
+    const data = await r.json();
+
+    const body = document.getElementById("attendanceBody");
+    body.innerHTML = "";
+
+    if(!data.records || data.records.length===0){
+        body.innerHTML =
+        `<tr>
+            <td colspan="5" style="text-align:center;">
+                No attendance records.
+            </td>
+        </tr>`;
+
+        document.getElementById("totalStudents").textContent="0";
+        document.getElementById("presentStudents").textContent="0";
+        document.getElementById("absentStudents").textContent="0";
+        document.getElementById("attendanceRate").textContent="0%";
+        return;
+    }
+
+    const stats = data.statistics;
+
+    document.getElementById("totalStudents").textContent = stats.total;
+    document.getElementById("presentStudents").textContent = stats.present;
+    document.getElementById("absentStudents").textContent = stats.absent;
+    document.getElementById("attendanceRate").textContent =
+        stats.attendance_rate + "%";
+
+    data.records.forEach(record=>{
+
+        const status =
+            record.status==="Present"
+            ? "🟢 Present"
+            : "🔴 Absent";
+
+        const similarity =
+            record.recognition_similarity==null
+            ? "-"
+            : (record.recognition_similarity*100).toFixed(1)+"%";
+
+        const time =
+            record.attendance_time || "-";
+
+        body.innerHTML += `
+        <tr>
+            <td>${record.student_id}</td>
+            <td>${record.student_name}</td>
+            <td>${status}</td>
+            <td>${time}</td>
+            <td>${similarity}</td>
+        </tr>`;
+    });
+
+}
+
+document.getElementById("startSessionBtn").onclick = async ()=>{
+    await fetch(startUrl,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:"{}"
+    });
+    refreshStatus();
+    refreshAttendance();
+};
+
+document.getElementById("endSessionBtn").onclick = async ()=>{
+    await fetch(endUrl,{method:"POST"});
+    refreshStatus();
+    refreshAttendance();
+};
+
+setInterval(()=>{
+    refreshStatus();
+    refreshAttendance();
+},2000);
+
+refreshStatus();
+refreshAttendance();
+
+</script>
+
+{% endblock %}

@@ -1,0 +1,2137 @@
+/* ==========================================================
+   NAO SMART CLASSROOM DASHBOARD
+   Version 2.0
+   Author: OpenAI
+========================================================== */
+
+/* ===========================
+   Google Font
+=========================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+
+/* ===========================
+   Theme Variables
+=========================== */
+
+:root{
+
+    --primary:#2563eb;
+    --primary-dark:#1d4ed8;
+
+    --success:#16a34a;
+    --danger:#dc2626;
+    --warning:#f59e0b;
+
+    --sidebar:#0f172a;
+    --sidebar-hover:#1e293b;
+
+    --background:#f3f6fb;
+
+    --white:#ffffff;
+
+    --text:#1e293b;
+
+    --text-light:#64748b;
+
+    --border:#e2e8f0;
+
+    --shadow:
+        0 10px 30px rgba(15,23,42,.08);
+
+    --radius:18px;
+
+    --transition:.25s ease;
+
+}
+
+
+
+/* ===========================
+   Reset
+=========================== */
+
+*{
+
+    margin:0;
+
+    padding:0;
+
+    box-sizing:border-box;
+
+}
+
+
+
+html{
+
+    scroll-behavior:smooth;
+
+}
+
+
+
+body{
+
+    font-family:'Inter',sans-serif;
+
+    background:var(--background);
+
+    color:var(--text);
+
+    overflow-x:hidden;
+
+}
+
+
+
+/* ===========================
+   Links
+=========================== */
+
+a{
+
+    text-decoration:none;
+
+    color:inherit;
+
+}
+
+
+
+/* ===========================
+   Lists
+=========================== */
+
+ul{
+
+    list-style:none;
+
+}
+
+
+
+/* ===========================
+   Wrapper
+=========================== */
+
+.wrapper{
+
+    display:flex;
+
+    min-height:100vh;
+
+}
+
+
+
+/* ===========================
+   Main Area
+=========================== */
+
+.main{
+
+    flex:1;
+
+    margin-left:270px;
+
+    display:flex;
+
+    flex-direction:column;
+
+    transition:.3s;
+
+}
+
+
+
+/* Sidebar collapsed */
+
+.sidebar.collapsed + .main{
+
+    margin-left:85px;
+
+}
+
+
+
+/* ===========================
+   Content
+=========================== */
+
+.content{
+
+    padding:30px;
+
+}
+
+
+
+/* ===========================
+   Page Animation
+=========================== */
+
+.content{
+
+    animation:fadeIn .45s ease;
+
+}
+
+
+
+@keyframes fadeIn{
+
+    from{
+
+        opacity:0;
+
+        transform:translateY(15px);
+
+    }
+
+    to{
+
+        opacity:1;
+
+        transform:translateY(0);
+
+    }
+
+}
+
+
+
+/* ===========================
+   Headings
+=========================== */
+
+h1{
+
+    font-size:30px;
+
+    font-weight:700;
+
+}
+
+
+
+h2{
+    font-size:22px;
+    font-weight:700;
+}
+
+h3{
+    font-size:18px;
+}
+
+h4{
+    font-size:15px;
+    color:var(--text-light);
+    font-weight:600;
+}
+
+/* ===========================
+   Paragraph
+=========================== */
+p{
+    color:var(--text-light);
+    line-height:1.6;
+}
+
+/* ===========================
+   Scrollbar
+=========================== */
+::-webkit-scrollbar{
+    width:8px;
+}
+
+::-webkit-scrollbar-thumb{
+    background:#cbd5e1;
+    border-radius:20px;
+}
+
+::-webkit-scrollbar-track{
+    background:transparent;
+}
+
+/* ==========================================================
+   SIDEBAR
+========================================================== */
+
+.sidebar{
+
+    position:fixed;
+
+    left:0;
+
+    top:0;
+
+    width:270px;
+
+    height:100vh;
+
+    background:var(--sidebar);
+
+    color:white;
+
+    display:flex;
+
+    flex-direction:column;
+
+    transition:.3s;
+
+    box-shadow:8px 0 30px rgba(0,0,0,.15);
+
+    z-index:999;
+
+}
+
+
+
+.sidebar.collapsed{
+
+    width:85px;
+
+}
+
+
+
+/* ===========================
+   Sidebar Header
+=========================== */
+
+.sidebar-header{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:space-between;
+
+    padding:28px 24px;
+
+    border-bottom:1px solid rgba(255,255,255,.08);
+
+}
+
+
+
+.logo{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:14px;
+
+    font-size:22px;
+
+    font-weight:700;
+
+    white-space:nowrap;
+
+}
+
+
+
+.logo i{
+
+    width:48px;
+
+    height:48px;
+
+    border-radius:50%;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    background:rgba(255,255,255,.08);
+
+    font-size:22px;
+
+}
+
+
+
+/* ===========================
+   Toggle Button
+=========================== */
+
+#toggleBtn{
+
+    width:42px;
+
+    height:42px;
+
+    border:none;
+
+    border-radius:12px;
+
+    background:rgba(255,255,255,.08);
+
+    color:white;
+
+    cursor:pointer;
+
+    transition:.25s;
+
+}
+
+
+
+#toggleBtn:hover{
+
+    background:var(--primary);
+
+    transform:rotate(90deg);
+
+}
+
+
+
+/* ===========================
+   Navigation
+=========================== */
+
+.sidebar nav{
+
+    flex:1;
+
+    display:flex;
+
+    flex-direction:column;
+
+    padding:18px;
+
+    gap:8px;
+
+}
+
+
+
+.sidebar nav a{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:18px;
+
+    padding:16px 18px;
+
+    border-radius:14px;
+
+    transition:.25s;
+
+    color:#dbe4f3;
+
+    font-weight:500;
+
+}
+
+
+
+.sidebar nav a i{
+
+    width:22px;
+
+    text-align:center;
+
+    font-size:18px;
+
+}
+
+
+
+/* Hover */
+
+.sidebar nav a:hover{
+
+    background:var(--sidebar-hover);
+
+    color:white;
+
+    transform:translateX(6px);
+
+}
+
+
+
+/* Active */
+
+.sidebar nav a.active{
+
+    background:linear-gradient(
+        135deg,
+        var(--primary),
+        #3b82f6
+    );
+
+    color:white;
+
+    box-shadow:0 10px 20px rgba(37,99,235,.35);
+
+}
+
+
+
+/* Collapse */
+
+.sidebar.collapsed nav a{
+
+    justify-content:center;
+
+}
+
+
+
+.sidebar.collapsed nav a span{
+
+    display:none;
+
+}
+
+
+
+.sidebar.collapsed .logo span{
+
+    display:none;
+
+}
+
+
+
+.sidebar.collapsed .sidebar-header{
+
+    justify-content:center;
+
+}
+
+
+
+.sidebar.collapsed #toggleBtn{
+
+    position:absolute;
+
+    bottom:25px;
+
+}
+
+
+
+/* ==========================================================
+   TOPBAR
+========================================================== */
+
+.topbar{
+
+    height:82px;
+
+    background:white;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:space-between;
+
+    padding:0 35px;
+
+    box-shadow:var(--shadow);
+
+    position:sticky;
+
+    top:0;
+
+    z-index:200;
+
+}
+
+
+
+.topbar h1{
+
+    margin-bottom:4px;
+
+}
+
+
+
+.topbar p{
+
+    font-size:14px;
+
+}
+
+
+
+/* ===========================
+   Right Area
+=========================== */
+
+.top-right{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:25px;
+
+}
+
+
+
+/* ===========================
+   Clock
+=========================== */
+
+#clock{
+
+    font-size:17px;
+
+    font-weight:700;
+
+    color:var(--text);
+
+    background:white;
+
+    padding:10px 18px;
+
+    border-radius:12px;
+
+    border:1px solid var(--border);
+
+}
+
+
+
+/* ==========================================================
+   Robot Status Pill
+========================================================== */
+
+.robot-pill{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:10px;
+
+    padding:11px 18px;
+
+    border-radius:999px;
+
+    font-weight:600;
+
+    transition:.3s;
+
+}
+
+
+
+.robot-pill.connected{
+
+    background:#dcfce7;
+
+    color:#166534;
+
+}
+
+
+
+.robot-pill.disconnected{
+
+    background:#fee2e2;
+
+    color:#991b1b;
+
+}
+
+
+
+/* Dot */
+
+.dot{
+
+    width:12px;
+
+    height:12px;
+
+    border-radius:50%;
+
+}
+
+
+
+/* Connected */
+
+.robot-pill.connected .dot{
+
+    background:#22c55e;
+
+    box-shadow:
+
+        0 0 10px #22c55e,
+
+        0 0 20px #22c55e;
+
+}
+
+
+
+/* Disconnected */
+
+.robot-pill.disconnected .dot{
+
+    background:#ef4444;
+
+}
+
+
+
+/* Small pulse */
+
+.robot-pill.connected .dot{
+
+    animation:pulse 1.8s infinite;
+
+}
+
+
+
+@keyframes pulse{
+
+    0%{
+
+        transform:scale(.9);
+
+    }
+
+    50%{
+
+        transform:scale(1.2);
+
+    }
+
+    100%{
+
+        transform:scale(.9);
+
+    }
+
+}
+/* ==========================================================
+   STATISTICS
+========================================================== */
+
+.stats{
+
+    display:grid;
+
+    grid-template-columns:repeat(4,1fr);
+
+    gap:25px;
+
+    margin-bottom:30px;
+
+}
+
+
+
+/* ===========================
+   Statistics Card
+=========================== */
+
+.stat{
+
+    background:white;
+
+    border-radius:20px;
+
+    padding:25px;
+
+    box-shadow:var(--shadow);
+
+    position:relative;
+
+    overflow:hidden;
+
+    transition:.3s;
+
+}
+
+
+
+/* Top Border */
+
+.stat::before{
+
+    content:"";
+
+    position:absolute;
+
+    top:0;
+
+    left:0;
+
+    width:100%;
+
+    height:5px;
+
+    background:linear-gradient(
+        90deg,
+        var(--primary),
+        #60a5fa
+    );
+
+}
+
+
+
+/* Hover */
+
+.stat:hover{
+
+    transform:translateY(-8px);
+
+    box-shadow:
+
+        0 20px 40px rgba(37,99,235,.12);
+
+}
+
+
+
+/* Number */
+
+.stat h2{
+
+    font-size:40px;
+
+    margin-top:18px;
+
+    font-weight:700;
+
+    color:var(--text);
+
+}
+
+
+
+/* Title */
+
+.stat h4{
+
+    font-size:14px;
+
+    letter-spacing:.5px;
+
+    text-transform:uppercase;
+
+}
+
+
+
+/* ==========================================================
+   DASHBOARD GRID
+========================================================== */
+
+.dashboard{
+
+    display:grid;
+
+    grid-template-columns:2fr 1fr;
+
+    grid-template-rows:auto auto auto;
+
+    gap:25px;
+
+}
+
+
+
+/* ==========================================================
+   PANELS
+========================================================== */
+
+.panel{
+
+    background:white;
+
+    border-radius:20px;
+
+    padding:25px;
+
+    box-shadow:var(--shadow);
+
+    transition:.3s;
+
+}
+
+
+
+/* Hover */
+
+.panel:hover{
+
+    transform:translateY(-4px);
+
+}
+
+
+
+/* Heading */
+
+.panel h2{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:12px;
+
+    margin-bottom:22px;
+
+    font-size:20px;
+
+}
+
+
+
+.panel h2 i{
+
+    color:var(--primary);
+
+}
+
+
+
+/* ==========================================================
+   CAMERA PANEL
+========================================================== */
+
+.camera-panel{
+
+    min-height:700px;
+
+}
+
+
+
+.camera-placeholder{
+
+    width:100%;
+
+    height:620px;
+
+    border-radius:18px;
+
+    border:2px dashed #d7e3f5;
+
+    background:#f8fbff;
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+
+    justify-content:center;
+
+    gap:18px;
+
+    transition:.3s;
+
+}
+
+
+
+.camera-placeholder:hover{
+
+    border-color:var(--primary);
+
+}
+
+
+
+.camera-placeholder i{
+
+    font-size:72px;
+
+    color:#93c5fd;
+
+}
+
+
+
+.camera-placeholder p{
+
+    font-size:17px;
+
+}
+
+
+
+/* ==========================================================
+   FUTURE VIDEO
+========================================================== */
+
+.camera-placeholder video{
+
+    width:100%;
+
+    height:100%;
+
+    border-radius:18px;
+
+    object-fit:cover;
+
+}
+
+
+
+/* ==========================================================
+   PANEL SPACING
+========================================================== */
+
+.panel + .panel{
+
+    margin-top:0;
+
+}
+
+/* ==========================================================
+   ROBOT SESSION PANEL
+========================================================== */
+
+.info-table{
+
+    width:100%;
+
+    border-collapse:collapse;
+
+}
+
+.info-table tr{
+
+    transition:.25s;
+
+}
+
+.info-table tr:hover{
+
+    background:#f8fbff;
+
+}
+
+.info-table td{
+
+    padding:16px 0;
+
+    border-bottom:1px solid var(--border);
+
+    vertical-align:middle;
+
+}
+
+.info-table td:first-child{
+
+    width:150px;
+
+    color:var(--text-light);
+
+    font-weight:600;
+
+}
+
+.info-table td:last-child{
+
+    font-weight:600;
+
+    color:var(--text);
+
+}
+
+
+
+/* ==========================================================
+   CONNECT PANEL
+========================================================== */
+
+.connection-panel{
+
+    display:flex;
+
+    flex-direction:column;
+
+}
+
+
+
+/* ==========================================================
+   Labels
+========================================================== */
+
+label{
+
+    display:block;
+
+    margin-top:18px;
+
+    margin-bottom:8px;
+
+    font-size:14px;
+
+    font-weight:600;
+
+    color:var(--text);
+
+}
+
+
+
+/* ==========================================================
+   Input
+========================================================== */
+
+input{
+
+    width:100%;
+
+    padding:14px 16px;
+
+    border-radius:14px;
+
+    border:1px solid var(--border);
+
+    outline:none;
+
+    font-size:15px;
+
+    transition:.25s;
+
+    background:white;
+
+}
+
+
+
+input:hover{
+
+    border-color:#93c5fd;
+
+}
+
+
+
+input:focus{
+
+    border-color:var(--primary);
+
+    box-shadow:
+
+        0 0 0 4px rgba(37,99,235,.12);
+
+}
+
+
+
+/* ==========================================================
+   Select
+========================================================== */
+
+select{
+
+    width:100%;
+
+    padding:14px 16px;
+
+    border-radius:14px;
+
+    border:1px solid var(--border);
+
+    font-size:15px;
+
+    outline:none;
+
+    transition:.25s;
+
+    background:white;
+
+}
+
+
+
+select:hover{
+
+    border-color:#93c5fd;
+
+}
+
+
+
+select:focus{
+
+    border-color:var(--primary);
+
+    box-shadow:
+
+        0 0 0 4px rgba(37,99,235,.12);
+
+}
+
+
+
+/* ==========================================================
+   Buttons
+========================================================== */
+
+button{
+
+    width:100%;
+
+    border:none;
+
+    border-radius:14px;
+
+    padding:15px;
+
+    cursor:pointer;
+
+    font-size:15px;
+
+    font-weight:600;
+
+    transition:.25s;
+
+}
+
+
+
+/* Connect */
+
+#connectBtn{
+
+    margin-top:25px;
+
+    background:linear-gradient(
+
+        135deg,
+
+        var(--primary),
+
+        #3b82f6
+
+    );
+
+    color:white;
+
+}
+
+
+
+#connectBtn:hover{
+
+    transform:translateY(-2px);
+
+    box-shadow:
+
+        0 15px 25px rgba(37,99,235,.25);
+
+}
+
+
+
+/* Disconnect */
+
+#disconnectBtn{
+
+    margin-top:15px;
+
+    background:#ef4444;
+
+    color:white;
+
+}
+
+
+
+#disconnectBtn:hover{
+
+    background:#dc2626;
+
+    transform:translateY(-2px);
+
+}
+
+
+
+/* Disabled */
+
+button:disabled{
+
+    opacity:.6;
+
+    cursor:not-allowed;
+
+    transform:none;
+
+}
+
+
+
+/* ==========================================================
+   STATUS BOX
+========================================================== */
+
+.status{
+
+    margin-top:22px;
+
+    padding:16px;
+
+    border-radius:14px;
+
+    font-weight:600;
+
+    text-align:center;
+
+    transition:.25s;
+
+}
+
+
+
+.status.connected{
+
+    background:#dcfce7;
+
+    color:#166534;
+
+    border:1px solid #86efac;
+
+}
+
+.status.disconnected{
+
+    background:#fee2e2;
+
+    color:#991b1b;
+
+    border:1px solid #fca5a5;
+
+}
+
+/* ==========================================================
+   ACTIVITY PANEL
+========================================================== */
+
+.activity-panel{
+
+    display:flex;
+
+    flex-direction:column;
+
+}
+
+
+
+/* ==========================================================
+   LOG
+========================================================== */
+
+.log{
+
+    height:320px;
+
+    overflow-y:auto;
+
+    background:#0f172a;
+
+    color:#e2e8f0;
+
+    border-radius:18px;
+
+    padding:18px;
+
+    font-family:"Consolas","Courier New",monospace;
+
+    font-size:14px;
+
+    line-height:1.8;
+
+    border:1px solid rgba(255,255,255,.05);
+
+}
+
+
+
+/* Log Items */
+
+.log div{
+
+    padding:10px 0;
+
+    border-bottom:1px solid rgba(255,255,255,.06);
+
+    transition:.2s;
+
+    word-break:break-word;
+
+}
+
+
+
+.log div:last-child{
+
+    border-bottom:none;
+
+}
+
+
+
+.log div:hover{
+
+    color:white;
+
+    padding-left:8px;
+
+}
+
+
+
+/* ==========================================================
+   CUSTOM SCROLLBAR
+========================================================== */
+
+.log::-webkit-scrollbar{
+
+    width:8px;
+
+}
+
+.log::-webkit-scrollbar-thumb{
+
+    background:#334155;
+
+    border-radius:20px;
+
+}
+
+.log::-webkit-scrollbar-thumb:hover{
+
+    background:#475569;
+
+}
+
+
+
+/* ==========================================================
+   PANEL HOVER
+========================================================== */
+
+.panel{
+
+    transition:
+
+        transform .25s,
+
+        box-shadow .25s;
+
+}
+
+.panel:hover{
+
+    transform:translateY(-5px);
+
+    box-shadow:
+
+        0 18px 35px rgba(0,0,0,.08);
+
+}
+
+
+
+/* ==========================================================
+   BUTTON EFFECTS
+========================================================== */
+
+button{
+
+    position:relative;
+
+    overflow:hidden;
+
+}
+
+
+
+button::after{
+
+    content:"";
+
+    position:absolute;
+
+    left:50%;
+
+    top:50%;
+
+    width:0;
+
+    height:0;
+
+    background:rgba(255,255,255,.2);
+
+    border-radius:50%;
+
+    transform:translate(-50%,-50%);
+
+    transition:.5s;
+
+}
+
+
+
+button:active::after{
+
+    width:300px;
+
+    height:300px;
+
+}
+
+
+
+/* ==========================================================
+   INPUT PLACEHOLDER
+========================================================== */
+
+input::placeholder{
+
+    color:#94a3b8;
+
+}
+
+
+
+/* ==========================================================
+   TABLE
+========================================================== */
+
+table{
+
+    width:100%;
+
+}
+
+
+
+/* ==========================================================
+   ICON SPACING
+========================================================== */
+
+.panel h2 i{
+
+    width:24px;
+
+    text-align:center;
+
+}
+
+
+
+/* ==========================================================
+   TRANSITIONS
+========================================================== */
+
+button,
+input,
+select,
+.stat,
+.panel,
+.sidebar,
+.sidebar nav a,
+.robot-pill{
+
+    transition:all .25s ease;
+
+}
+
+
+
+/* ==========================================================
+   SMALL BADGES
+========================================================== */
+
+.badge{
+
+    display:inline-block;
+
+    padding:6px 12px;
+
+    border-radius:999px;
+
+    font-size:12px;
+
+    font-weight:600;
+
+}
+
+
+
+.badge-success{
+
+    background:#dcfce7;
+
+    color:#166534;
+
+}
+
+
+
+.badge-danger{
+
+    background:#fee2e2;
+
+    color:#991b1b;
+
+}
+
+
+
+.badge-warning{
+
+    background:#fef3c7;
+
+    color:#92400e;
+
+}
+
+
+
+/* ==========================================================
+   SHADOW UTILITIES
+========================================================== */
+
+.shadow{
+
+    box-shadow:var(--shadow);
+
+}
+
+
+
+.shadow-sm{
+
+    box-shadow:
+
+        0 4px 12px rgba(0,0,0,.06);
+
+}
+
+
+
+/* ==========================================================
+   TEXT UTILITIES
+========================================================== */
+
+.text-center{
+
+    text-align:center;
+
+}
+
+
+
+.text-right{
+
+    text-align:right;
+
+}
+
+
+
+.text-muted{
+
+    color:var(--text-light);
+
+}
+
+
+
+/* ==========================================================
+   SPACING UTILITIES
+========================================================== */
+
+.mt-10{
+
+    margin-top:10px;
+
+}
+
+
+
+.mt-20{
+
+    margin-top:20px;
+
+}
+
+
+
+.mt-30{
+
+    margin-top:30px;
+
+}
+
+
+
+.mb-10{
+
+    margin-bottom:10px;
+
+}
+
+
+
+.mb-20{
+
+    margin-bottom:20px;
+
+}
+
+
+
+.mb-30{
+
+    margin-bottom:30px;
+
+}
+
+
+
+/* ==========================================================
+   FADE-IN ANIMATION
+========================================================== */
+
+.fade-in{
+
+    animation:fadeIn .5s ease;
+
+}
+
+
+
+/* ==========================================================
+   FUTURE CAMERA STREAM
+========================================================== */
+
+.camera-stream{
+
+    width:100%;
+
+    height:100%;
+
+    object-fit:cover;
+
+    border-radius:18px;
+
+}
+
+
+
+/* ==========================================================
+   FUTURE CHART CONTAINER
+========================================================== */
+
+.chart-container{
+
+    width:100%;
+
+    min-height:350px;
+
+}
+
+
+
+/* ==========================================================
+   FUTURE REPORT TABLE
+========================================================== */
+
+.report-table{
+
+    width:100%;
+
+    border-collapse:collapse;
+
+}
+
+.report-table th{
+
+    background:#f8fafc;
+
+    padding:15px;
+
+    text-align:left;
+
+}
+
+.report-table td{
+
+    padding:15px;
+
+    border-bottom:1px solid var(--border);
+
+}
+
+/* ==========================================================
+   DASHBOARD LAYOUT
+========================================================== */
+
+.dashboard{
+
+    display:grid;
+
+    grid-template-columns:2fr 1fr;
+
+    gap:25px;
+
+    align-items:start;
+
+}
+
+/* Left Side */
+
+.camera-panel{
+
+    grid-row:span 3;
+
+}
+
+/* Right Side */
+
+.session-panel{
+
+    min-height:260px;
+
+}
+
+.connection-panel{
+
+    min-height:420px;
+
+}
+
+.activity-panel{
+
+    min-height:380px;
+
+}
+
+
+/* ==========================================================
+   CARD ICONS (Future Ready)
+========================================================== */
+
+.stat{
+
+    position:relative;
+
+}
+
+.stat::after{
+
+    position:absolute;
+
+    right:25px;
+
+    top:25px;
+
+    font-family:"Font Awesome 6 Free";
+
+    font-weight:900;
+
+    opacity:.08;
+
+    font-size:46px;
+
+}
+
+/* Robot */
+
+.stat:nth-child(1)::after{
+
+    content:"\f544";
+
+}
+
+/* Camera */
+
+.stat:nth-child(2)::after{
+
+    content:"\f03d";
+
+}
+
+/* Attendance */
+
+.stat:nth-child(3)::after{
+
+    content:"\f4fc";
+
+}
+
+/* Students */
+
+.stat:nth-child(4)::after{
+
+    content:"\f501";
+
+}
+
+
+
+/* ==========================================================
+   PANEL TITLE LINE
+========================================================== */
+
+.panel h2{
+
+    padding-bottom:15px;
+
+    border-bottom:1px solid var(--border);
+
+}
+
+
+
+/* ==========================================================
+   CAMERA PLACEHOLDER
+========================================================== */
+
+.camera-placeholder{
+
+    cursor:pointer;
+
+}
+
+.camera-placeholder:hover{
+
+    background:#eef6ff;
+
+}
+
+
+
+/* ==========================================================
+   STATUS TEXT
+========================================================== */
+
+#sessionStatus{
+
+    font-weight:700;
+
+}
+
+#robotIP,
+
+#sessionID,
+
+#remainingTime,
+
+#disconnectReason{
+
+    word-break:break-word;
+
+}
+
+
+
+/* ==========================================================
+   BUTTON GROUP
+========================================================== */
+
+.connection-panel button{
+
+    width:100%;
+
+}
+
+#disconnectBtn{
+
+    margin-bottom:5px;
+
+}
+
+
+
+/* ==========================================================
+   MOBILE
+========================================================== */
+
+@media(max-width:1200px){
+
+    .stats{
+
+        grid-template-columns:repeat(2,1fr);
+
+    }
+
+}
+
+@media(max-width:992px){
+
+    .sidebar{
+
+        width:85px;
+
+    }
+
+    .sidebar .logo span{
+
+        display:none;
+
+    }
+
+    .sidebar nav span{
+
+        display:none;
+
+    }
+
+    .main{
+
+        margin-left:85px;
+
+    }
+
+    .dashboard{
+
+        grid-template-columns:1fr;
+
+    }
+
+    .camera-panel{
+
+        grid-row:auto;
+
+    }
+
+}
+
+@media(max-width:768px){
+
+    .topbar{
+
+        flex-direction:column;
+
+        align-items:flex-start;
+
+        gap:15px;
+
+        height:auto;
+
+        padding:20px;
+
+    }
+
+    .top-right{
+
+        width:100%;
+
+        justify-content:space-between;
+
+    }
+
+    .stats{
+
+        grid-template-columns:1fr;
+
+    }
+
+    .content{
+
+        padding:18px;
+
+    }
+
+    .camera-placeholder{
+
+        height:350px;
+
+    }
+
+}
+
+@media(max-width:576px){
+
+    .main{
+
+        margin-left:0;
+
+    }
+
+    .sidebar{
+
+        left:-270px;
+
+    }
+
+    .sidebar.show{
+
+        left:0;
+
+    }
+
+    .topbar{
+
+        border-radius:0;
+
+    }
+
+}
+
+
+
+/* ==========================================================
+   PRINT
+========================================================== */
+
+@media print{
+
+    .sidebar,
+
+    .topbar,
+
+    #connectBtn,
+
+    #disconnectBtn{
+
+        display:none;
+
+    }
+
+    .main{
+
+        margin:0;
+
+    }
+
+}
+
+
+
+/* ==========================================================
+   FOOTER SPACE
+========================================================== */
+
+.content{
+
+    padding-bottom:60px;
+
+}

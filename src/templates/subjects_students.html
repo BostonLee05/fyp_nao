@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Subjects & Students{% endblock %}
+{% block page_title %}Subjects & Students{% endblock %}
+
+{% block content %}
+
+<div class="dashboard-grid">
+
+    <section class="panel">
+
+        <h2><i class="fa-solid fa-book"></i> Subject Management</h2>
+
+        <label>Subject Code</label>
+        <input type="text" placeholder="BMSE3153">
+
+        <label>Subject Name</label>
+        <input type="text" placeholder="Final Year Project">
+
+        <label>Semester</label>
+        <input type="text" placeholder="2026 Semester 2">
+
+        <button id="addSubjectBtn">Create Subject</button>
+
+        <hr>
+
+        <h3>Registered Subjects</h3>
+
+        <table class="attendance-table">
+            <tr><th>Code</th><th>Name</th></tr>
+            <tr><td>BMSE3153</td><td>Final Year Project</td></tr>
+            <tr><td>BMIS2113</td><td>IT Infrastructure</td></tr>
+            <tr><td>CCCS3213</td><td>Cloud Computing</td></tr>
+        </table>
+
+    </section>
+
+    <section class="panel">
+
+        <h2><i class="fa-solid fa-user-graduate"></i> Student Registration</h2>
+
+        <label>Student ID</label>
+        <input type="text" placeholder="23WMR001">
+
+        <label>Student Name</label>
+        <input type="text" placeholder="Lee Yen Hong">
+
+        <label>Programme</label>
+        <input type="text" placeholder="Bachelor of Information Technology">
+
+        <label>Subject</label>
+        <select>
+            <option>BMSE3153 - Final Year Project</option>
+        </select>
+
+        <label>Face Images</label>
+        <input type="file" multiple>
+
+        <button id="registerStudentBtn">Register Student</button>
+
+    </section>
+
+</div>
+
+<div class="panel">
+
+    <h2>Registered Students</h2>
+
+    <table class="attendance-table">
+
+        <thead>
+            <tr>
+                <th>Photo</th>
+                <th>Student ID</th>
+                <th>Name</th>
+                <th>Subject</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+            <tr>
+                <td>👤</td>
+                <td>23WMR001</td>
+                <td>Lee Yen Hong</td>
+                <td>BMSE3153</td>
+                <td>Edit | Delete | Register Face</td>
+            </tr>
+
+        </tbody>
+
+    </table>
+
+</div>
+
+{% endblock %}

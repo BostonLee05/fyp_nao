@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block page_title %}
+Dashboard
+{% endblock %}
+
+{% block content %}
+
+<!-- ================= Statistics ================= -->
+
+<div class="stats">
+
+    <div class="stat">
+        <h4>Robot</h4>
+        <h2 id="robotCard">
+            {{ "Connected" if robot.connected else "Offline" }}
+        </h2>
+    </div>
+
+    <div class="stat">
+        <h4>Camera</h4>
+        <h2 id="cameraCard">
+            Idle
+        </h2>
+    </div>
+
+    <div class="stat">
+        <h4>Attendance</h4>
+        <h2 id="attendanceCard">
+            0
+        </h2>
+    </div>
+
+    <div class="stat">
+        <h4>Students</h4>
+        <h2 id="studentCard">
+            0
+        </h2>
+    </div>
+
+</div>
+
+
+<!-- ================= Main Dashboard ================= -->
+
+<div class="dashboard">
+
+    <!-- ================= Live Camera ================= -->
+
+    <section class="panel camera-panel">
+
+        <h2>
+            <i class="fa-solid fa-video"></i>
+            Live Camera Preview
+        </h2>
+
+        <div class="camera-placeholder">
+
+            <i class="fa-solid fa-camera"></i>
+
+            <p>
+                Camera stream will appear here
+            </p>
+
+        </div>
+
+    </section>
+
+
+    <!-- ================= Robot Session ================= -->
+
+    <section class="panel session-panel">
+        <h2>
+            <i class="fa-solid fa-robot"></i>
+            Robot Session
+        </h2>
+
+        <table class="info-table">
+
+            <tr>
+                <td>Status</td>
+
+                <td id="sessionStatus">
+
+                    {% if robot.connected %}
+                        🟢 Connected
+                    {% else %}
+                        🔴 Offline
+                    {% endif %}
+
+                </td>
+            </tr>
+
+            <tr>
+
+                <td>Robot IP</td>
+
+                <td id="robotIP">
+
+                    {{ robot.robot_ip or "-" }}
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td>Session ID</td>
+
+                <td id="sessionID">
+
+                    {{ robot.session_id or "-" }}
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td>Remaining</td>
+
+                <td id="remainingTime">
+
+                    {{ robot.remaining }}
+
+                </td>
+
+            </tr>
+
+            <tr>
+
+                <td>Last Reason</td>
+
+                <td id="disconnectReason">
+
+                    {{ robot.last_disconnect_reason or "-" }}
+
+                </td>
+
+            </tr>
+
+        </table>
+
+    </section>
+
+
+    <!-- ================= Robot Connection ================= -->
+
+    <section class="panel connection-panel">
+
+        <h2>
+            <i class="fa-solid fa-plug"></i>
+            Connect Robot
+        </h2>
+
+        <label>
+
+            Robot IP
+
+        </label>
+
+        <input
+            type="text"
+            id="robot_ip"
+            placeholder="192.168.0.106">
+
+        <label>
+
+            Session Duration
+
+        </label>
+
+        <select id="sessionDuration">
+
+            <option value="900">15 Minutes</option>
+
+            <option value="1800" selected>30 Minutes</option>
+
+            <option value="3600">1 Hour</option>
+
+            <option value="7200">2 Hours</option>
+
+            <option value="">Unlimited</option>
+
+        </select>
+
+        <button id="connectBtn">
+
+            Connect Robot
+
+        </button>
+
+        <button id="disconnectBtn"
+                class="disconnect-btn">
+
+            Disconnect Robot
+
+        </button>
+
+        <div
+            id="status"
+            class="status disconnected">
+
+            Waiting for robot connection...
+
+        </div>
+
+    </section>
+
+
+    <!-- ================= Activity ================= -->
+
+    <section class="panel activity-panel">
+
+        <h2>
+            <i class="fa-solid fa-list"></i>
+            System Activity
+        </h2>
+
+        <div
+            class="log"
+            id="log">
+
+            <div>
+
+                Dashboard loaded.
+
+            </div>
+
+            <div>
+
+                Waiting for robot connection...
+
+            </div>
+
+        </div>
+
+    </section>
+
+</div>
+
+{% endblock %}

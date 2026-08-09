@@ -1,0 +1,71 @@
+
+{% extends "base.html" %}
+
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+
+<div class="dashboard-grid">
+
+    <section class="panel">
+
+        <h2><i class="fa-solid fa-robot"></i> Robot Settings</h2>
+
+        <label>Default Robot IP</label>
+        <input type="text" placeholder="192.168.0.106">
+
+        <label>Default Port</label>
+        <input type="number" value="9559">
+
+        <label>Default Session Duration</label>
+        <select>
+            <option>15 Minutes</option>
+            <option selected>30 Minutes</option>
+            <option>1 Hour</option>
+            <option>Unlimited</option>
+        </select>
+
+    </section>
+
+    <section class="panel">
+
+        <h2><i class="fa-solid fa-camera"></i> Vision Settings</h2>
+
+        <label>Camera Resolution</label>
+        <select>
+            <option>640 × 480</option>
+            <option selected>1280 × 720</option>
+            <option>1920 × 1080</option>
+        </select>
+
+        <label>YOLO Model</label>
+        <select>
+            <option>YOLOv11</option>
+        </select>
+
+        <label>Tracker</label>
+        <select>
+            <option>ByteTrack</option>
+        </select>
+
+    </section>
+
+</div>
+
+<div class="panel">
+
+    <h2><i class="fa-solid fa-floppy-disk"></i> System Settings</h2>
+
+    <p style="color:#666;margin-bottom:20px;">
+        Future versions will allow configuration of robot behaviour,
+        attendance options, AI thresholds and application preferences.
+    </p>
+
+    <button id="saveSettingsBtn">
+        Save Settings
+    </button>
+
+</div>
+
+{% endblock %}

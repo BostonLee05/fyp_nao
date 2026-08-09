@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Vision Monitoring{% endblock %}
+{% block page_title %}Vision Monitoring{% endblock %}
+
+{% block content %}
+<div class="panel">
+    <h2><i class="fa-solid fa-camera"></i> Vision Monitoring</h2>
+
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+        <button id="startVisionBtn" type="button" style="width:auto; padding:12px 18px;">Start Vision</button>
+        <button id="stopVisionBtn" type="button" style="width:auto; padding:12px 18px;">Stop Vision</button>
+    </div>
+
+    <div class="camera-placeholder vision-camera" style="padding:0; overflow:hidden;">
+        <img id="visionStream" alt="Live vision stream" style="width:100%; display:block; min-height:360px; object-fit:cover;" />
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <section class="panel">
+        <h3>Vision Statistics</h3>
+        <table class="info-table">
+            <tr><td>Stream</td><td id="visionRunning">Stopped</td></tr>
+            <tr><td>Camera</td><td id="visionCamera">Disconnected</td></tr>
+            <tr><td>FPS</td><td id="visionFps">0.0</td></tr>
+            <tr><td>Persons</td><td id="visionPersons">0</td></tr>
+            <tr><td>Recognized</td><td id="visionRecognized">0</td></tr>
+            <tr><td>Unknown</td><td id="visionUnknown">0</td></tr>
+            <tr><td>Phones</td><td id="visionPhones">0</td></tr>
+            <tr><td>Resolution</td><td id="visionResolution">-</td></tr>
+            <tr><td>Last Error</td><td id="visionError">None</td></tr>
+        </table>
+    </section>
+</div>
+
+<script>
+    const startUrl = "{{ url_for('vision.start_vision') }}";
+    const stopUrl = "{{ url_for('vision.stop_vision') }}";
+    const statusUrl = "{{ url_for('vision.vision_status') }}";
+    const streamUrl = "{{ url_for('vision.video_feed') }}";
+
+    console.log("Stream URL:", streamUrl);
+    
+    const streamImg = document.getElementById("visionStream");
+    const startBtn = document.getElementById("startVisionBtn");
+    const stopBtn = document.getElementById("stopVisionBtn");
+
+    const fields = {
+        running: document.getElementById("visionRunning"),
+        camera: document.getElementById("visionCamera"),
+        fps: document.getElementById("visionFps"),
+        persons: document.getElementById("visionPersons"),
+        recognized: document.getElementById("visionRecognized"),
+        unknown: document.getElementById("visionUnknown"),
+        phones: document.getElementById("visionPhones"),
+        resolution: document.getElementById("visionResolution"),
+        error: document.getElementById("visionError"),
+    };
+
+    let pollTimer = null;
+
+    async function refreshStatus() {
+        const response = await fetch(statusUrl);
+        const data = await response.json();
+        const status = data.status || {};
+        const vision = data.vision || {};
+
+        fields.running.textContent = status.running ? "Running" : "Stopped";
+        fields.camera.textContent = status.camera_ready ? "Ready" : "Disconnected";
+        fields.fps.textContent = (vision.fps ?? status.fps ?? 0).toFixed(1);
+        fields.persons.textContent = vision.persons ?? 0;
+        fields.recognized.textContent = vision.recognized ?? 0;
+        fields.unknown.textContent = vision.unknown ?? 0;
+        fields.phones.textContent = vision.phones ?? 0;
+        fields.resolution.textContent = status.width && status.height ? `${status.width} x ${status.height}` : "-";
+        fields.error.textContent = status.last_error || "None";
+    }
+
+    function startPolling() {
+        stopPolling();
+        pollTimer = setInterval(refreshStatus, 1500);
+        refreshStatus();
+    }
+
+    function stopPolling() {
+        if (pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+        }
+    }
+
+    startBtn.addEventListener("click", async () => {
+        const response = await fetch(startUrl, { method: "POST" });
+        if (!response.ok) {
+            return;
+        }
+
+        streamImg.src = `${streamUrl}?ts=${Date.now()}`;
+        startPolling();
+    });
+
+    stopBtn.addEventListener("click", async () => {
+        await fetch(stopUrl, { method: "POST" });
+        streamImg.removeAttribute("src");
+        stopPolling();
+        await refreshStatus();
+    });
+
+    refreshStatus();
+</script>
+{% endblock %}

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}NAO Smart Classroom{% endblock %}</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/style.css') }}">
+
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+</head>
+
+<body>
+
+<div class="wrapper">
+
+    <!-- ================= Sidebar ================= -->
+
+    <aside id="sidebar" class="sidebar">
+
+        <div class="sidebar-header">
+
+            <div class="logo">
+                <i class="fa-solid fa-robot"></i>
+                <span>NAO Classroom</span>
+            </div>
+
+            <button id="toggleBtn">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+
+        </div>
+
+        <nav>
+
+            <a class="active" href="/">
+                <i class="fa-solid fa-house"></i>
+                <span>Dashboard</span>
+            </a>
+
+            <a href="/vision">
+                <i class="fa-solid fa-camera"></i>
+                <span>Vision Monitoring</span>
+            </a>
+
+            <a href="/attendance">
+                <i class="fa-solid fa-user-check"></i>
+                <span>Attendance</span>
+            </a>
+
+            <a href="/behaviour">
+                <i class="fa-solid fa-eye"></i>
+                <span>Behaviour Analysis</span>
+            </a>
+
+            <a href="/subjects">
+                <i class="fa-solid fa-user-graduate"></i>
+                <span>Subjects &amp; Students</span>
+            </a>
+
+            <a href="/reports">
+                <i class="fa-solid fa-chart-line"></i>
+                <span>Reports (WIP)</span>
+            </a>
+
+            <a href="/settings">
+                <i class="fa-solid fa-gear"></i>
+                <span>Settings</span>
+            </a>
+
+        </nav>
+
+    </aside>
+
+    <!-- ================= Main ================= -->
+
+    <div class="main">
+
+        <header class="topbar">
+
+            <div>
+
+                <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+
+                <p>NAO Smart Classroom Monitoring System</p>
+
+            </div>
+
+            <div class="top-right">
+
+                <div id="clock">--:--:--</div>
+
+                <div id="robotStatusPill"
+                     class="robot-pill {{ 'connected' if robot.connected else 'disconnected' }}">
+
+                    <span id="robotStatusDot"
+                          class="dot"></span>
+
+                    <span id="robotStatusText">
+                        {{ "Robot Connected" if robot.connected else "Robot Offline" }}
+                    </span>
+
+                </div>
+
+            </div>
+
+        </header>
+
+        <main class="content">
+
+            {% block content %}
+            {% endblock %}
+
+        </main>
+
+    </div>
+
+</div>
+
+<script>
+window.ROBOT_STATUS = {
+    connected: {{ robot.connected | tojson }},
+    ip: {{ (robot.robot_ip or "") | tojson }},
+    remaining: {{ (robot.remaining or "") | tojson }},
+    session_id: {{ (robot.session_id or "") | tojson }}
+};
+</script>
+
+<script src="{{ url_for('static', filename='js/connection.js') }}"></script>
+
+</body>
+</html>
