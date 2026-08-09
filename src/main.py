@@ -1,12 +1,27 @@
+"""
+main.py
+Flask entry point for the NAO Smart Classroom Monitoring System.
+"""
+
 import sys
-import time
 import qi
+
 from flask import Flask, render_template, request, jsonify
 
 from speaker import Speaker
 from modules.fall_recovery import FallRecovery
 from modules.voice_recognition import VoiceRecognition
 from modules.gemini_service import GeminiService
+
+from routes.home import home_bp
+from routes.robot import robot_bp
+from routes.vision import vision_bp
+from routes.attendance import attendance_bp
+from routes.subjects import subjects_bp
+from routes.behaviour import behaviour_bp
+from routes.reports import reports_bp
+from routes.settings import settings_bp
+
 
 app = Flask(__name__)
 
@@ -19,14 +34,20 @@ fall = None
 voice = None
 gemini = None
 
+
+# ---------------------------------------------------
+# Robot Commands
+# ---------------------------------------------------
+
 def say_hello():
     speaker.speak("Hello there! I'm Great!")
 
-def sit_down():
 
+def sit_down():
     try:
         posture = session.service("ALRobotPosture")
         current_posture = posture.getPosture()
+
         print(f"[Posture] Current posture: {current_posture}")
 
         if current_posture in ["Sit"]:
@@ -42,18 +63,21 @@ def sit_down():
         if success:
             print("[Posture] Robot successfully sit.")
         else:
-            print("[Posture] Failed to reach standing posture.")
+            print("[Posture] Failed to reach sitting posture.")
             speaker.speak("I couldn't sit down.")
 
     except Exception as e:
         print(f"[Posture Error] {e}")
-        speaker.speak("Sorry, I encountered an error trying to sit down.")
+        speaker.speak(
+            "Sorry, I encountered an error trying to sit down."
+        )
+
 
 def stand_up():
-
     try:
         posture = session.service("ALRobotPosture")
         current_posture = posture.getPosture()
+
         print(f"[Posture] Current posture: {current_posture}")
 
         if current_posture in ["StandInit", "Stand"]:
@@ -64,7 +88,6 @@ def stand_up():
         print("[Posture] Changing posture to 'StandInit'...")
         speaker.speak("Standing up.")
 
-        # "StandInit" is the ideal balanced posture for walking/moving
         success = posture.goToPosture("StandInit", 0.5)
 
         if success:
@@ -75,8 +98,14 @@ def stand_up():
 
     except Exception as e:
         print(f"[Posture Error] {e}")
-        speaker.speak("Sorry, I encountered an error trying to stand up.")
+        speaker.speak(
+            "Sorry, I encountered an error trying to stand up."
+        )
 
+
+# ---------------------------------------------------
+# Robot Initialization
+# ---------------------------------------------------
 
 def initialize_robot():
     global session, speaker, fall, voice, gemini
@@ -88,30 +117,58 @@ def initialize_robot():
         print(f"Connecting to NAO at: {connection_url}")
         session.connect(connection_url)
         print("Successfully connected.")
+
     except Exception as e:
-        print(f"Failed to connect to NAO at: {connection_url}\nError: {e}")
+        print(
+            f"Failed to connect to NAO at: {connection_url}\n"
+            f"Error: {e}"
+        )
         sys.exit(1)
 
     speaker = Speaker(session)
 
     gemini = GeminiService()
-    print(f"[System] Gemini Service status: {'Ready' if gemini.client else 'No API Key'}")
 
-    # 1. Start Fall Recovery in background thread
+    print(
+        f"[System] Gemini Service status: "
+        f"{'Ready' if gemini.client else 'No API Key'}"
+    )
+
+    # 1. Start Fall Recovery
     fall = FallRecovery(session, speaker)
     fall.start()
 
-    # Start Voice Recognition module
+    # 2. Start Voice Recognition
     voice = VoiceRecognition(session, speaker)
+
     voice.register_command("hello", say_hello)
     voice.register_command("sit down", sit_down)
     voice.register_command("stand up", stand_up)
+
     voice.start()
 
-    print("\n[System] All robot modules initialized and running continuously.")
+    print(
+        "\n[System] All robot modules initialized and running continuously."
+    )
 
 
-# --- Flask Web Routes ---
+# ---------------------------------------------------
+# Flask Blueprints
+# ---------------------------------------------------
+
+app.register_blueprint(home_bp)
+app.register_blueprint(robot_bp)
+app.register_blueprint(vision_bp)
+app.register_blueprint(attendance_bp)
+app.register_blueprint(subjects_bp)
+app.register_blueprint(behaviour_bp)
+app.register_blueprint(reports_bp)
+app.register_blueprint(settings_bp)
+
+
+# ---------------------------------------------------
+# Basic Flask Routes
+# ---------------------------------------------------
 
 @app.route("/")
 def index():
@@ -125,25 +182,48 @@ def say_something():
 
     try:
         speaker.speak(str(text))
-        return jsonify({"status": "success", "message": "NAO spoke."})
+
+        return jsonify({
+            "status": "success",
+            "message": "NAO spoke."
+        })
+
     except Exception as e:
-        return jsonify({"status": "error", "message": f"Failed to speak: {e}"})
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to speak: {e}"
+        })
 
 
-# --- Application Entry Point ---
+# ---------------------------------------------------
+# Application Entry Point
+# ---------------------------------------------------
 
 if __name__ == "__main__":
     initialize_robot()
 
-    print("[System] Launching web server. Press Ctrl+C to stop.")
+    print(
+        "[System] Launching web server. "
+        "Press Ctrl+C to stop."
+    )
+
     try:
-        app.run(host="0.0.0.0", port=5000, debug=False)
+        app.run(
+            host="0.0.0.0",
+            port=5000,
+            debug=False
+        )
+
     except KeyboardInterrupt:
         pass
+
     finally:
         print("\n[System] Shutting down services...")
+
         if fall:
             fall.stop()
+
         if voice:
             voice.stop()
+
         print("[System] Closed successfully.")

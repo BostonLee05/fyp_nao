@@ -27,7 +27,7 @@ from database import (
     get_all_students,
 )
 
-from attendance import (
+from modules.attendance import (
     mark_attendance,
     RESULT_RECORDED,
     RESULT_ALREADY_RECORDED,
@@ -35,7 +35,7 @@ from attendance import (
     RESULT_NOT_ENROLLED
 )
 
-from behaviour_monitoring import (
+from modules.behaviour_monitoring import (
     BehaviourTracker,
     BEHAVIOUR_FORWARD,
     BEHAVIOUR_LEFT,
