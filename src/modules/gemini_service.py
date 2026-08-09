@@ -30,13 +30,18 @@ class GeminiService(object):
                 )
             )
 
-    def ask(self, prompt):
+    def ask(self, prompt, image=None):
         if not self.chat:
             return "My Gemini API key is missing."
 
         try:
-            # send_message preserves context across turns automatically
-            response = self.chat.send_message(prompt)
+            contents = []
+            if image is not None:
+                contents.append(image)
+            contents.append(prompt)
+
+            # send_message supports passing lists containing PIL Images + text
+            response = self.chat.send_message(contents)
             return response.text.strip()
         except Exception as e:
             print(f"[Gemini Error] {e}")

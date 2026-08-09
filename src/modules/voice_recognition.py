@@ -1,9 +1,10 @@
 import sys
 import time
 import threading
+from PIL import Image
 from threading import Timer
 from modules.gemini_service import GeminiService
-
+from speaker import Speaker
 
 class VoiceRecognition(object):
     def __init__(self, session, speaker):
@@ -21,6 +22,12 @@ class VoiceRecognition(object):
         except Exception:
             self.asr = None
             print("[Voice] Virtual NAO detected.")
+
+        try:
+            self.video_service = self.session.service("ALVideoDevice")
+        except Exception:
+            self.video_service = None
+            print("[Voice WARN] ALVideoDevice service not available: %s")
 
         self.service_name = "VoiceRecognitionModule"
         self.is_listening = False
@@ -45,6 +52,36 @@ class VoiceRecognition(object):
         """Register a command keyword and its corresponding function."""
         self.commands[phrase.lower()] = callback_function
         print(f"[Voice] Registered command: '{phrase}'")
+
+    def capture_frame(self):
+        if not self.video_service or self.is_virtual:
+            print("[Voice] Camera capture skipped (Virtual mode or missing ALVideoDevice).")
+            return None
+
+        try:
+            # Parameters: Top camera (0), VGA 640x480 (2), RGB color space (11), 30 FPS
+            client_name = self.video_service.subscribe("gemini_vision", 0, 2, 11, 30)
+
+            try:
+                nao_image = self.video_service.getImageRemote(client_name)
+            finally:
+                self.video_service.unsubscribe(client_name)
+
+            if nao_image and len(nao_image) >= 7:
+                width = nao_image[0]
+                height = nao_image[1]
+                array = nao_image[6]
+
+                # Convert raw byte buffer into a PIL Image
+                try:
+                    img = Image.frombytes("RGB", (width, height), bytes(array))
+                except (AttributeError, TypeError):
+                    img = Image.fromstring("RGB", (width, height), str(bytearray(array)))
+                return img
+        except Exception as e:
+            print("[Voice Error] Failed to capture camera frame: %s" % e)
+
+        return None
 
     def start(self):
         """Starts the speech recognition service."""
@@ -204,10 +241,19 @@ class VoiceRecognition(object):
                     except Exception:
                         pass
 
-                    self.speaker.speak("I'm thinking...")
+                    # Check if user's phrase implies looking at something
+                    vision_keywords = ["see", "look", "what is this", "what's this", "identify", "holding", "show"]
+                    needs_vision = any(kw in query_prompt for kw in vision_keywords)
+
+                    image_frame = None
+                    if needs_vision:
+                        self.speaker.speak("Let me have a look...")
+                        image_frame = self.capture_frame()
+                    else:
+                        self.speaker.speak("I'm thinking...")
 
                     if self.gemini_service:
-                        ai_reply = self.gemini_service.ask(query_prompt)
+                        ai_reply = self.gemini_service.ask(query_prompt, image=image_frame)
                         print(f"[Gemini Response] {ai_reply}")
                         self.speaker.speak(ai_reply)
                     else:
