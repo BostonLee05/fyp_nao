@@ -3,20 +3,83 @@ import time
 import qi
 from flask import Flask, render_template, request, jsonify
 
+from speaker import Speaker
 from modules.fall_recovery import FallRecovery
 from modules.voice_recognition import VoiceRecognition
+from modules.gemini_service import GeminiService
 
 app = Flask(__name__)
 
-IP = "192.168.0.106"
+IP = "127.0.0.1"
 PORT = 9559
 
-def handle_hello():
-    print("Executing hello action!")
+session = None
+speaker = None
+fall = None
+voice = None
+gemini = None
+
+def say_hello():
+    speaker.speak("Hello there! I'm Great!")
+
+def sit_down():
+
+    try:
+        posture = session.service("ALRobotPosture")
+        current_posture = posture.getPosture()
+        print(f"[Posture] Current posture: {current_posture}")
+
+        if current_posture in ["Sit"]:
+            print("[Posture] Robot is already sitted. Skipping task.")
+            speaker.speak("I am already in siting posture.")
+            return
+
+        print("[Posture] Changing posture to 'Sit'...")
+        speaker.speak("Sitting down.")
+
+        success = posture.goToPosture("Sit", 0.5)
+
+        if success:
+            print("[Posture] Robot successfully sit.")
+        else:
+            print("[Posture] Failed to reach standing posture.")
+            speaker.speak("I couldn't sit down.")
+
+    except Exception as e:
+        print(f"[Posture Error] {e}")
+        speaker.speak("Sorry, I encountered an error trying to sit down.")
+
+def stand_up():
+
+    try:
+        posture = session.service("ALRobotPosture")
+        current_posture = posture.getPosture()
+        print(f"[Posture] Current posture: {current_posture}")
+
+        if current_posture in ["StandInit", "Stand"]:
+            print("[Posture] Robot is already standing. Skipping task.")
+            speaker.speak("I am already standing.")
+            return
+
+        print("[Posture] Changing posture to 'StandInit'...")
+        speaker.speak("Standing up.")
+
+        # "StandInit" is the ideal balanced posture for walking/moving
+        success = posture.goToPosture("StandInit", 0.5)
+
+        if success:
+            print("[Posture] Robot successfully stood up.")
+        else:
+            print("[Posture] Failed to reach standing posture.")
+            speaker.speak("I couldn't stand up.")
+
+    except Exception as e:
+        print(f"[Posture Error] {e}")
+        speaker.speak("Sorry, I encountered an error trying to stand up.")
 
 
 def initialize_robot():
-    global session
+    global session, speaker, fall, voice, gemini
 
     connection_url = f"tcp://{IP}:{PORT}"
     session = qi.Session()
@@ -29,13 +92,20 @@ def initialize_robot():
         print(f"Failed to connect to NAO at: {connection_url}\nError: {e}")
         sys.exit(1)
 
+    speaker = Speaker(session)
+
+    gemini = GeminiService()
+    print(f"[System] Gemini Service status: {'Ready' if gemini.client else 'No API Key'}")
+
     # 1. Start Fall Recovery in background thread
-    fall = FallRecovery(session)
+    fall = FallRecovery(session, speaker)
     fall.start()
 
-    # 2. Start Voice Recognition module
-    voice = VoiceRecognition(session)
-    voice.register_command("hello", handle_hello)
+    # Start Voice Recognition module
+    voice = VoiceRecognition(session, speaker)
+    voice.register_command("hello", say_hello)
+    voice.register_command("sit down", sit_down)
+    voice.register_command("stand up", stand_up)
     voice.start()
 
     print("\n[System] All robot modules initialized and running continuously.")
@@ -43,20 +113,18 @@ def initialize_robot():
 
 # --- Flask Web Routes ---
 
-@app.route('/')
+@app.route("/")
 def index():
-    return render_template('index.html')
+    return render_template("index.html")
 
 
-@app.route('/say', methods=['POST'])
+@app.route("/say", methods=["POST"])
 def say_something():
     data = request.get_json()
-    text = data.get('text', '')
+    text = data.get("text", "")
 
     try:
-        # Pull the ALTextToSpeech service using the global qi session
-        tts = session.service("ALTextToSpeech")
-        tts.say(str(text))
+        speaker.speak(str(text))
         return jsonify({"status": "success", "message": "NAO spoke."})
     except Exception as e:
         return jsonify({"status": "error", "message": f"Failed to speak: {e}"})
@@ -65,17 +133,14 @@ def say_something():
 # --- Application Entry Point ---
 
 if __name__ == "__main__":
-    # First, spin up all robot configurations and background threads
     initialize_robot()
 
-    # Second, hand over control to Flask.
     print("[System] Launching web server. Press Ctrl+C to stop.")
     try:
-        app.run(host='0.0.0.0', port=5000, debug=False)
+        app.run(host="0.0.0.0", port=5000, debug=False)
     except KeyboardInterrupt:
         pass
     finally:
-        # Triggers cleanly when you shut down the Flask server
         print("\n[System] Shutting down services...")
         if fall:
             fall.stop()
