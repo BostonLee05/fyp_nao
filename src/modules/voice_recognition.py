@@ -113,23 +113,46 @@ class VoiceRecognition(object):
             print(f"[Voice ERROR] Failed to start speech recognition: {e}")
 
     def _set_wake_mode(self):
-        """State 1: Sleep mode waiting for wake word."""
+        """Return to wake-word listening mode."""
         self._stop_timeout_timer()
         self.state = "WAITING_FOR_WAKE"
 
-        if self.asr:
+        if not self.asr:
+            return
+
+        try:
+            self.asr.pause(True)
+
+            self.asr.setLanguage("English")
+            self.asr.setVocabulary(self.wake_words, True)
+
+            self.asr.pause(False)
+
+            print("[Voice] Wake mode restored. Say 'Hey Nao'.")
+
+        except Exception as e:
+            print(f"[Voice ERROR] Failed to restore wake mode: {e}")
+
+            # Try to recover the speech recognition service
             try:
+                self.asr.unsubscribe(self.service_name)
+            except Exception:
+                pass
+
+            try:
+                self.asr.subscribe(self.service_name)
                 self.asr.pause(True)
                 self.asr.setLanguage("English")
                 self.asr.setVocabulary(self.wake_words, True)
                 self.asr.pause(False)
-            except Exception:
-                pass
 
-        try:
-            self.leds.fadeRGB("FaceLeds", 0xFFFFFF, 0.2)  # White LEDs
-        except Exception:
-            pass
+                print("[Voice] Speech recognition restarted.")
+
+            except Exception as restart_error:
+                print(
+                    f"[Voice ERROR] Could not restart speech recognition: "
+                    f"{restart_error}"
+                )
 
     def _set_command_mode(self, prompt=True):
         """State 2: Active chat mode waiting for commands/queries."""
