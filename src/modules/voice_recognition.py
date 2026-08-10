@@ -88,11 +88,29 @@ class VoiceRecognition(object):
         if not self.commands:
             print("[WARN] No commands registered!")
 
-        self.subscriber = self.memory.subscriber("WordRecognized")
-        self.subscriber.signal.connect(self._on_word_recognized)
-        self._set_wake_mode()
-        self.is_listening = True
-        print("[Voice] Listening active. Say 'Hey Nao' to activate commands.")
+        if not self.asr:
+            print("[Voice ERROR] ALSpeechRecognition is not available.")
+            return
+
+        try:
+            # Subscribe the speech recognition service
+            self.asr.subscribe(self.service_name)
+
+            # Listen for recognized words
+            self.subscriber = self.memory.subscriber("WordRecognized")
+            self.subscriber.signal.connect(self._on_word_recognized)
+
+            self._set_wake_mode()
+
+            self.is_listening = True
+
+            print(
+                "[Voice] Listening active. "
+                "Say 'Hey Nao' to activate commands."
+            )
+
+        except Exception as e:
+            print(f"[Voice ERROR] Failed to start speech recognition: {e}")
 
     def _set_wake_mode(self):
         """State 1: Sleep mode waiting for wake word."""
@@ -266,18 +284,32 @@ class VoiceRecognition(object):
 
     def stop(self):
         """Cleanup resources."""
+
         if self.timeout_timer:
             self.timeout_timer.cancel()
+            self.timeout_timer = None
 
-        if self.is_listening:
-            if self.asr:
-                try:
-                    self.asr.unsubscribe(self.service_name)
-                except Exception:
-                    pass
+        if self.subscriber:
             try:
-                self.leds.reset("FaceLeds")
+                self.subscriber.signal.disconnect(
+                    self._on_word_recognized
+                )
             except Exception:
                 pass
-            self.is_listening = False
-            print("[Voice] Unsubscribed speech recognition service.")
+
+            self.subscriber = None
+
+        if self.asr:
+            try:
+                self.asr.unsubscribe(self.service_name)
+            except Exception:
+                pass
+
+        try:
+            self.leds.reset("FaceLeds")
+        except Exception:
+            pass
+
+        self.is_listening = False
+
+        print("[Voice] Speech recognition stopped.")

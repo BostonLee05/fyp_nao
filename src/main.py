@@ -4,7 +4,6 @@ Flask entry point for the NAO Smart Classroom Monitoring System.
 """
 
 import sys
-import qi
 
 from flask import Flask, render_template, request, jsonify
 
@@ -12,6 +11,9 @@ from speaker import Speaker
 from modules.fall_recovery import FallRecovery
 from modules.voice_recognition import VoiceRecognition
 from modules.gemini_service import GeminiService
+
+from nao_api import get_nao_manager
+from config import ROBOT_IP, ROBOT_PORT
 
 from routes.home import home_bp
 from routes.robot import robot_bp
@@ -22,13 +24,11 @@ from routes.behaviour import behaviour_bp
 from routes.reports import reports_bp
 from routes.settings import settings_bp
 
-
 app = Flask(__name__)
 
-IP = "127.0.0.1"
-PORT = 9559
-
 session = None
+nao_manager = get_nao_manager()
+
 speaker = None
 fall = None
 voice = None
@@ -110,17 +110,28 @@ def stand_up():
 def initialize_robot():
     global session, speaker, fall, voice, gemini
 
-    connection_url = f"tcp://{IP}:{PORT}"
-    session = qi.Session()
-
     try:
-        print(f"Connecting to NAO at: {connection_url}")
-        session.connect(connection_url)
+        print(
+            f"Connecting to NAO at: "
+            f"tcp://{ROBOT_IP}:{ROBOT_PORT}"
+        )
+
+        # Use the shared NAOManager connection
+        nao_manager.connect(
+            ROBOT_IP,
+            ROBOT_PORT
+        )
+
+        # IMPORTANT:
+        # Get the same qi.Session used by NAOManager.
+        session = nao_manager.get_session()
+
         print("Successfully connected.")
 
     except Exception as e:
         print(
-            f"Failed to connect to NAO at: {connection_url}\n"
+            f"Failed to connect to NAO at: "
+            f"tcp://{ROBOT_IP}:{ROBOT_PORT}\n"
             f"Error: {e}"
         )
         sys.exit(1)
@@ -148,7 +159,8 @@ def initialize_robot():
     voice.start()
 
     print(
-        "\n[System] All robot modules initialized and running continuously."
+        "\n[System] All robot modules initialized "
+        "and running continuously."
     )
 
 
@@ -225,5 +237,8 @@ if __name__ == "__main__":
 
         if voice:
             voice.stop()
+
+        if nao_manager.is_connected():
+            nao_manager.disconnect()
 
         print("[System] Closed successfully.")
