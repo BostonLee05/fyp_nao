@@ -59,8 +59,10 @@ class VoiceRecognition(object):
             return None
 
         try:
-            # Parameters: Top camera (0), VGA 640x480 (2), RGB color space (11), 30 FPS
-            client_name = self.video_service.subscribe("gemini_vision", 0, 2, 11, 30)
+            # FIX: Use subscribeCamera for 5 arguments (name, cameraIndex, resolution, colorSpace, fps)
+            client_name = self.video_service.subscribeCamera(
+                "gemini_vision", int(0), int(2), int(11), int(5)
+            )
 
             try:
                 nao_image = self.video_service.getImageRemote(client_name)
@@ -72,12 +74,7 @@ class VoiceRecognition(object):
                 height = nao_image[1]
                 array = nao_image[6]
 
-                # Convert raw byte buffer into a PIL Image
-                try:
-                    img = Image.frombytes("RGB", (width, height), bytes(array))
-                except (AttributeError, TypeError):
-                    img = Image.fromstring("RGB", (width, height), str(bytearray(array)))
-                return img
+                return Image.frombytes("RGB", (width, height), bytes(array))
         except Exception as e:
             print("[Voice Error] Failed to capture camera frame: %s" % e)
 
@@ -88,71 +85,30 @@ class VoiceRecognition(object):
         if not self.commands:
             print("[WARN] No commands registered!")
 
-        if not self.asr:
-            print("[Voice ERROR] ALSpeechRecognition is not available.")
-            return
-
-        try:
-            # Subscribe the speech recognition service
-            self.asr.subscribe(self.service_name)
-
-            # Listen for recognized words
-            self.subscriber = self.memory.subscriber("WordRecognized")
-            self.subscriber.signal.connect(self._on_word_recognized)
-
-            self._set_wake_mode()
-
-            self.is_listening = True
-
-            print(
-                "[Voice] Listening active. "
-                "Say 'Hey Nao' to activate commands."
-            )
-
-        except Exception as e:
-            print(f"[Voice ERROR] Failed to start speech recognition: {e}")
+        self.subscriber = self.memory.subscriber("WordRecognized")
+        self.subscriber.signal.connect(self._on_word_recognized)
+        self._set_wake_mode()
+        self.is_listening = True
+        print("[Voice] Listening active. Say 'Hey Nao' to activate commands.")
 
     def _set_wake_mode(self):
-        """Return to wake-word listening mode."""
+        """State 1: Sleep mode waiting for wake word."""
         self._stop_timeout_timer()
         self.state = "WAITING_FOR_WAKE"
 
-        if not self.asr:
-            return
-
-        try:
-            self.asr.pause(True)
-
-            self.asr.setLanguage("English")
-            self.asr.setVocabulary(self.wake_words, True)
-
-            self.asr.pause(False)
-
-            print("[Voice] Wake mode restored. Say 'Hey Nao'.")
-
-        except Exception as e:
-            print(f"[Voice ERROR] Failed to restore wake mode: {e}")
-
-            # Try to recover the speech recognition service
+        if self.asr:
             try:
-                self.asr.unsubscribe(self.service_name)
-            except Exception:
-                pass
-
-            try:
-                self.asr.subscribe(self.service_name)
                 self.asr.pause(True)
                 self.asr.setLanguage("English")
                 self.asr.setVocabulary(self.wake_words, True)
                 self.asr.pause(False)
+            except Exception:
+                pass
 
-                print("[Voice] Speech recognition restarted.")
-
-            except Exception as restart_error:
-                print(
-                    f"[Voice ERROR] Could not restart speech recognition: "
-                    f"{restart_error}"
-                )
+        try:
+            self.leds.fadeRGB("FaceLeds", 0xFFFFFF, 0.2)  # White LEDs
+        except Exception:
+            pass
 
     def _set_command_mode(self, prompt=True):
         """State 2: Active chat mode waiting for commands/queries."""
@@ -307,32 +263,18 @@ class VoiceRecognition(object):
 
     def stop(self):
         """Cleanup resources."""
-
         if self.timeout_timer:
             self.timeout_timer.cancel()
-            self.timeout_timer = None
 
-        if self.subscriber:
+        if self.is_listening:
+            if self.asr:
+                try:
+                    self.asr.unsubscribe(self.service_name)
+                except Exception:
+                    pass
             try:
-                self.subscriber.signal.disconnect(
-                    self._on_word_recognized
-                )
+                self.leds.reset("FaceLeds")
             except Exception:
                 pass
-
-            self.subscriber = None
-
-        if self.asr:
-            try:
-                self.asr.unsubscribe(self.service_name)
-            except Exception:
-                pass
-
-        try:
-            self.leds.reset("FaceLeds")
-        except Exception:
-            pass
-
-        self.is_listening = False
-
-        print("[Voice] Speech recognition stopped.")
+            self.is_listening = False
+            print("[Voice] Unsubscribed speech recognition service.")
