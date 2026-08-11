@@ -27,7 +27,14 @@ class VoiceRecognition(object):
             self.video_service = self.session.service("ALVideoDevice")
         except Exception:
             self.video_service = None
-            print("[Voice WARN] ALVideoDevice service not available: %s")
+            print("[Voice WARN] ALVideoDevice service not available.")
+
+        # Initialize ALAnimatedSpeech for body gestures while speaking
+        try:
+            self.animated_speech = self.session.service("ALAnimatedSpeech")
+        except Exception:
+            self.animated_speech = None
+            print("[Voice WARN] ALAnimatedSpeech service not available.")
 
         self.service_name = "VoiceRecognitionModule"
         self.is_listening = False
@@ -37,6 +44,28 @@ class VoiceRecognition(object):
         self.state = "WAITING_FOR_WAKE"
         self.timeout_timer = None
         self.subscriber = None
+
+    def speak(self, text):
+        """
+        Speaks text using NAOqi ALAnimatedSpeech with automatic gestures,
+        falling back to the standard speaker instance if unavailable or in virtual mode.
+        """
+        if not text:
+            return
+
+        print(f"[Voice Speaking]: {text}")
+
+        if self.animated_speech and not self.is_virtual:
+            try:
+                # Enables contextual body gestures during speech execution
+                self.animated_speech.say(str(text))
+                return
+            except Exception as e:
+                print(f"[Voice Error] Animated speech failed: {e}")
+
+        # Fallback to standard speaker implementation
+        if self.speaker:
+            self.speaker.speak(text)
 
     def _start_timeout_timer(self, duration=20.0):
         self._stop_timeout_timer()
@@ -173,9 +202,9 @@ class VoiceRecognition(object):
         except Exception:
             pass
 
-        # Speak "Yes?" only on the initial wake word trigger
+        # Speak "Yes?" with natural gesture on wake word trigger
         if prompt:
-            self.speaker.speak("Yes?")
+            self.speak("Yes?")
 
         if self.asr:
             try:
@@ -183,14 +212,14 @@ class VoiceRecognition(object):
             except Exception:
                 pass
 
-        # Start 10s idle timer after speaking is done and mic is live
+        # Start idle timer after speaking is done and mic is live
         self._start_timeout_timer(20.0)
 
     def _on_command_timeout(self):
-        """Triggered if user is silent for 10s in WAITING_FOR_COMMAND state."""
+        """Triggered if user is silent in WAITING_FOR_COMMAND state."""
         if self.state == "WAITING_FOR_COMMAND":
             print("[Voice] Command timeout reached.")
-            self.speaker.speak("Oops! Command timeout. Call me again when you need me!")
+            self.speak("Oops! Command timeout. Call me again when you need me!")
             self._set_wake_mode()
 
     def _on_word_recognized(self, value):
@@ -228,7 +257,7 @@ class VoiceRecognition(object):
                         self.asr.pause(True)
                     except Exception:
                         pass
-                self.speaker.speak("Goodbye!")
+                self.speak("Goodbye!")
                 self._set_wake_mode()
                 return
 
@@ -288,19 +317,19 @@ class VoiceRecognition(object):
 
                     image_frame = None
                     if needs_vision:
-                        self.speaker.speak("Let me have a look...")
+                        self.speak("Let me have a look...")
                         image_frame = self.capture_frame()
                     else:
-                        self.speaker.speak("I'm thinking...")
+                        self.speak("I'm thinking...")
 
                     if self.gemini_service:
                         ai_reply = self.gemini_service.ask(query_prompt, image=image_frame)
                         print(f"[Gemini Response] {ai_reply}")
-                        self.speaker.speak(ai_reply)
+                        self.speak(ai_reply)
                     else:
                         print("[Voice Error] Failed to generate Gemini response.")
 
-                    # Loop back to command mode: enable mic and start 10s timer NOW
+                    # Loop back to command mode: enable mic and start timer
                     self._set_command_mode(prompt=False)
 
                 threading.Thread(target=handle_gemini_query).start()
