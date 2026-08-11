@@ -26,36 +26,32 @@ from routes.settings import settings_bp
 
 app = Flask(__name__)
 
-
 nao_manager = get_nao_manager()
 
+robot_manager = None
 speaker = None
 fall = None
 voice = None
 gemini = None
 
-
 # ---------------------------------------------------
 # Robot Commands
 # ---------------------------------------------------
 
-def say_hello():
-    if speaker:
-        speaker.speak("Hello there! I'm Great!")
-
-
 def sit_down():
-    if not robot_manager or not robot_manager.get_session():
+    if not nao_manager.is_connected():
         print("[Posture Error] Robot session not available.")
         return
 
     try:
-        posture = robot_manager.get_session().service("ALRobotPosture")
+        posture = nao_manager.get_service("ALRobotPosture")
         current_posture = posture.getPosture()
 
         print(f"[Posture] Current posture: {current_posture}")
 
-        if current_posture in ["Sit"]:
+        speaker = app.config.get("SPEAKER")
+
+        if current_posture == "Sit":
             print("[Posture] Robot is already sitting. Skipping task.")
             if speaker:
                 speaker.speak("I am already in sitting posture.")
@@ -76,20 +72,23 @@ def sit_down():
 
     except Exception as e:
         print(f"[Posture Error] {e}")
+        speaker = app.config.get("SPEAKER")
         if speaker:
             speaker.speak("Sorry, I encountered an error trying to sit down.")
 
 
 def stand_up():
-    if not robot_manager or not robot_manager.get_session():
+    if not nao_manager.is_connected():
         print("[Posture Error] Robot session not available.")
         return
 
     try:
-        posture = robot_manager.get_session().service("ALRobotPosture")
+        posture = nao_manager.get_service("ALRobotPosture")
         current_posture = posture.getPosture()
 
         print(f"[Posture] Current posture: {current_posture}")
+
+        speaker = app.config.get("SPEAKER")
 
         if current_posture in ["StandInit", "Stand"]:
             print("[Posture] Robot is already standing. Skipping task.")
@@ -112,8 +111,10 @@ def stand_up():
 
     except Exception as e:
         print(f"[Posture Error] {e}")
+        speaker = app.config.get("SPEAKER")
         if speaker:
             speaker.speak("Sorry, I encountered an error trying to stand up.")
+
 # ---------------------------------------------------
 # Robot Initialization
 # ---------------------------------------------------
@@ -135,7 +136,6 @@ def initialize_robot():
 
         # 2. Start Voice Recognition
         voice = VoiceRecognition(session, speaker)
-        voice.register_command("hello", say_hello)
         voice.register_command("sit down", sit_down)
         voice.register_command("stand up", stand_up)
         voice.start()
