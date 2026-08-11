@@ -79,7 +79,7 @@ def mark_attendance(
     # Get current date and time
     now = datetime.now()
 
-    attendance_date = now.strftime("%Y-%m-%d")
+    attendance_date = active_session["session_date"]
     attendance_time = now.strftime("%H:%M:%S")
 
     # Record attendance
