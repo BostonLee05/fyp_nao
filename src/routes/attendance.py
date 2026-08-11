@@ -1,5 +1,5 @@
 """
-routes/jh_attendance.py
+routes/attendance.py
 
 Attendance Blueprint.
 """

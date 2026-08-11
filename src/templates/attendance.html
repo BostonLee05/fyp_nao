@@ -99,7 +99,9 @@ new Date().toISOString().split("T")[0];
 
 async function refreshStatus(){
 
-    const r = await fetch(statusUrl);
+    const r = await fetch(statusUrl + "?t=" + Date.now(), {
+        cache: "no-store"
+    });
     const data = await r.json();
 
     const status = document.getElementById("attendanceSessionStatus");
@@ -113,7 +115,9 @@ async function refreshStatus(){
 
 async function refreshAttendance(){
 
-    const r = await fetch(currentUrl);
+    const r = await fetch(currentUrl + "?t=" + Date.now(), {
+        cache: "no-store"
+    });
     const data = await r.json();
 
     const body = document.getElementById("attendanceBody");
