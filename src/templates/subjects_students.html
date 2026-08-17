@@ -7,60 +7,173 @@
 
 <div class="dashboard-grid">
 
+    <!-- ================================================== -->
+    <!-- SUBJECT MANAGEMENT -->
+    <!-- ================================================== -->
+
     <section class="panel">
 
-        <h2><i class="fa-solid fa-book"></i> Subject Management</h2>
+        <h2>
+            <i class="fa-solid fa-book"></i>
+            Subject Management
+        </h2>
 
-        <label>Subject Code</label>
-        <input type="text" placeholder="BMSE3153">
+        <label for="subjectCode">Subject Code</label>
+        <input
+            id="subjectCode"
+            type="text"
+            placeholder="BMIT2073"
+        >
 
-        <label>Subject Name</label>
-        <input type="text" placeholder="Final Year Project">
+        <label for="subjectName">Subject Name</label>
+        <input
+            id="subjectName"
+            type="text"
+            placeholder="Testing Class"
+        >
 
-        <label>Semester</label>
-        <input type="text" placeholder="2026 Semester 2">
+        <label for="semester">Semester</label>
+        <input
+            id="semester"
+            type="text"
+            placeholder="2026 Semester 2"
+        >
 
-        <button id="addSubjectBtn">Create Subject</button>
+        <button id="addSubjectBtn">
+            Create Subject
+        </button>
+
+        <p id="subjectMessage"></p>
 
         <hr>
 
         <h3>Registered Subjects</h3>
 
         <table class="attendance-table">
-            <tr><th>Code</th><th>Name</th></tr>
-            <tr><td>BMSE3153</td><td>Final Year Project</td></tr>
-            <tr><td>BMIS2113</td><td>IT Infrastructure</td></tr>
-            <tr><td>CCCS3213</td><td>Cloud Computing</td></tr>
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Semester</th>
+                </tr>
+            </thead>
+
+            <tbody id="subjectsBody">
+                <tr>
+                    <td colspan="3" style="text-align:center;">
+                        Loading subjects...
+                    </td>
+                </tr>
+            </tbody>
         </table>
 
     </section>
 
+
+    <!-- ================================================== -->
+    <!-- STUDENT REGISTRATION -->
+    <!-- ================================================== -->
+
     <section class="panel">
 
-        <h2><i class="fa-solid fa-user-graduate"></i> Student Registration</h2>
+        <h2>
+            <i class="fa-solid fa-user-graduate"></i>
+            Student Registration
+        </h2>
 
-        <label>Student ID</label>
-        <input type="text" placeholder="23WMR001">
+        <form id="studentForm">
 
-        <label>Student Name</label>
-        <input type="text" placeholder="Lee Yen Hong">
+            <label for="studentId">Student ID</label>
+            <input
+                id="studentId"
+                name="student_id"
+                type="text"
+                placeholder="S001"
+                required
+            >
 
-        <label>Programme</label>
-        <input type="text" placeholder="Bachelor of Information Technology">
+            <label for="studentName">Student Name</label>
+            <input
+                id="studentName"
+                name="student_name"
+                type="text"
+                placeholder="Lee Yen Hong"
+                required
+            >
 
-        <label>Subject</label>
-        <select>
-            <option>BMSE3153 - Final Year Project</option>
-        </select>
+            <label for="programme">Programme</label>
+            <input
+                id="programme"
+                name="programme"
+                type="text"
+                placeholder="Bachelor of Information Technology"
+            >
 
-        <label>Face Images</label>
-        <input type="file" multiple>
+            <label for="studentSubject">Subject</label>
+            <select
+                id="studentSubject"
+                name="class_id"
+            >
+                <option value="">
+                    No subject / Enroll later
+                </option>
+            </select>
 
-        <button id="registerStudentBtn">Register Student</button>
+            <button
+                id="registerStudentBtn"
+                type="submit"
+            >
+                Register Student Details
+            </button>
+
+            <p id="studentMessage"></p>
+
+            <hr>
+
+            <h3>NAO Face Registration</h3>
+
+            <p id="faceRegistrationMessage">
+                Register the student details first, then start the
+                NAO camera face capture.
+            </p>
+
+            <div id="faceRegistrationProgress">
+                <strong>Status:</strong>
+                <span id="faceStatusText">Ready</span>
+                <br>
+                <strong>Direction:</strong>
+                <span id="faceDirection">-</span>
+                <br>
+                <strong>Captured:</strong>
+                <span id="faceCaptured">0 / 5</span>
+            </div>
+
+            <button
+                id="startFaceRegistrationBtn"
+                type="button"
+                disabled
+            >
+                Start NAO Face Registration
+            </button>
+
+            <button
+                id="cancelFaceRegistrationBtn"
+                type="button"
+                disabled
+            >
+                Cancel Registration
+            </button>
+
+        </form>
 
     </section>
 
 </div>
+
+
+<!-- ====================================================== -->
+<!-- REGISTERED STUDENTS -->
+<!-- ====================================================== -->
 
 <div class="panel">
 
@@ -73,25 +186,603 @@
                 <th>Photo</th>
                 <th>Student ID</th>
                 <th>Name</th>
+                <th>Programme</th>
                 <th>Subject</th>
-                <th>Actions</th>
+                <th>Face</th>
             </tr>
         </thead>
 
-        <tbody>
-
+        <tbody id="studentsBody">
             <tr>
-                <td>👤</td>
-                <td>23WMR001</td>
-                <td>Lee Yen Hong</td>
-                <td>BMSE3153</td>
-                <td>Edit | Delete | Register Face</td>
+                <td colspan="6" style="text-align:center;">
+                    Loading students...
+                </td>
             </tr>
-
         </tbody>
 
     </table>
 
 </div>
+
+
+<script>
+
+const subjectsUrl =
+    "{{ url_for('subjects.list_subjects') }}";
+
+const studentsUrl =
+    "{{ url_for('subjects.list_students') }}";
+
+const subjectCode =
+    document.getElementById("subjectCode");
+
+const subjectName =
+    document.getElementById("subjectName");
+
+const semester =
+    document.getElementById("semester");
+
+const addSubjectBtn =
+    document.getElementById("addSubjectBtn");
+
+const subjectMessage =
+    document.getElementById("subjectMessage");
+
+const studentForm =
+    document.getElementById("studentForm");
+
+const studentSubject =
+    document.getElementById("studentSubject");
+
+const studentMessage =
+    document.getElementById("studentMessage");
+
+const startFaceRegistrationBtn =
+    document.getElementById(
+        "startFaceRegistrationBtn"
+    );
+
+const cancelFaceRegistrationBtn =
+    document.getElementById(
+        "cancelFaceRegistrationBtn"
+    );
+
+const faceRegistrationMessage =
+    document.getElementById(
+        "faceRegistrationMessage"
+    );
+
+const faceStatusText =
+    document.getElementById(
+        "faceStatusText"
+    );
+
+const faceDirection =
+    document.getElementById(
+        "faceDirection"
+    );
+
+const faceCaptured =
+    document.getElementById(
+        "faceCaptured"
+    );
+
+let registeredStudentId = "";
+
+
+// =========================================================
+// LOAD SUBJECTS
+// =========================================================
+
+async function loadSubjects() {
+
+    try {
+
+        const response = await fetch(
+            subjectsUrl + "?t=" + Date.now(),
+            { cache: "no-store" }
+        );
+
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(
+                data.message || "Unable to load subjects."
+            );
+        }
+
+        const body =
+            document.getElementById("subjectsBody");
+
+        body.innerHTML = "";
+
+        studentSubject.innerHTML = `
+            <option value="">
+                No subject / Enroll later
+            </option>
+        `;
+
+        if (!data.subjects.length) {
+
+            body.innerHTML = `
+                <tr>
+                    <td colspan="3" style="text-align:center;">
+                        No subjects registered yet.
+                    </td>
+                </tr>
+            `;
+
+            return;
+        }
+
+        data.subjects.forEach(subject => {
+
+            const row = document.createElement("tr");
+
+            row.innerHTML = `
+                <td>${escapeHtml(subject.class_code)}</td>
+                <td>${escapeHtml(subject.class_name)}</td>
+                <td>${escapeHtml(subject.semester || "-")}</td>
+            `;
+
+            body.appendChild(row);
+
+            const option = document.createElement("option");
+
+            option.value = subject.class_id;
+
+            option.textContent =
+                `${subject.class_code} - ${subject.class_name}`;
+
+            studentSubject.appendChild(option);
+        });
+
+    } catch (error) {
+
+        console.error(error);
+
+        subjectMessage.textContent =
+            "Failed to load subjects.";
+    }
+}
+
+
+// =========================================================
+// CREATE SUBJECT
+// =========================================================
+
+addSubjectBtn.addEventListener("click", async () => {
+
+    const code = subjectCode.value.trim();
+    const name = subjectName.value.trim();
+    const term = semester.value.trim();
+
+    if (!code || !name) {
+        subjectMessage.textContent =
+            "Subject code and name are required.";
+        return;
+    }
+
+    addSubjectBtn.disabled = true;
+
+    try {
+
+        const response = await fetch(
+            subjectsUrl,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    class_code: code,
+                    class_name: name,
+                    semester: term
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            subjectMessage.textContent =
+                data.message || "Failed to create subject.";
+            return;
+        }
+
+        subjectMessage.textContent =
+            "Subject created successfully.";
+
+        subjectCode.value = "";
+        subjectName.value = "";
+        semester.value = "";
+
+        await loadSubjects();
+
+    } catch (error) {
+
+        console.error(error);
+
+        subjectMessage.textContent =
+            "Unable to connect to the server.";
+
+    } finally {
+        addSubjectBtn.disabled = false;
+    }
+});
+
+
+// =========================================================
+// REGISTER STUDENT DETAILS
+// =========================================================
+
+studentForm.addEventListener("submit", async (event) => {
+
+    event.preventDefault();
+
+    const studentId =
+        document.getElementById("studentId").value.trim();
+
+    const studentName =
+        document.getElementById("studentName").value.trim();
+
+    const programme =
+        document.getElementById("programme").value.trim();
+
+    const classId =
+        studentSubject.value;
+
+    if (!studentId || !studentName) {
+        studentMessage.textContent =
+            "Student ID and student name are required.";
+        return;
+    }
+
+    const registerButton =
+        document.getElementById("registerStudentBtn");
+
+    registerButton.disabled = true;
+
+    try {
+
+        const response = await fetch(
+            studentsUrl,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    student_id: studentId,
+                    student_name: studentName,
+                    programme: programme,
+                    class_id: classId
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            studentMessage.textContent =
+                data.message ||
+                "Failed to register student.";
+            return;
+        }
+
+        registeredStudentId = studentId;
+
+        studentMessage.textContent =
+            "Student details saved successfully.";
+
+        startFaceRegistrationBtn.disabled = false;
+
+        faceRegistrationMessage.textContent =
+            `Student ${studentId} is ready for NAO face registration.`;
+
+        await loadStudents();
+
+    } catch (error) {
+
+        console.error(error);
+
+        studentMessage.textContent =
+            "Unable to connect to the server.";
+
+    } finally {
+
+        registerButton.disabled = false;
+    }
+});
+
+
+// =========================================================
+// NAO FACE REGISTRATION
+// =========================================================
+
+function updateFaceRegistrationUI(data) {
+
+    faceStatusText.textContent =
+        data.message || "Ready";
+
+    faceDirection.textContent =
+        data.current_direction || "-";
+
+    faceCaptured.textContent =
+        `${data.captured || 0} / ${data.total || 5}`;
+
+    if (data.running) {
+
+        startFaceRegistrationBtn.disabled = true;
+        cancelFaceRegistrationBtn.disabled = false;
+
+    } else {
+
+        cancelFaceRegistrationBtn.disabled = true;
+
+        if (data.completed) {
+
+            startFaceRegistrationBtn.disabled = false;
+
+            faceRegistrationMessage.textContent =
+                "Face registration completed. Images saved to the student's dataset folder.";
+
+            studentMessage.textContent =
+                "Student face registration completed.";
+
+            loadStudents();
+
+        } else if (data.error) {
+
+            startFaceRegistrationBtn.disabled = false;
+
+            faceRegistrationMessage.textContent =
+                `Registration failed: ${data.error}`;
+
+        } else {
+
+            startFaceRegistrationBtn.disabled =
+                !registeredStudentId;
+        }
+    }
+}
+
+
+async function pollFaceRegistration() {
+
+    if (!registeredStudentId) {
+        return;
+    }
+
+    try {
+
+        const response = await fetch(
+            `/api/students/${encodeURIComponent(
+                registeredStudentId
+            )}/face-registration/status?t=${Date.now()}`,
+            {
+                cache: "no-store"
+            }
+        );
+
+        const data = await response.json();
+
+        if (data.success) {
+            updateFaceRegistrationUI(data);
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Face registration status error:",
+            error
+        );
+    }
+}
+
+
+startFaceRegistrationBtn.addEventListener(
+    "click",
+    async () => {
+
+        if (!registeredStudentId) {
+
+            faceRegistrationMessage.textContent =
+                "Register the student details first.";
+
+            return;
+        }
+
+        startFaceRegistrationBtn.disabled = true;
+
+        try {
+
+            const response = await fetch(
+                `/api/students/${encodeURIComponent(
+                    registeredStudentId
+                )}/face-registration/start`,
+                {
+                    method: "POST"
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+
+                faceRegistrationMessage.textContent =
+                    data.message ||
+                    "Unable to start face registration.";
+
+                startFaceRegistrationBtn.disabled = false;
+
+                return;
+            }
+
+            faceRegistrationMessage.textContent =
+                "NAO face registration started.";
+
+            await pollFaceRegistration();
+
+        } catch (error) {
+
+            console.error(error);
+
+            faceRegistrationMessage.textContent =
+                "Unable to connect to the server.";
+
+            startFaceRegistrationBtn.disabled = false;
+        }
+    }
+);
+
+
+cancelFaceRegistrationBtn.addEventListener(
+    "click",
+    async () => {
+
+        if (!registeredStudentId) {
+            return;
+        }
+
+        try {
+
+            const response = await fetch(
+                `/api/students/${encodeURIComponent(
+                    registeredStudentId
+                )}/face-registration/cancel`,
+                {
+                    method: "POST"
+                }
+            );
+
+            const data = await response.json();
+
+            faceRegistrationMessage.textContent =
+                data.message ||
+                "Cancellation requested.";
+
+        } catch (error) {
+
+            console.error(error);
+
+            faceRegistrationMessage.textContent =
+                "Unable to cancel registration.";
+        }
+    }
+);
+
+
+setInterval(
+    pollFaceRegistration,
+    1000
+);
+
+
+// =========================================================
+// LOAD STUDENTS
+// =========================================================
+
+async function loadStudents() {
+
+    try {
+
+        const response = await fetch(
+            studentsUrl + "?t=" + Date.now(),
+            { cache: "no-store" }
+        );
+
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(
+                data.message || "Unable to load students."
+            );
+        }
+
+        const body =
+            document.getElementById("studentsBody");
+
+        body.innerHTML = "";
+
+        if (!data.students.length) {
+
+            body.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align:center;">
+                        No students registered yet.
+                    </td>
+                </tr>
+            `;
+
+            return;
+        }
+
+        data.students.forEach(student => {
+
+            const row = document.createElement("tr");
+
+            const faceStatus =
+                Number(student.face_registered) === 1
+                ? "🟢 Registered"
+                : "🔴 Not registered";
+
+            row.innerHTML = `
+                <td>👤</td>
+                <td>${escapeHtml(student.student_id)}</td>
+                <td>${escapeHtml(student.student_name)}</td>
+                <td>${escapeHtml(student.programme || "-")}</td>
+                <td>${escapeHtml(student.subjects || "Not enrolled")}</td>
+                <td>${faceStatus}</td>
+            `;
+
+            body.appendChild(row);
+        });
+
+    } catch (error) {
+
+        console.error(error);
+
+        document.getElementById(
+            "studentsBody"
+        ).innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align:center;">
+                    Failed to load students.
+                </td>
+            </tr>
+        `;
+    }
+}
+
+
+// =========================================================
+// BASIC HTML ESCAPING
+// =========================================================
+
+function escapeHtml(value) {
+
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+
+// =========================================================
+// INITIAL LOAD
+// =========================================================
+
+async function initializePage() {
+    await loadSubjects();
+    await loadStudents();
+    await pollFaceRegistration();
+}
+
+initializePage();
+
+</script>
 
 {% endblock %}
