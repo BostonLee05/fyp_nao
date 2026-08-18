@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 
 {% block title %}Reports{% endblock %}
@@ -6,48 +5,336 @@
 
 {% block content %}
 
-<div class="panel" style="text-align:center;padding:60px;">
+<div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;">
+        <div>
+            <h2 style="margin:0;">Attendance Report</h2>
+            <p style="margin:8px 0 0;color:#777;">
+                View student attendance for a selected date.
+            </p>
+        </div>
+        <i class="fa-solid fa-chart-column"
+           style="font-size:50px;color:#2d8cff;"></i>
+    </div>
+</div>
 
-    <i class="fa-solid fa-chart-column"
-       style="font-size:80px;color:#2d8cff;"></i>
+<div class="panel" style="margin-top:20px;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;align-items:end;">
 
-    <h2 style="margin-top:20px;">
-        Reports & Analytics
-    </h2>
+        <div>
+            <label for="attendanceDate"
+                   style="display:block;font-weight:600;margin-bottom:8px;">
+                Attendance Date
+            </label>
 
-    <h3 style="margin-top:10px;color:#888;">
-        🚧 Work In Progress
-    </h3>
+            <input
+                type="date"
+                id="attendanceDate"
+                max=""
+                style="width:100%;box-sizing:border-box;padding:10px 12px;"
+            >
 
-    <p style="margin-top:25px;line-height:1.8;color:#666;">
-        This module will provide attendance statistics,
-        classroom analytics and export functions.
-    </p>
+            <small style="display:block;margin-top:6px;color:#777;">
+                Today and previous dates are available. Future dates are disabled.
+            </small>
+        </div>
 
-    <div class="dashboard-grid" style="margin-top:40px;">
+        <div>
+            <label for="subjectSelect"
+                   style="display:block;font-weight:600;margin-bottom:8px;">
+                Subject / Class
+            </label>
+
+            <select
+                id="subjectSelect"
+                style="width:100%;box-sizing:border-box;padding:10px 12px;"
+            >
+                <option value="">Select subject</option>
+            </select>
+        </div>
+
+        <div>
+            <button
+                id="loadReportBtn"
+                type="button"
+                style="width:100%;padding:11px 16px;cursor:pointer;"
+            >
+                <i class="fa-solid fa-magnifying-glass"></i>
+                View Attendance
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<div id="reportMessage"
+     class="panel"
+     style="margin-top:20px;display:none;">
+</div>
+
+<div id="reportContent" style="display:none;">
+
+    <div class="dashboard-grid" style="margin-top:20px;">
 
         <div class="panel">
-            <h3>📈 Attendance Statistics</h3>
-            <p>Coming Soon</p>
+            <h4>Total Students</h4>
+            <h2 id="totalStudents">0</h2>
         </div>
 
         <div class="panel">
-            <h3>📊 Behaviour Analytics</h3>
-            <p>Coming Soon</p>
+            <h4>Present</h4>
+            <h2 id="presentStudents">0</h2>
         </div>
 
         <div class="panel">
-            <h3>📄 PDF Report</h3>
-            <p>Coming Soon</p>
+            <h4>Absent</h4>
+            <h2 id="absentStudents">0</h2>
         </div>
 
         <div class="panel">
-            <h3>📥 CSV Export</h3>
-            <p>Coming Soon</p>
+            <h4>Attendance Rate</h4>
+            <h2 id="attendanceRate">0%</h2>
+        </div>
+
+    </div>
+
+    <div class="panel" style="margin-top:20px;">
+
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;">
+            <div>
+                <h2 id="reportTitle" style="margin:0;">Attendance</h2>
+                <p id="reportSubtitle"
+                   style="margin:6px 0 0;color:#777;"></p>
+            </div>
+        </div>
+
+        <div style="overflow-x:auto;margin-top:20px;">
+            <table class="attendance-table" style="width:100%;">
+                <thead>
+                    <tr>
+                        <th>Student ID</th>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+
+                <tbody id="reportBody">
+                    <tr>
+                        <td colspan="4" style="text-align:center;">
+                            No attendance records.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
 
     </div>
 
 </div>
+
+<script>
+const classesUrl = "{{ url_for('reports.report_classes') }}";
+const attendanceReportUrl = "{{ url_for('reports.attendance_report') }}";
+
+const attendanceDate = document.getElementById("attendanceDate");
+const subjectSelect = document.getElementById("subjectSelect");
+const loadReportBtn = document.getElementById("loadReportBtn");
+const reportMessage = document.getElementById("reportMessage");
+const reportContent = document.getElementById("reportContent");
+
+function getTodayLocal() {
+    const now = new Date();
+
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+}
+
+function showMessage(message, isError = false) {
+    reportMessage.style.display = "block";
+    reportMessage.textContent = message;
+
+    if (isError) {
+        reportMessage.style.color = "#b00020";
+    } else {
+        reportMessage.style.color = "#555";
+    }
+}
+
+function hideMessage() {
+    reportMessage.style.display = "none";
+}
+
+function setDefaultDate() {
+    const today = getTodayLocal();
+
+    attendanceDate.value = today;
+    attendanceDate.max = today;
+}
+
+async function loadSubjects() {
+    try {
+        const response = await fetch(classesUrl);
+        const data = await response.json();
+
+        subjectSelect.innerHTML =
+            '<option value="">Select subject</option>';
+
+        if (!data.success || !data.classes.length) {
+            showMessage("No subjects/classes are available.", true);
+            return;
+        }
+
+        data.classes.forEach(item => {
+            const option = document.createElement("option");
+
+            option.value = item.class_id;
+            option.textContent =
+                `${item.class_code} - ${item.class_name}`;
+
+            subjectSelect.appendChild(option);
+        });
+
+    } catch (error) {
+        console.error("Failed to load subjects:", error);
+        showMessage("Unable to load subjects/classes.", true);
+    }
+}
+
+async function loadAttendanceReport() {
+    hideMessage();
+
+    const selectedDate = attendanceDate.value;
+    const classId = subjectSelect.value;
+
+    if (!selectedDate) {
+        showMessage("Please select an attendance date.", true);
+        return;
+    }
+
+    if (!classId) {
+        showMessage("Please select a subject/class.", true);
+        return;
+    }
+
+    if (selectedDate > attendanceDate.max) {
+        showMessage("Future dates cannot be selected.", true);
+        return;
+    }
+
+    loadReportBtn.disabled = true;
+
+    try {
+        const params = new URLSearchParams({
+            date: selectedDate,
+            class_id: classId
+        });
+
+        const response = await fetch(
+            `${attendanceReportUrl}?${params.toString()}`
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            reportContent.style.display = "none";
+            showMessage(
+                data.message || "Unable to load attendance report.",
+                true
+            );
+            return;
+        }
+
+        document.getElementById("totalStudents").textContent =
+            data.summary.total;
+
+        document.getElementById("presentStudents").textContent =
+            data.summary.present;
+
+        document.getElementById("absentStudents").textContent =
+            data.summary.absent;
+
+        document.getElementById("attendanceRate").textContent =
+            `${data.summary.rate}%`;
+
+        document.getElementById("reportTitle").textContent =
+            `${data.class.class_code} - ${data.class.class_name}`;
+
+        document.getElementById("reportSubtitle").textContent =
+            `Attendance for ${data.display_date}`;
+
+        const body = document.getElementById("reportBody");
+        body.innerHTML = "";
+
+        if (!data.records.length) {
+            body.innerHTML = `
+                <tr>
+                    <td colspan="4" style="text-align:center;">
+                        No students are enrolled in this subject.
+                    </td>
+                </tr>
+            `;
+        } else {
+            data.records.forEach(record => {
+                const status = record.status;
+                const statusStyle =
+                    status === "Present"
+                        ? "font-weight:600;color:#16803c;"
+                        : "font-weight:600;color:#b00020;";
+
+                body.innerHTML += `
+                    <tr>
+                        <td>${escapeHtml(record.student_id)}</td>
+                        <td>${escapeHtml(record.student_name)}</td>
+                        <td style="${statusStyle}">
+                            ${escapeHtml(status)}
+                        </td>
+                        <td>${escapeHtml(record.attendance_time || "-")}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        reportContent.style.display = "block";
+
+    } catch (error) {
+        console.error("Attendance report error:", error);
+        reportContent.style.display = "none";
+        showMessage(
+            "Unable to connect to the server.",
+            true
+        );
+    } finally {
+        loadReportBtn.disabled = false;
+    }
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+attendanceDate.addEventListener("change", () => {
+    if (attendanceDate.value > attendanceDate.max) {
+        attendanceDate.value = attendanceDate.max;
+        showMessage("Future dates are not allowed.", true);
+    }
+});
+
+loadReportBtn.addEventListener(
+    "click",
+    loadAttendanceReport
+);
+
+setDefaultDate();
+loadSubjects();
+</script>
 
 {% endblock %}
