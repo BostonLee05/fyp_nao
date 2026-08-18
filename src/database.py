@@ -541,7 +541,68 @@ def get_all_classes():
 
     return classes
 
+def update_class(class_id, class_code, class_name, semester=None):
+    connection = get_connection()
+    cursor = connection.cursor()
 
+    try:
+        cursor.execute("""
+            UPDATE classes
+            SET
+                class_code = ?,
+                class_name = ?,
+                semester = ?
+            WHERE class_id = ?
+        """, (
+            class_code,
+            class_name,
+            semester,
+            class_id
+        ))
+
+        connection.commit()
+
+        return cursor.rowcount > 0
+
+    except sqlite3.IntegrityError:
+        return False
+
+    finally:
+        connection.close()
+
+def delete_class(class_id):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            DELETE FROM classes
+            WHERE class_id = ?
+        """, (class_id,))
+
+        connection.commit()
+
+        return cursor.rowcount > 0
+
+    finally:
+        connection.close()
+
+def delete_student(student_id):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            DELETE FROM students
+            WHERE student_id = ?
+        """, (student_id,))
+
+        connection.commit()
+
+        return cursor.rowcount > 0
+
+    finally:
+        connection.close()
 # =========================================================
 # ENROLL STUDENT
 # =========================================================

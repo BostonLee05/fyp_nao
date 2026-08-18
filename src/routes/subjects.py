@@ -5,16 +5,20 @@ Dynamic Subjects & Students Blueprint.
 """
 
 import os
+import shutil
 
 from flask import Blueprint, jsonify, render_template, request
 
 from database import (
     add_class,
     add_student,
+    delete_class,
+    delete_student,
     enroll_student,
     get_all_classes,
     get_all_students_with_classes,
     get_student,
+    update_class,
     update_face_registration,
     update_student_profile,
 )
@@ -78,6 +82,62 @@ def create_subject():
         "class_id": class_id
     })
 
+@subjects_bp.route("/api/subjects/<int:class_id>", methods=["PUT"])
+def edit_subject(class_id):
+
+    data = request.get_json(silent=True) or {}
+
+    code = str(
+        data.get("class_code", "")
+    ).strip()
+
+    name = str(
+        data.get("class_name", "")
+    ).strip()
+
+    semester = str(
+        data.get("semester", "")
+    ).strip() or None
+
+    if not code or not name:
+        return jsonify({
+            "success": False,
+            "message": "Subject code and subject name are required."
+        }), 400
+
+    success = update_class(
+        class_id,
+        code,
+        name,
+        semester
+    )
+
+    if not success:
+        return jsonify({
+            "success": False,
+            "message": "Unable to update subject. Code may already exist."
+        }), 409
+
+    return jsonify({
+        "success": True,
+        "message": "Subject updated successfully."
+    })
+
+@subjects_bp.route("/api/subjects/<int:class_id>", methods=["DELETE"])
+def remove_subject(class_id):
+
+    success = delete_class(class_id)
+
+    if not success:
+        return jsonify({
+            "success": False,
+            "message": "Subject not found."
+        }), 404
+
+    return jsonify({
+        "success": True,
+        "message": "Subject deleted successfully."
+    })
 
 # =========================================================
 # STUDENTS
@@ -166,6 +226,85 @@ def register_student():
         ) if existing else False
     })
 
+@subjects_bp.route("/api/students/<student_id>", methods=["DELETE"])
+def remove_student(student_id):
+    student_id = str(student_id).strip()
+
+    if not get_student(student_id):
+        return jsonify({
+            "success": False,
+            "message": "Student not found."
+        }), 404
+
+    dataset_folder = os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "dataset",
+            student_id
+        )
+    )
+
+    try:
+        success = delete_student(student_id)
+
+        if not success:
+            return jsonify({
+                "success": False,
+                "message": "Unable to delete student."
+            }), 500
+
+        # Keep the filesystem synchronized with the database.
+        if os.path.isdir(dataset_folder):
+            shutil.rmtree(dataset_folder)
+
+        return jsonify({
+            "success": True,
+            "message": "Student and face dataset deleted successfully."
+        })
+
+    except Exception as exc:
+        return jsonify({
+            "success": False,
+            "message": f"Unable to delete student: {exc}"
+        }), 500
+
+
+@subjects_bp.route("/api/students/<student_id>", methods=["PUT"])
+def edit_student(student_id):
+
+    data = request.get_json(silent=True) or {}
+
+    student_name = str(
+        data.get("student_name", "")
+    ).strip()
+
+    programme = str(
+        data.get("programme", "")
+    ).strip() or None
+
+    if not student_name:
+        return jsonify({
+            "success": False,
+            "message": "Student name is required."
+        }), 400
+
+    success = update_student_profile(
+        student_id,
+        student_name,
+        programme
+    )
+
+    if not success:
+        return jsonify({
+            "success": False,
+            "message": "Student not found."
+        }), 404
+
+    return jsonify({
+        "success": True,
+        "message": "Student updated successfully."
+    })
 
 # =========================================================
 # FACE REGISTRATION - START
