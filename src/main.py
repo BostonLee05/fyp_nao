@@ -158,9 +158,6 @@ if __name__ == "__main__":
         if wake_audio:
             wake_audio.stop()
 
-        if voice:
-            voice.stop()
-
         if fall:
             fall.stop()
 
