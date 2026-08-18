@@ -10,6 +10,7 @@ from flask import Flask, render_template, request, jsonify
 from speaker import Speaker
 from modules.fall_recovery import FallRecovery
 from modules.voice_recognition import VoiceRecognition
+from modules.wake_audio import WakeAudio
 from modules.gemini_service import GeminiService
 
 from nao_api import get_nao_manager
@@ -32,116 +33,22 @@ robot_manager = None
 speaker = None
 fall = None
 voice = None
+wake_audio = None
 gemini = None
-
-# ---------------------------------------------------
-# Robot Commands
-# ---------------------------------------------------
-
-def sit_down():
-    if not nao_manager.is_connected():
-        print("[Posture Error] Robot session not available.")
-        return
-
-    try:
-        posture = nao_manager.get_service("ALRobotPosture")
-        current_posture = posture.getPosture()
-
-        print(f"[Posture] Current posture: {current_posture}")
-
-        speaker = app.config.get("SPEAKER")
-
-        if current_posture == "Sit":
-            print("[Posture] Robot is already sitting. Skipping task.")
-            if speaker:
-                speaker.speak("I am already in sitting posture.")
-            return
-
-        print("[Posture] Changing posture to 'Sit'...")
-        if speaker:
-            speaker.speak("Sitting down.")
-
-        success = posture.goToPosture("Sit", 0.5)
-
-        if success:
-            print("[Posture] Robot successfully sat down.")
-        else:
-            print("[Posture] Failed to reach sitting posture.")
-            if speaker:
-                speaker.speak("I couldn't sit down.")
-
-    except Exception as e:
-        print(f"[Posture Error] {e}")
-        speaker = app.config.get("SPEAKER")
-        if speaker:
-            speaker.speak("Sorry, I encountered an error trying to sit down.")
-
-
-def stand_up():
-    if not nao_manager.is_connected():
-        print("[Posture Error] Robot session not available.")
-        return
-
-    try:
-        posture = nao_manager.get_service("ALRobotPosture")
-        current_posture = posture.getPosture()
-
-        print(f"[Posture] Current posture: {current_posture}")
-
-        speaker = app.config.get("SPEAKER")
-
-        if current_posture in ["StandInit", "Stand"]:
-            print("[Posture] Robot is already standing. Skipping task.")
-            if speaker:
-                speaker.speak("I am already standing.")
-            return
-
-        print("[Posture] Changing posture to 'StandInit'...")
-        if speaker:
-            speaker.speak("Standing up.")
-
-        success = posture.goToPosture("StandInit", 0.5)
-
-        if success:
-            print("[Posture] Robot successfully stood up.")
-        else:
-            print("[Posture] Failed to reach standing posture.")
-            if speaker:
-                speaker.speak("I couldn't stand up.")
-
-    except Exception as e:
-        print(f"[Posture Error] {e}")
-        speaker = app.config.get("SPEAKER")
-        if speaker:
-            speaker.speak("Sorry, I encountered an error trying to stand up.")
 
 # ---------------------------------------------------
 # Robot Initialization
 # ---------------------------------------------------
 
 def initialize_robot():
-    global robot_manager, speaker, fall, voice, gemini
+    global robot_manager, speaker, fall, voice, wake_audio, gemini
 
     robot_manager = get_nao_manager()
+    session = None
 
     try:
         robot_manager.connect(config.ROBOT_IP, config.ROBOT_PORT)
         session = robot_manager.get_session()
-
-        speaker = Speaker(session)
-
-        # 1. Start Fall Recovery
-        fall = FallRecovery(session, speaker)
-        fall.start()
-
-        # 2. Start Voice Recognition
-        voice = VoiceRecognition(session, speaker)
-        voice.register_command("sit down", sit_down)
-        voice.register_command("stand up", stand_up)
-        voice.start()
-
-        print("\n[System] All robot modules initialized and running continuously.")
-
     except Exception as e:
         print(f"\n[System Warning] Could not connect to NAO ({e}).")
         print("[System Warning] Running server in Web-Only Mode (Robot hardware offline).\n")
@@ -152,6 +59,33 @@ def initialize_robot():
         f"[System] Gemini Service status: "
         f"{'Ready' if getattr(gemini, 'client', None) else 'No API Key'}"
     )
+
+    if session:
+        speaker = Speaker(session)
+
+        try:
+            # 1. Start Fall Recovery
+            fall = FallRecovery(session, speaker)
+            fall.start()
+        except Exception as e:
+            print(f"[System Warning] Fall Recovery did not start: {e}")
+
+        try:
+            # 2. Prepare Voice Recognition for wake-word-triggered recording
+            voice = VoiceRecognition(session, speaker, gemini_service=gemini)
+        except Exception as e:
+            print(f"[System Warning] Voice Recognition did not start: {e}")
+
+        if voice:
+            try:
+                # 3. Start NAOqi wake-word recognition
+                wake_audio = WakeAudio(session, speaker, voice)
+                wake_audio.start()
+            except Exception as e:
+                print(f"[System Warning] Wake Audio did not start: {e}")
+
+        print("\n[System] Robot module initialization finished.")
+
 
 # ---------------------------------------------------
 # Flask Blueprints
@@ -221,11 +155,14 @@ if __name__ == "__main__":
     finally:
         print("\n[System] Shutting down services...")
 
-        if fall:
-            fall.stop()
+        if wake_audio:
+            wake_audio.stop()
 
         if voice:
             voice.stop()
+
+        if fall:
+            fall.stop()
 
         if nao_manager.is_connected():
             nao_manager.disconnect()
