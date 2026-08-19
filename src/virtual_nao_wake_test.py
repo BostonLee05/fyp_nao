@@ -118,6 +118,7 @@ class VirtualVoiceRecognition(VoiceRecognition):
         mode="mic",
         duration=4,
         use_gemini=True,
+        frame_provider=None,
     ):
         self.virtual_mode = mode
         self.default_duration = duration
@@ -129,6 +130,7 @@ class VirtualVoiceRecognition(VoiceRecognition):
             speaker=speaker,
             use_test_audio=(mode == "test"),
             use_gemini=use_gemini,
+            frame_provider=frame_provider,
         )
 
         self.audio_recorder = True
@@ -321,6 +323,7 @@ def main():
         mode=args.mode,
         duration=args.duration,
         use_gemini=not args.no_gemini,
+        frame_provider=None,
     )
     wake_audio = WakeAudio(session, speaker, voice)
     wake_audio.start()

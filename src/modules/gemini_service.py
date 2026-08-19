@@ -18,7 +18,9 @@ class GeminiService(object):
             self.system_instruction = system_instruction or (
                 "You are NAO, a friendly humanoid robot. "
                 "Keep all answers very short, concise, and direct (1 to 2 sentences maximum). "
-                "Use simple language suitable for a general class audience with a natural tone."
+                "Use simple English only. "
+                "If the user speaks another language, translate it internally and respond only in English. "
+                "If an image is provided, use it as the current NAO camera view when answering."
             )
             # Initialize a persistent chat session
             self.chat = self.client.chats.create(
@@ -37,7 +39,15 @@ class GeminiService(object):
         try:
             contents = []
             if image is not None:
-                contents.append(image)
+                if isinstance(image, bytes):
+                    contents.append(
+                        types.Part.from_bytes(
+                            data=image,
+                            mime_type="image/jpeg",
+                        )
+                    )
+                else:
+                    contents.append(image)
             contents.append(prompt)
 
             response = self.chat.send_message(contents)

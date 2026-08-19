@@ -12,6 +12,7 @@ from modules.fall_recovery import FallRecovery
 from modules.voice_recognition import VoiceRecognition
 from modules.wake_audio import WakeAudio
 from modules.gemini_service import GeminiService
+from integrated_monitoring import monitor
 
 from nao_api import get_nao_manager
 import config
@@ -72,7 +73,12 @@ def initialize_robot():
 
         try:
             # 2. Prepare Voice Recognition for wake-word-triggered recording
-            voice = VoiceRecognition(session, speaker, gemini_service=gemini)
+            voice = VoiceRecognition(
+                session,
+                speaker,
+                gemini_service=gemini,
+                frame_provider=monitor.get_frame,
+            )
         except Exception as e:
             print(f"[System Warning] Voice Recognition did not start: {e}")
 

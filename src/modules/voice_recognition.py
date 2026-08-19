@@ -2,6 +2,17 @@ import os
 import tempfile
 import threading
 from pathlib import Path
+
+try:
+    import cv2
+except ImportError:  # pragma: no cover - environment dependent
+    cv2 = None
+
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover - environment dependent
+    np = None
+
 from faster_whisper import WhisperModel
 
 from modules.gemini_service import GeminiService
@@ -15,12 +26,14 @@ class VoiceRecognition:
         use_test_audio=True,
         gemini_service=None,
         use_gemini=True,
+        frame_provider=None,
     ):
         self.session = session
         self.speaker = speaker
         self.use_test_audio = use_test_audio
         self.use_gemini = use_gemini
         self.gemini_service = gemini_service
+        self.frame_provider = frame_provider
         self.recording_lock = threading.Lock()
 
         module_dir = Path(__file__).resolve().parent
@@ -130,12 +143,66 @@ class VoiceRecognition:
     def _transcribe(self, audio_path):
         """Converts audio file to text using faster-whisper."""
         try:
-            segments, _ = self.model.transcribe(audio_path, beam_size=5)
+            segments, _ = self.model.transcribe(
+                audio_path,
+                beam_size=5,
+                task="translate",
+            )
             transcription = "".join([segment.text for segment in segments]).strip()
             return transcription
         except Exception as e:
             print(f"[VoiceRecognition Error] Transcription failed: {e}")
             return ""
+
+    def _capture_camera_frame(self):
+        if cv2 is None:
+            return None
+
+        try:
+            frame = None
+
+            if self.frame_provider is not None:
+                frame = self.frame_provider()
+            elif self.session and self.session.isConnected() and np is not None:
+                video = self.session.service("ALVideoDevice")
+                client_name = f"VoiceRecognitionVision_{threading.get_ident()}"
+                client_name = video.subscribeCamera(
+                    client_name,
+                    0,
+                    2,
+                    11,
+                    5,
+                )
+                try:
+                    image = video.getImageRemote(client_name)
+                finally:
+                    try:
+                        video.unsubscribe(client_name)
+                    except Exception:
+                        pass
+
+                if image is None:
+                    return None
+
+                width = int(image[0])
+                height = int(image[1])
+                image_data = image[6]
+                frame = np.frombuffer(image_data, dtype=np.uint8).reshape(
+                    (height, width, 3)
+                )
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+            if frame is None:
+                return None
+
+            ok, buffer = cv2.imencode(".jpg", frame)
+            if not ok:
+                return None
+
+            return buffer.tobytes()
+        except Exception as e:
+            print(f"[VoiceRecognition Warning] Camera frame capture failed: {e}")
+            return None
 
     def _on_speech_recognized(self, text):
         """Triggers actions when speech is detected."""
@@ -150,7 +217,17 @@ class VoiceRecognition:
             return
 
         if self.speaker and self.gemini_service and self.use_gemini:
-            response = self.gemini_service.ask(text)
+            image = self._capture_camera_frame()
+
+            prompt = text
+            if image is not None:
+                prompt = (
+                    "Use the attached NAO camera image if it helps answer the question. "
+                    "Reply in English only. "
+                    f"User said: {text}"
+                )
+
+            response = self.gemini_service.ask(prompt, image=image)
             if response:
                 print(f"[VoiceRecognition] Gemini: \"{response}\"")
                 self.speaker.speak(response)
