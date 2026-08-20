@@ -2,16 +2,8 @@ import os
 import tempfile
 import threading
 from pathlib import Path
-
-try:
-    import cv2
-except ImportError:  # pragma: no cover - environment dependent
-    cv2 = None
-
-try:
-    import numpy as np
-except ImportError:  # pragma: no cover - environment dependent
-    np = None
+import cv2
+import numpy as np
 
 from faster_whisper import WhisperModel
 
@@ -61,10 +53,27 @@ class VoiceRecognition:
                 print("[VoiceRecognition] ALFileManager connected.")
 
                 try:
-                    print(
-                        "[VoiceRecognition] ALFileManager methods:",
-                        self.file_manager.metaObject().methodNames()
-                    )
+                    meta_object = self.file_manager.metaObject()
+                    if hasattr(meta_object, "methodNames"):
+                        methods = list(meta_object.methodNames())
+                    elif isinstance(meta_object, dict):
+                        raw_methods = (
+                            meta_object.get("methods") or meta_object.get("method") or []
+                        )
+                        if isinstance(raw_methods, dict):
+                            methods = list(raw_methods.keys())
+                        else:
+                            methods = [
+                                method.get("name")
+                                if isinstance(method, dict) and "name" in method
+                                else str(method)
+                                for method in raw_methods
+                            ]
+                    else:
+                        methods = []
+
+                    if methods:
+                        print("[VoiceRecognition] ALFileManager methods:", methods)
                 except Exception as e:
                     print(
                         f"[VoiceRecognition Warning] "
@@ -238,6 +247,7 @@ class VoiceRecognition:
             return False
 
         normalized_text = text.lower()
+        compact_text = normalized_text.replace(" ", "")
 
         if "attendance mode" in normalized_text:
             self.speaker.speak("Attendance Mode Activating...")
@@ -247,4 +257,92 @@ class VoiceRecognition:
             self.speaker.speak("Hello, this is from pre-built keyword...")
             return True
 
+        if self._contains_command(normalized_text, compact_text, ["stand up", "standup"]):
+            self.speaker.speak("Standing up.")
+            self._go_to_posture("StandInit")
+            return True
+
+        if self._contains_command(normalized_text, compact_text, ["sit down", "sitdown"]):
+            self.speaker.speak("Sitting down.")
+            self._go_to_posture("Sit")
+            return True
+
+        if self._contains_command(normalized_text, compact_text, ["wake up", "wakeup"]):
+            self.speaker.speak("Waking up.")
+            self._wake_up()
+            return True
+
+        if "rest" in normalized_text:
+            self.speaker.speak("Going to rest mode.")
+            self._rest()
+            return True
+
+        if "crouch" in normalized_text:
+            self.speaker.speak("Crouching.")
+            self._go_to_posture("Crouch")
+            return True
+
         return False
+
+    def _contains_command(self, normalized_text, compact_text, phrases):
+        for phrase in phrases:
+            if " " in phrase:
+                if phrase in normalized_text:
+                    return True
+            elif phrase in compact_text:
+                return True
+        return False
+
+    def _get_nao_service(self, name):
+        try:
+            if self.session and self.session.isConnected():
+                return self.session.service(name)
+        except Exception as e:
+            print(f"[VoiceRecognition Warning] Could not get {name}: {e}")
+        return None
+
+    def _wake_up(self):
+        motion = self._get_nao_service("ALMotion")
+        if not motion:
+            print("[VoiceRecognition] ALMotion unavailable; wake up skipped.")
+            return
+
+        try:
+            motion.wakeUp()
+        except Exception as e:
+            print(f"[VoiceRecognition Error] Wake up command failed: {e}")
+
+    def _rest(self):
+        motion = self._get_nao_service("ALMotion")
+        if not motion:
+            print("[VoiceRecognition] ALMotion unavailable; rest skipped.")
+            return
+
+        try:
+            motion.rest()
+        except Exception as e:
+            print(f"[VoiceRecognition Error] Rest command failed: {e}")
+
+    def _go_to_posture(self, posture_name, speed=0.6):
+        posture = self._get_nao_service("ALRobotPosture")
+        if not posture:
+            print(
+                f"[VoiceRecognition] ALRobotPosture unavailable; "
+                f"{posture_name} skipped."
+            )
+            return
+
+        self._wake_up()
+
+        try:
+            success = posture.goToPosture(posture_name, speed)
+            if not success:
+                print(
+                    f"[VoiceRecognition Warning] "
+                    f"Posture command {posture_name} was not completed."
+                )
+        except Exception as e:
+            print(
+                f"[VoiceRecognition Error] "
+                f"Posture command {posture_name} failed: {e}"
+            )
