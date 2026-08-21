@@ -1,338 +1,363 @@
-import sys
-import time
+import os
+import tempfile
 import threading
-from PIL import Image
-from threading import Timer
-from modules.gemini_service import GeminiService
-from speaker import Speaker
+from pathlib import Path
 
-class VoiceRecognition(object):
-    def __init__(self, session, speaker):
+try:
+    import cv2
+except ImportError:  # pragma: no cover - environment dependent
+    cv2 = None
+
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover - environment dependent
+    np = None
+import cv2
+import numpy as np
+
+from faster_whisper import WhisperModel
+
+from modules.gemini_service import GeminiService
+from modules.nao_audio_transfer import NAOAudioTransfer
+
+class VoiceRecognition:
+    def __init__(
+        self,
+        session=None,
+        speaker=None,
+        use_test_audio=True,
+        gemini_service=None,
+        use_gemini=True,
+        frame_provider=None,
+    ):
         self.session = session
         self.speaker = speaker
-        self.gemini_service = GeminiService()
+        self.use_test_audio = use_test_audio
+        self.use_gemini = use_gemini
+        self.gemini_service = gemini_service
+        self.frame_provider = frame_provider
+        self.recording_lock = threading.Lock()
 
-        self.memory = self.session.service("ALMemory")
-        self.leds = self.session.service("ALLeds")
+        module_dir = Path(__file__).resolve().parent
 
-        # Check if running in Virtual Mode
-        self.is_virtual = self.speaker.is_virtual
+        # Temp audio path for real NAO recording
+        self.nao_audio_path = "/home/nao/nao_speech.wav"
+        self.temp_audio_path = str(Path(tempfile.gettempdir()) / "nao_speech.wav")
+
+        # Test fallback path for offline mode
+        self.test_audio_path = str(module_dir / "nao_test.wav")
+
+        # Initialize Whisper Model
+        print("[VoiceRecognition] Initializing Whisper model...")
+        self.model = WhisperModel("base", device="cpu", compute_type="int8")
+
+        # Initialize NAO Audio Recorder proxy if session exists
+        self.audio_recorder = None
+        self.file_manager = None
+        if self.session and self.session.isConnected():
+            try:
+                self.audio_recorder = self.session.service("ALAudioRecorder")
+                self.file_manager = self.session.service("ALFileManager")
+
+                print("[VoiceRecognition] ALAudioRecorder connected.")
+                print("[VoiceRecognition] ALFileManager connected.")
+
+                try:
+                    print(
+                        "[VoiceRecognition] ALFileManager methods:",
+                        self.file_manager.metaObject().methodNames()
+                    )
+                    meta_object = self.file_manager.metaObject()
+                    if hasattr(meta_object, "methodNames"):
+                        methods = list(meta_object.methodNames())
+                    elif isinstance(meta_object, dict):
+                        raw_methods = (
+                            meta_object.get("methods") or meta_object.get("method") or []
+                        )
+                        if isinstance(raw_methods, dict):
+                            methods = list(raw_methods.keys())
+                        else:
+                            methods = [
+                                method.get("name")
+                                if isinstance(method, dict) and "name" in method
+                                else str(method)
+                                for method in raw_methods
+                            ]
+                    else:
+                        methods = []
+
+                    if methods:
+                        print("[VoiceRecognition] ALFileManager methods:", methods)
+                except Exception as e:
+                    print(
+                        f"[VoiceRecognition Warning] "
+                        f"Could not inspect ALFileManager: {e}"
+                    )
+            except Exception as e:
+                print(f"[VoiceRecognition Warning] Could not initialize NAO audio/file services: {e}")
+
+        if self.use_gemini and self.gemini_service is None:
+            try:
+                self.gemini_service = GeminiService()
+            except Exception as e:
+                self.gemini_service = None
+                print(f"[VoiceRecognition Warning] Gemini Service did not initialize: {e}")
+
+        self.audio_transfer = NAOAudioTransfer(
+            audio_recorder=self.audio_recorder,
+            file_manager=self.file_manager,
+            remote_path=self.nao_audio_path,
+            local_path=self.temp_audio_path,
+            test_audio_path=self.test_audio_path,
+            use_test_audio=self.use_test_audio,
+        )
+
+    def listen_once_async(self, duration=4, on_complete=None):
+        """Starts one recording/transcription pass in the background."""
+        if self.recording_lock.locked():
+            print("[VoiceRecognition] Recording already in progress. Ignoring trigger.")
+            return False
+
+        def _worker():
+            try:
+                self.listen_once(duration=duration)
+            finally:
+                if on_complete:
+                    on_complete()
+
+        threading.Thread(target=_worker, daemon=True).start()
+        return True
+
+    def listen_once(self, duration=4):
+        if not self.recording_lock.acquire(blocking=False):
+            print("[VoiceRecognition] Recording already in progress. Skipping.")
+            return ""
+
         try:
-            self.asr = self.session.service("ALSpeechRecognition")
-        except Exception:
-            self.asr = None
-            print("[Voice] Virtual NAO detected.")
+            print(f"[VoiceRecognition] Starting one-shot recording ({duration}s)...")
 
+            if self.audio_recorder:
+                print("[VoiceRecognition] Using NAO ALAudioRecorder.")
+                audio_file = self.audio_transfer.record_from_nao(duration=duration)
+            else:
+                print("[VoiceRecognition] Using test audio.")
+                audio_file = self.audio_transfer.get_test_audio()
+
+            print(f"[VoiceRecognition] Audio file: {audio_file}")
+
+            if audio_file and os.path.exists(audio_file):
+                print("[VoiceRecognition] Starting transcription...")
+
+                text = self._transcribe(audio_file)
+
+                print(f"[VoiceRecognition] Transcription: '{text}'")
+
+                if text:
+                    self._on_speech_recognized(text)
+
+                return text
+
+            print("[VoiceRecognition] No audio file available.")
+            return ""
+
+        finally:
+            self.recording_lock.release()
+
+    def _transcribe(self, audio_path):
+        """Converts audio file to text using faster-whisper."""
         try:
-            self.video_service = self.session.service("ALVideoDevice")
-        except Exception:
-            self.video_service = None
-            print("[Voice WARN] ALVideoDevice service not available: %s")
+            segments, _ = self.model.transcribe(
+                audio_path,
+                beam_size=5,
+                task="translate",
+            )
+            transcription = "".join([segment.text for segment in segments]).strip()
+            return transcription
+        except Exception as e:
+            print(f"[VoiceRecognition Error] Transcription failed: {e}")
+            return ""
 
-        self.service_name = "VoiceRecognitionModule"
-        self.is_listening = False
-
-        self.wake_words = ["hey nao", "hey now", "hi nao", "hey know"]
-        self.commands = {}
-        self.state = "WAITING_FOR_WAKE"
-        self.timeout_timer = None
-        self.subscriber = None
-
-    def _start_timeout_timer(self, duration=20.0):
-        self._stop_timeout_timer()
-        self.timeout_timer = Timer(duration, self._on_command_timeout)
-        self.timeout_timer.start()
-
-    def _stop_timeout_timer(self):
-        if self.timeout_timer:
-            self.timeout_timer.cancel()
-            self.timeout_timer = None
-
-    def register_command(self, phrase, callback_function):
-        """Register a command keyword and its corresponding function."""
-        self.commands[phrase.lower()] = callback_function
-        print(f"[Voice] Registered command: '{phrase}'")
-
-    def capture_frame(self):
-        if not self.video_service or self.is_virtual:
-            print("[Voice] Camera capture skipped (Virtual mode or missing ALVideoDevice).")
+    def _capture_camera_frame(self):
+        if cv2 is None:
             return None
 
         try:
-            # Parameters: Top camera (0), VGA 640x480 (2), RGB color space (11), 30 FPS
-            client_name = self.video_service.subscribe("gemini_vision", 0, 2, 11, 30)
+            frame = None
 
-            try:
-                nao_image = self.video_service.getImageRemote(client_name)
-            finally:
-                self.video_service.unsubscribe(client_name)
-
-            if nao_image and len(nao_image) >= 7:
-                width = nao_image[0]
-                height = nao_image[1]
-                array = nao_image[6]
-
-                # Convert raw byte buffer into a PIL Image
+            if self.frame_provider is not None:
+                frame = self.frame_provider()
+            elif self.session and self.session.isConnected() and np is not None:
+                video = self.session.service("ALVideoDevice")
+                client_name = f"VoiceRecognitionVision_{threading.get_ident()}"
+                client_name = video.subscribeCamera(
+                    client_name,
+                    0,
+                    2,
+                    11,
+                    5,
+                )
                 try:
-                    img = Image.frombytes("RGB", (width, height), bytes(array))
-                except (AttributeError, TypeError):
-                    img = Image.fromstring("RGB", (width, height), str(bytearray(array)))
-                return img
-        except Exception as e:
-            print("[Voice Error] Failed to capture camera frame: %s" % e)
+                    image = video.getImageRemote(client_name)
+                finally:
+                    try:
+                        video.unsubscribe(client_name)
+                    except Exception:
+                        pass
 
+                if image is None:
+                    return None
+
+                width = int(image[0])
+                height = int(image[1])
+                image_data = image[6]
+                frame = np.frombuffer(image_data, dtype=np.uint8).reshape(
+                    (height, width, 3)
+                )
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+            if frame is None:
+                return None
+
+            ok, buffer = cv2.imencode(".jpg", frame)
+            if not ok:
+                return None
+
+            return buffer.tobytes()
+        except Exception as e:
+            print(f"[VoiceRecognition Warning] Camera frame capture failed: {e}")
+            return None
+
+    def _on_speech_recognized(self, text):
+        """Triggers actions when speech is detected."""
+        print(f"\n[VoiceRecognition] Heard: \"{text}\"")
+
+        if not text:
+            return
+
+        # Simple keyword matching stays first so fixed classroom commands are fast
+        # and keep working without Gemini.
+        if self._handle_keyword_command(text):
+            return
+
+        if self.speaker and self.gemini_service and self.use_gemini:
+            image = self._capture_camera_frame()
+
+            prompt = text
+            if image is not None:
+                prompt = (
+                    "Use the attached NAO camera image if it helps answer the question. "
+                    "Reply in English only. "
+                    f"User said: {text}"
+                )
+
+            response = self.gemini_service.ask(prompt, image=image)
+            if response:
+                print(f"[VoiceRecognition] Gemini: \"{response}\"")
+                self.speaker.speak(response)
+
+    def _handle_keyword_command(self, text):
+        """Handles fixed voice commands with simple keyword matching."""
+        if not self.speaker:
+            return False
+
+        normalized_text = text.lower()
+        compact_text = normalized_text.replace(" ", "")
+
+        if "attendance mode" in normalized_text:
+            self.speaker.speak("Attendance Mode Activating...")
+            return True
+
+        if "hello" in normalized_text:
+            self.speaker.speak("Hello, this is from pre-built keyword...")
+            return True
+
+        if self._contains_command(normalized_text, compact_text, ["stand up", "standup"]):
+            self.speaker.speak("Standing up.")
+            self._go_to_posture("StandInit")
+            return True
+
+        if self._contains_command(normalized_text, compact_text, ["sit down", "sitdown"]):
+            self.speaker.speak("Sitting down.")
+            self._go_to_posture("Sit")
+            return True
+
+        if self._contains_command(normalized_text, compact_text, ["wake up", "wakeup"]):
+            self.speaker.speak("Waking up.")
+            self._wake_up()
+            return True
+
+        if "rest" in normalized_text:
+            self.speaker.speak("Going to rest mode.")
+            self._rest()
+            return True
+
+        if "crouch" in normalized_text:
+            self.speaker.speak("Crouching.")
+            self._go_to_posture("Crouch")
+            return True
+
+        return False
+
+    def _contains_command(self, normalized_text, compact_text, phrases):
+        for phrase in phrases:
+            if " " in phrase:
+                if phrase in normalized_text:
+                    return True
+            elif phrase in compact_text:
+                return True
+        return False
+
+    def _get_nao_service(self, name):
+        try:
+            if self.session and self.session.isConnected():
+                return self.session.service(name)
+        except Exception as e:
+            print(f"[VoiceRecognition Warning] Could not get {name}: {e}")
         return None
 
-    def start(self):
-        """Starts the speech recognition service."""
-        if not self.commands:
-            print("[WARN] No commands registered!")
-
-        if not self.asr:
-            print("[Voice ERROR] ALSpeechRecognition is not available.")
+    def _wake_up(self):
+        motion = self._get_nao_service("ALMotion")
+        if not motion:
+            print("[VoiceRecognition] ALMotion unavailable; wake up skipped.")
             return
 
         try:
-            # Subscribe the speech recognition service
-            self.asr.subscribe(self.service_name)
+            motion.wakeUp()
+        except Exception as e:
+            print(f"[VoiceRecognition Error] Wake up command failed: {e}")
 
-            # Listen for recognized words
-            self.subscriber = self.memory.subscriber("WordRecognized")
-            self.subscriber.signal.connect(self._on_word_recognized)
+    def _rest(self):
+        motion = self._get_nao_service("ALMotion")
+        if not motion:
+            print("[VoiceRecognition] ALMotion unavailable; rest skipped.")
+            return
 
-            self._set_wake_mode()
+        try:
+            motion.rest()
+        except Exception as e:
+            print(f"[VoiceRecognition Error] Rest command failed: {e}")
 
-            self.is_listening = True
-
+    def _go_to_posture(self, posture_name, speed=0.6):
+        posture = self._get_nao_service("ALRobotPosture")
+        if not posture:
             print(
-                "[Voice] Listening active. "
-                "Say 'Hey Nao' to activate commands."
+                f"[VoiceRecognition] ALRobotPosture unavailable; "
+                f"{posture_name} skipped."
+            )
+            return
+
+        self._wake_up()
+
+        try:
+            success = posture.goToPosture(posture_name, speed)
+            if not success:
+                print(
+                    f"[VoiceRecognition Warning] "
+                    f"Posture command {posture_name} was not completed."
+                )
+        except Exception as e:
+            print(
+                f"[VoiceRecognition Error] "
+                f"Posture command {posture_name} failed: {e}"
             )
 
-        except Exception as e:
-            print(f"[Voice ERROR] Failed to start speech recognition: {e}")
-
-    def _set_wake_mode(self):
-        """Return to wake-word listening mode."""
-        self._stop_timeout_timer()
-        self.state = "WAITING_FOR_WAKE"
-
-        if not self.asr:
-            return
-
-        try:
-            self.asr.pause(True)
-
-            self.asr.setLanguage("English")
-            self.asr.setVocabulary(self.wake_words, True)
-
-            self.asr.pause(False)
-
-            print("[Voice] Wake mode restored. Say 'Hey Nao'.")
-
-        except Exception as e:
-            print(f"[Voice ERROR] Failed to restore wake mode: {e}")
-
-            # Try to recover the speech recognition service
-            try:
-                self.asr.unsubscribe(self.service_name)
-            except Exception:
-                pass
-
-            try:
-                self.asr.subscribe(self.service_name)
-                self.asr.pause(True)
-                self.asr.setLanguage("English")
-                self.asr.setVocabulary(self.wake_words, True)
-                self.asr.pause(False)
-
-                print("[Voice] Speech recognition restarted.")
-
-            except Exception as restart_error:
-                print(
-                    f"[Voice ERROR] Could not restart speech recognition: "
-                    f"{restart_error}"
-                )
-
-    def _set_command_mode(self, prompt=True):
-        """State 2: Active chat mode waiting for commands/queries."""
-        self._stop_timeout_timer()
-        self.state = "WAITING_FOR_COMMAND"
-        print("\n[Voice State] ---> WAITING_FOR_COMMAND")
-
-        if self.asr:
-            try:
-                cmd_vocabulary = list(self.commands.keys()) + ["exit"]
-                self.asr.pause(True)
-                self.asr.setVocabulary(cmd_vocabulary, True)
-            except Exception:
-                pass
-
-        try:
-            self.leds.fadeRGB("FaceLeds", 0x0000FF, 0.2)  # Blue LEDs
-        except Exception:
-            pass
-
-        # Speak "Yes?" only on the initial wake word trigger
-        if prompt:
-            self.speaker.speak("Yes?")
-
-        if self.asr:
-            try:
-                self.asr.pause(False)
-            except Exception:
-                pass
-
-        # Start 10s idle timer after speaking is done and mic is live
-        self._start_timeout_timer(20.0)
-
-    def _on_command_timeout(self):
-        """Triggered if user is silent for 10s in WAITING_FOR_COMMAND state."""
-        if self.state == "WAITING_FOR_COMMAND":
-            print("[Voice] Command timeout reached.")
-            self.speaker.speak("Oops! Command timeout. Call me again when you need me!")
-            self._set_wake_mode()
-
-    def _on_word_recognized(self, value):
-        """Callback triggered whenever NAO detects speech."""
-        if not value or len(value) < 2:
-            return
-
-        phrase = value[0].lower().replace("<...>", "").strip()
-        confidence = value[1]
-
-        print(f"[Voice Debug] [{self.state}] Detected: '{phrase}' (Confidence: {confidence:.2f})")
-
-        threshold = 0.35 if self.state == "WAITING_FOR_COMMAND" else 0.45
-        if confidence < threshold:
-            return
-
-        # STATE 1: Waiting for wake phrase ("Hey Nao")
-        if self.state == "WAITING_FOR_WAKE":
-            if any(w in phrase for w in self.wake_words):
-                print("[Voice] Wake word detected!")
-                self._set_command_mode(prompt=True)
-
-        # STATE 2: Active Chat Loop
-        elif self.state == "WAITING_FOR_COMMAND":
-
-            # Ignore NAO's own prompt audio
-            if phrase == "yes":
-                return
-
-            # Explicit Exit Command: Return to wake word state
-            if "exit" in phrase:
-                self._stop_timeout_timer()
-                if self.asr:
-                    try:
-                        self.asr.pause(True)
-                    except Exception:
-                        pass
-                self.speaker.speak("Goodbye!")
-                self._set_wake_mode()
-                return
-
-            # Match registered Python commands
-            matched_command = None
-            for cmd in self.commands:
-                if cmd in phrase:
-                    matched_command = cmd
-                    break
-
-            if matched_command:
-                self._stop_timeout_timer()
-
-                print(f"[Voice] Executing command: '{matched_command}'")
-
-                try:
-                    self.leds.fadeRGB("FaceLeds", 0x00FF00, 0.2)  # Green LEDs
-                except Exception:
-                    pass
-
-                try:
-                    self.commands[matched_command]()
-                except Exception as e:
-                    print(f"[Voice] Callback execution error: {e}")
-
-                # Stay in command mode & listen for the next interaction
-                self._set_command_mode(prompt=False)
-
-            # Continuous Gemini Chat Query
-            else:
-                query_prompt = phrase.replace("yes", "").strip()
-
-                if not query_prompt:
-                    return
-
-                # Pause timer and ASR while Gemini processes and speaks
-                self._stop_timeout_timer()
-                self.state = "PROCESSING_GEMINI"
-
-                if self.asr:
-                    try:
-                        self.asr.pause(True)
-                    except Exception:
-                        pass
-
-                def handle_gemini_query():
-                    print(f"[Voice -> Gemini] Processing query: '{query_prompt}'")
-
-                    try:
-                        self.leds.fadeRGB("FaceLeds", 0x00FF00, 0.2)  # Yellow LEDs
-                    except Exception:
-                        pass
-
-                    # Check if user's phrase implies looking at something
-                    vision_keywords = ["see", "look", "what is this", "what's this", "identify", "holding", "show"]
-                    needs_vision = any(kw in query_prompt for kw in vision_keywords)
-
-                    image_frame = None
-                    if needs_vision:
-                        self.speaker.speak("Let me have a look...")
-                        image_frame = self.capture_frame()
-                    else:
-                        self.speaker.speak("I'm thinking...")
-
-                    if self.gemini_service:
-                        ai_reply = self.gemini_service.ask(query_prompt, image=image_frame)
-                        print(f"[Gemini Response] {ai_reply}")
-                        self.speaker.speak(ai_reply)
-                    else:
-                        print("[Voice Error] Failed to generate Gemini response.")
-
-                    # Loop back to command mode: enable mic and start 10s timer NOW
-                    self._set_command_mode(prompt=False)
-
-                threading.Thread(target=handle_gemini_query).start()
-
-    def stop(self):
-        """Cleanup resources."""
-
-        if self.timeout_timer:
-            self.timeout_timer.cancel()
-            self.timeout_timer = None
-
-        if self.subscriber:
-            try:
-                self.subscriber.signal.disconnect(
-                    self._on_word_recognized
-                )
-            except Exception:
-                pass
-
-            self.subscriber = None
-
-        if self.asr:
-            try:
-                self.asr.unsubscribe(self.service_name)
-            except Exception:
-                pass
-
-        try:
-            self.leds.reset("FaceLeds")
-        except Exception:
-            pass
-
-        self.is_listening = False
-
-        print("[Voice] Speech recognition stopped.")
