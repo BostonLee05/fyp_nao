@@ -61,6 +61,18 @@ def initialize_database():
     """)
 
     # -----------------------------------------------------
+    # MIGRATE EXISTING STUDENTS TABLE
+    # -----------------------------------------------------
+    try:
+        cursor.execute("""
+            ALTER TABLE students
+            ADD COLUMN programme TEXT
+        """)
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" not in str(e).lower():
+            raise
+
+    # -----------------------------------------------------
     # CLASSES
     # -----------------------------------------------------
 
@@ -77,10 +89,20 @@ def initialize_database():
             class_name TEXT
                 NOT NULL,
 
+            semester TEXT,
+
             created_at TIMESTAMP
                 DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    try:
+        cursor.execute("""
+            ALTER TABLE classes
+            ADD COLUMN semester TEXT
+        """)
+    except sqlite3.OperationalError:
+        pass
 
     # -----------------------------------------------------
     # CLASS ENROLLMENTS
@@ -212,39 +234,59 @@ def initialize_database():
 # =========================================================
 # ADD STUDENT
 # =========================================================
-
-def add_student(
-    student_id,
-    student_name
-):
-
+def add_student(student_id, student_name, programme=None):
     connection = get_connection()
-
     cursor = connection.cursor()
 
     try:
-
         cursor.execute("""
             INSERT INTO students (
                 student_id,
-                student_name
+                student_name,
+                programme
             )
-            VALUES (?, ?)
+            VALUES (?, ?, ?)
         """, (
             student_id,
-            student_name
+            student_name,
+            programme
+        ))
+
+        connection.commit()
+        return True
+
+    except sqlite3.IntegrityError:
+        return False
+
+    finally:
+        connection.close()
+
+def update_student_profile(
+    student_id,
+    student_name,
+    programme=None
+):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            UPDATE students
+            SET
+                student_name = ?,
+                programme = ?
+            WHERE student_id = ?
+        """, (
+            student_name,
+            programme,
+            student_id
         ))
 
         connection.commit()
 
-        return True
-
-    except sqlite3.IntegrityError:
-
-        return False
+        return cursor.rowcount > 0
 
     finally:
-
         connection.close()
 
 
@@ -295,6 +337,52 @@ def get_all_students():
 
     return students
 
+# =========================================================
+# GET ALL STUDENTS WITH ENROLLED CLASSES
+# =========================================================
+
+def get_all_students_with_classes():
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT
+            students.student_id,
+            students.student_name,
+            students.face_registered,
+            students.face_folder,
+
+            GROUP_CONCAT(
+                classes.class_code || ' - ' || classes.class_name,
+                ', '
+            ) AS classes
+
+        FROM students
+
+        LEFT JOIN class_enrollments
+            ON students.student_id
+            = class_enrollments.student_id
+
+        LEFT JOIN classes
+            ON class_enrollments.class_id
+            = classes.class_id
+
+        GROUP BY
+            students.student_id,
+            students.student_name,
+            students.face_registered,
+            students.face_folder
+
+        ORDER BY
+            students.student_id
+    """)
+
+    students = cursor.fetchall()
+
+    connection.close()
+
+    return students
 
 # =========================================================
 # STUDENT EXISTS
@@ -346,29 +434,29 @@ def update_face_registration(
 
 
 # =========================================================
-# ADD CLASS
+# ADD CLASS / SUBJECT
 # =========================================================
 
 def add_class(
     class_code,
-    class_name
+    class_name,
+    semester=None
 ):
-
     connection = get_connection()
-
     cursor = connection.cursor()
 
     try:
-
         cursor.execute("""
             INSERT INTO classes (
                 class_code,
-                class_name
+                class_name,
+                semester
             )
-            VALUES (?, ?)
+            VALUES (?, ?, ?)
         """, (
             class_code,
-            class_name
+            class_name,
+            semester
         ))
 
         connection.commit()
@@ -376,13 +464,10 @@ def add_class(
         return cursor.lastrowid
 
     except sqlite3.IntegrityError:
-
         return None
 
     finally:
-
         connection.close()
-
 
 # =========================================================
 # GET CLASS BY CODE
@@ -456,7 +541,68 @@ def get_all_classes():
 
     return classes
 
+def update_class(class_id, class_code, class_name, semester=None):
+    connection = get_connection()
+    cursor = connection.cursor()
 
+    try:
+        cursor.execute("""
+            UPDATE classes
+            SET
+                class_code = ?,
+                class_name = ?,
+                semester = ?
+            WHERE class_id = ?
+        """, (
+            class_code,
+            class_name,
+            semester,
+            class_id
+        ))
+
+        connection.commit()
+
+        return cursor.rowcount > 0
+
+    except sqlite3.IntegrityError:
+        return False
+
+    finally:
+        connection.close()
+
+def delete_class(class_id):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            DELETE FROM classes
+            WHERE class_id = ?
+        """, (class_id,))
+
+        connection.commit()
+
+        return cursor.rowcount > 0
+
+    finally:
+        connection.close()
+
+def delete_student(student_id):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            DELETE FROM students
+            WHERE student_id = ?
+        """, (student_id,))
+
+        connection.commit()
+
+        return cursor.rowcount > 0
+
+    finally:
+        connection.close()
 # =========================================================
 # ENROLL STUDENT
 # =========================================================

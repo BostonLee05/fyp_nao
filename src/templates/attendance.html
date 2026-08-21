@@ -7,7 +7,10 @@
 
 <div class="panel">
 
-    <h2><i class="fa-solid fa-user-check"></i> Attendance Management</h2>
+    <h2>
+        <i class="fa-solid fa-user-check"></i>
+        Attendance Management
+    </h2>
 
     <div class="attendance-toolbar">
 
@@ -25,18 +28,33 @@
 
         <div>
             <label>Current Session</label>
-            <div id="attendanceSessionStatus">🔴 No Active Session</div>
+            <div id="attendanceSessionStatus">
+                🔴 No Active Session
+            </div>
         </div>
 
     </div>
 
     <div class="button-group">
-        <button id="startSessionBtn">🟢 Start Attendance Session</button>
-        <button id="endSessionBtn">🔴 End Attendance Session</button>
-        <button id="exportAttendanceBtn">Export CSV</button>
+        <button id="startSessionBtn">
+            🟢 Start Attendance Session
+        </button>
+
+        <button id="endSessionBtn">
+            🔴 End Attendance Session
+        </button>
+
+        <button id="exportAttendanceBtn">
+            Export CSV
+        </button>
+    </div>
+
+    <div id="attendanceRefreshError"
+         style="display:none;margin-top:12px;color:#b00020;">
     </div>
 
 </div>
+
 
 <div class="stats">
 
@@ -62,11 +80,13 @@
 
 </div>
 
+
 <div class="panel">
 
     <h2>Live Attendance</h2>
 
     <table class="attendance-table">
+
         <thead>
             <tr>
                 <th>Student ID</th>
@@ -78,14 +98,19 @@
         </thead>
 
         <tbody id="attendanceBody">
+
             <tr>
-                <td colspan="5" style="text-align:center;">No attendance records.</td>
+                <td colspan="5" style="text-align:center;">
+                    Start an attendance session to begin.
+                </td>
             </tr>
+
         </tbody>
 
     </table>
 
 </div>
+
 
 <script>
 
@@ -101,178 +126,150 @@ const statusUrl =
 const currentUrl =
     "{{ url_for('attendance.current_attendance') }}";
 
+const exportUrl =
+    "{{ url_for('attendance.export_attendance') }}";
+
 const classesUrl =
     "{{ url_for('attendance.attendance_classes') }}";
 
 
-const subjectSelect =
-    document.getElementById("subjectSelect");
+let currentSessionId = null;
 
-const attendanceDate =
-    document.getElementById("attendanceDate");
-
-const startSessionBtn =
-    document.getElementById("startSessionBtn");
-
-const endSessionBtn =
-    document.getElementById("endSessionBtn");
-
-const attendanceSessionStatus =
-    document.getElementById(
-        "attendanceSessionStatus"
-    );
+let refreshInProgress = false;
 
 
-// ======================================================
-// LOAD SUBJECTS
-// ======================================================
+/* =========================================================
+   DATE
+   ========================================================= */
+
+function setDefaultDate() {
+
+    const now = new Date();
+
+    const year =
+        now.getFullYear();
+
+    const month =
+        String(now.getMonth() + 1)
+            .padStart(2, "0");
+
+    const day =
+        String(now.getDate())
+            .padStart(2, "0");
+
+    const today =
+        `${year}-${month}-${day}`;
+
+    const input =
+        document.getElementById(
+            "attendanceDate"
+        );
+
+    input.value = today;
+    input.max = today;
+}
+
+
+/* =========================================================
+   LOAD SUBJECTS
+   ========================================================= */
 
 async function loadSubjects() {
 
     try {
 
         const response =
-            await fetch(classesUrl);
+            await fetch(
+                classesUrl + "?t=" + Date.now(),
+                {
+                    cache: "no-store"
+                }
+            );
 
         const data =
             await response.json();
 
-        if (!data.success) {
-
-            console.error(
-                "Failed to load subjects:",
-                data.message
+        const select =
+            document.getElementById(
+                "subjectSelect"
             );
 
+        select.innerHTML =
+            '<option value="">Select Subject</option>';
+
+        if (!data.success) {
             return;
         }
 
-        subjectSelect.innerHTML =
-            `<option value="">
-                Select Subject
-            </option>`;
-
-        data.classes.forEach(subject => {
+        data.classes.forEach(item => {
 
             const option =
-                document.createElement("option");
+                document.createElement(
+                    "option"
+                );
 
             option.value =
-                subject.class_id;
+                item.class_id;
 
             option.textContent =
-                `${subject.class_code} - ${subject.class_name}`;
+                `${item.class_code} - ${item.class_name}`;
 
-            subjectSelect.appendChild(option);
+            select.appendChild(option);
         });
 
     } catch (error) {
 
         console.error(
-            "Error loading subjects:",
+            "Failed to load subjects:",
             error
         );
     }
 }
 
 
-// ======================================================
-// SET DEFAULT DATE
-// ======================================================
-
-function setDefaultDate() {
-
-    const today =
-        new Date();
-
-    const year =
-        today.getFullYear();
-
-    const month =
-        String(
-            today.getMonth() + 1
-        ).padStart(2, "0");
-
-    const day =
-        String(
-            today.getDate()
-        ).padStart(2, "0");
-
-    attendanceDate.value =
-        `${year}-${month}-${day}`;
-}
-
-
-// ======================================================
-// UPDATE UI BASED ON SESSION
-// ======================================================
-
-function updateSessionUI(data) {
-
-    if (data.active && data.session) {
-
-        const session =
-            data.session;
-
-        attendanceSessionStatus.innerHTML =
-            `🟢 ${session.class_code}
-             - ${session.class_name}
-             | ${session.session_date}
-             | Started ${session.start_time}`;
-
-        // ------------------------------------------------
-        // Keep selected subject/date synchronized
-        // ------------------------------------------------
-
-        subjectSelect.value =
-            session.class_id;
-
-        attendanceDate.value =
-            session.session_date;
-
-        // ------------------------------------------------
-        // Disable controls while active
-        // ------------------------------------------------
-
-        subjectSelect.disabled = true;
-
-        attendanceDate.disabled = true;
-
-        startSessionBtn.disabled = true;
-
-        endSessionBtn.disabled = false;
-
-    } else {
-
-        attendanceSessionStatus.innerHTML =
-            "🔴 No Active Session";
-
-        subjectSelect.disabled = false;
-
-        attendanceDate.disabled = false;
-
-        startSessionBtn.disabled = false;
-
-        endSessionBtn.disabled = true;
-    }
-}
-
-
-// ======================================================
-// REFRESH SESSION STATUS
-// ======================================================
+/* =========================================================
+   REFRESH SESSION STATUS
+   ========================================================= */
 
 async function refreshStatus() {
 
     try {
 
         const response =
-            await fetch(statusUrl);
+            await fetch(
+                statusUrl + "?t=" + Date.now(),
+                {
+                    cache: "no-store"
+                }
+            );
 
         const data =
             await response.json();
 
-        updateSessionUI(data);
+        const status =
+            document.getElementById(
+                "attendanceSessionStatus"
+            );
+
+        if (data.active &&
+            data.session) {
+
+            currentSessionId =
+                data.session.session_id;
+
+            status.innerHTML =
+                `🟢 ${data.session.class_code} - ` +
+                `${data.session.class_name} | ` +
+                `${data.session.session_date} | ` +
+                `Started ${data.session.start_time}`;
+
+        } else {
+
+            currentSessionId = null;
+
+            status.innerHTML =
+                "🔴 No Active Session";
+        }
 
     } catch (error) {
 
@@ -284,240 +281,80 @@ async function refreshStatus() {
 }
 
 
-// ======================================================
-// START ATTENDANCE SESSION
-// ======================================================
-
-startSessionBtn.onclick =
-    async function () {
-
-        const classId =
-            subjectSelect.value;
-
-        const sessionDate =
-            attendanceDate.value;
-
-        // ------------------------------------------------
-        // Validate subject
-        // ------------------------------------------------
-
-        if (!classId) {
-
-            alert(
-                "Please select a subject."
-            );
-
-            return;
-        }
-
-        // ------------------------------------------------
-        // Validate date
-        // ------------------------------------------------
-
-        if (!sessionDate) {
-
-            alert(
-                "Please select an attendance date."
-            );
-
-            return;
-        }
-
-        // ------------------------------------------------
-        // Disable button immediately
-        // ------------------------------------------------
-
-        startSessionBtn.disabled = true;
-
-        try {
-
-            const response =
-                await fetch(
-                    startUrl,
-                    {
-                        method: "POST",
-
-                        headers: {
-                            "Content-Type":
-                                "application/json"
-                        },
-
-                        body: JSON.stringify({
-                            class_id:
-                                classId,
-
-                            session_date:
-                                sessionDate,
-
-                            session_name:
-                                "Attendance Session"
-                        })
-                    }
-                );
-
-            const data =
-                await response.json();
-
-            if (!response.ok ||
-                !data.success) {
-
-                alert(
-                    data.message ||
-                    "Failed to start attendance session."
-                );
-
-                startSessionBtn.disabled =
-                    false;
-
-                return;
-            }
-
-            // ------------------------------------------------
-            // Refresh UI
-            // ------------------------------------------------
-
-            await refreshStatus();
-
-            await refreshAttendance();
-
-        } catch (error) {
-
-            console.error(
-                "Start session error:",
-                error
-            );
-
-            alert(
-                "Unable to connect to the server."
-            );
-
-            startSessionBtn.disabled =
-                false;
-        }
-    };
-
-
-// ======================================================
-// END ATTENDANCE SESSION
-// ======================================================
-
-endSessionBtn.onclick =
-    async function () {
-
-        if (
-            !confirm(
-                "End the current attendance session?"
-            )
-        ) {
-            return;
-        }
-
-        try {
-
-            const response =
-                await fetch(
-                    endUrl,
-                    {
-                        method: "POST"
-                    }
-                );
-
-            const data =
-                await response.json();
-
-            if (!response.ok ||
-                !data.success) {
-
-                alert(
-                    data.message ||
-                    "Failed to end attendance session."
-                );
-
-                return;
-            }
-
-            await refreshStatus();
-
-            await refreshAttendance();
-
-        } catch (error) {
-
-            console.error(
-                "End session error:",
-                error
-            );
-
-            alert(
-                "Unable to connect to the server."
-            );
-        }
-    };
-
-
-// ======================================================
-// REFRESH LIVE ATTENDANCE
-// ======================================================
+/* =========================================================
+   REFRESH LIVE ATTENDANCE
+   ========================================================= */
 
 async function refreshAttendance() {
+
+    /*
+     * Do not ask the backend for an arbitrary active session.
+     * Use the exact session ID currently displayed on this page.
+     */
+    if (!currentSessionId) {
+        return;
+    }
+
+    /*
+     * Prevent overlapping polling requests.
+     */
+    if (refreshInProgress) {
+        return;
+    }
+
+    refreshInProgress = true;
 
     try {
 
         const response =
-            await fetch(currentUrl);
+            await fetch(
+                `${currentUrl}?session_id=` +
+                `${encodeURIComponent(currentSessionId)}` +
+                `&t=${Date.now()}`,
+                {
+                    cache: "no-store"
+                }
+            );
 
         const data =
             await response.json();
+
+        if (!response.ok ||
+            !data.success) {
+
+            throw new Error(
+                data.message ||
+                "Attendance request failed."
+            );
+        }
 
         const body =
             document.getElementById(
                 "attendanceBody"
             );
 
+        const errorBox =
+            document.getElementById(
+                "attendanceRefreshError"
+            );
+
+        errorBox.style.display =
+            "none";
+
         body.innerHTML = "";
 
-        // ------------------------------------------------
-        // No records
-        // ------------------------------------------------
 
-        if (
-            !data.records ||
-            data.records.length === 0
-        ) {
-
-            body.innerHTML = `
-                <tr>
-                    <td colspan="5"
-                        style="text-align:center;">
-                        No attendance records.
-                    </td>
-                </tr>
-            `;
-
-            document.getElementById(
-                "totalStudents"
-            ).textContent = "0";
-
-            document.getElementById(
-                "presentStudents"
-            ).textContent = "0";
-
-            document.getElementById(
-                "absentStudents"
-            ).textContent = "0";
-
-            document.getElementById(
-                "attendanceRate"
-            ).textContent = "0%";
-
-            return;
-        }
-
-        // ------------------------------------------------
-        // Statistics
-        // ------------------------------------------------
+        /* -------------------------------------------------
+           Statistics
+        ------------------------------------------------- */
 
         const stats =
-            data.statistics;
+            data.statistics || {
+                total: 0,
+                present: 0,
+                absent: 0,
+                attendance_rate: 0
+            };
 
         document.getElementById(
             "totalStudents"
@@ -537,58 +374,84 @@ async function refreshAttendance() {
         document.getElementById(
             "attendanceRate"
         ).textContent =
-            stats.attendance_rate + "%";
+            `${stats.attendance_rate}%`;
 
 
-        // ------------------------------------------------
-        // Attendance records
-        // ------------------------------------------------
+        /* -------------------------------------------------
+           No students
+        ------------------------------------------------- */
 
-        data.records.forEach(
-            record => {
+        if (!data.records ||
+            data.records.length === 0) {
 
-                const status =
-                    record.status === "Present"
+            body.innerHTML =
+                `<tr>
+                    <td colspan="5"
+                        style="text-align:center;">
+                        No students enrolled in this subject.
+                    </td>
+                </tr>`;
+
+            return;
+        }
+
+
+        /* -------------------------------------------------
+           Attendance rows
+        ------------------------------------------------- */
+
+        data.records.forEach(record => {
+
+            const isPresent =
+                record.status === "Present";
+
+            const status =
+                isPresent
                     ? "🟢 Present"
                     : "🔴 Absent";
 
-                const similarity =
-                    record.recognition_similarity == null
+            const similarity =
+                record.recognition_similarity == null
                     ? "-"
                     : (
-                        record.recognition_similarity
-                        * 100
+                        Number(
+                            record.recognition_similarity
+                        ) * 100
                     ).toFixed(1) + "%";
 
-                const time =
-                    record.attendance_time ||
-                    "-";
+            const time =
+                record.attendance_time ||
+                "-";
 
-                body.innerHTML += `
-                    <tr>
-                        <td>
-                            ${record.student_id}
-                        </td>
 
-                        <td>
-                            ${record.student_name}
-                        </td>
+            body.innerHTML +=
+                `<tr>
+                    <td>
+                        ${escapeHtml(
+                            record.student_id
+                        )}
+                    </td>
 
-                        <td>
-                            ${status}
-                        </td>
+                    <td>
+                        ${escapeHtml(
+                            record.student_name
+                        )}
+                    </td>
 
-                        <td>
-                            ${time}
-                        </td>
+                    <td>
+                        ${status}
+                    </td>
 
-                        <td>
-                            ${similarity}
-                        </td>
-                    </tr>
-                `;
-            }
-        );
+                    <td>
+                        ${escapeHtml(time)}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(similarity)}
+                    </td>
+                </tr>`;
+        });
+
 
     } catch (error) {
 
@@ -596,13 +459,233 @@ async function refreshAttendance() {
             "Attendance refresh error:",
             error
         );
+
+        const errorBox =
+            document.getElementById(
+                "attendanceRefreshError"
+            );
+
+        errorBox.textContent =
+            "Live attendance could not be refreshed.";
+
+        errorBox.style.display =
+            "block";
+
+    } finally {
+
+        refreshInProgress = false;
     }
 }
 
 
-// ======================================================
-// AUTOMATIC REFRESH
-// ======================================================
+/* =========================================================
+   START ATTENDANCE
+   ========================================================= */
+
+document.getElementById(
+    "startSessionBtn"
+).onclick = async () => {
+
+    const classId =
+        document.getElementById(
+            "subjectSelect"
+        ).value;
+
+    const sessionDate =
+        document.getElementById(
+            "attendanceDate"
+        ).value;
+
+
+    if (!classId) {
+
+        alert(
+            "Please select a subject."
+        );
+
+        return;
+    }
+
+
+    if (!sessionDate) {
+
+        alert(
+            "Please select an attendance date."
+        );
+
+        return;
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                startUrl,
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        class_id:
+                            classId,
+
+                        session_date:
+                            sessionDate,
+
+                        session_name:
+                            "Attendance Session"
+                    })
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok ||
+            !data.success) {
+
+            alert(
+                data.message ||
+                "Unable to start attendance session."
+            );
+
+            return;
+        }
+
+
+        /*
+         * Store the exact session created by the server.
+         */
+        currentSessionId =
+            data.session_id;
+
+
+        await refreshStatus();
+
+        await refreshAttendance();
+
+
+    } catch (error) {
+
+        console.error(
+            "Start session error:",
+            error
+        );
+
+        alert(
+            "Unable to connect to the server."
+        );
+    }
+};
+
+
+/* =========================================================
+   END ATTENDANCE
+   ========================================================= */
+
+document.getElementById(
+    "endSessionBtn"
+).onclick = async () => {
+
+    if (!confirm(
+        "End the current attendance session?"
+    )) {
+        return;
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                endUrl,
+                {
+                    method: "POST"
+                }
+            );
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok ||
+            !data.success) {
+
+            alert(
+                data.message ||
+                "Unable to end attendance session."
+            );
+
+            return;
+        }
+
+
+        await refreshStatus();
+
+
+    } catch (error) {
+
+        console.error(
+            "End session error:",
+            error
+        );
+
+        alert(
+            "Unable to connect to the server."
+        );
+    }
+};
+
+
+/* =========================================================
+   EXPORT CSV
+   ========================================================= */
+
+document.getElementById(
+    "exportAttendanceBtn"
+).onclick = () => {
+
+    if (!currentSessionId) {
+
+        alert(
+            "No attendance session is available to export."
+        );
+
+        return;
+    }
+
+
+    window.location.href =
+        `${exportUrl}?session_id=` +
+        `${encodeURIComponent(currentSessionId)}`;
+};
+
+
+/* =========================================================
+   HTML ESCAPING
+   ========================================================= */
+
+function escapeHtml(value) {
+
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+
+/* =========================================================
+   AUTOMATIC REFRESH
+   ========================================================= */
 
 setInterval(
     refreshStatus,
@@ -615,9 +698,9 @@ setInterval(
 );
 
 
-// ======================================================
-// INITIAL LOAD
-// ======================================================
+/* =========================================================
+   INITIAL LOAD
+   ========================================================= */
 
 async function initializeAttendancePage() {
 

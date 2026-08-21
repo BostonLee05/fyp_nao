@@ -4,94 +4,416 @@
 {% block page_title %}Subjects & Students{% endblock %}
 
 {% block content %}
+<style>
+.subjects-page .panel{height:auto!important;min-height:0!important;overflow:visible!important}
+.subjects-page .dashboard-grid{align-items:start}
+.records-container{width:100%;overflow-x:auto}
+.records-container table{width:100%;min-width:650px}
+.action-buttons{display:flex;gap:6px;justify-content:center;align-items:center;flex-wrap:wrap}
+.action-btn{border:0;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13px}
+.action-btn:disabled{opacity:.6;cursor:not-allowed}
+.edit-btn{background:#e8f0ff;color:#2563eb}.delete-btn{background:#ffe8e8;color:#dc2626}
+.face-btn{background:#eaf8ee;color:#15803d}.cancel-btn{background:#eee;color:#444;margin-left:6px}
+.form-editing{outline:2px solid #2563eb;outline-offset:2px}
+.table-empty{text-align:center;padding:14px}.face-status{white-space:nowrap}
 
+.face-registration-status {
+    margin-top: 12px;
+    padding: 16px;
+    border-radius: 10px;
+    background: #f7f9fc;
+    border: 1px solid #e1e6ef;
+}
+
+.face-registration-status > div {
+    margin-bottom: 9px;
+}
+
+.face-registration-status > div:last-child {
+    margin-bottom: 0;
+}
+
+#faceDirection {
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+#faceInstruction {
+    font-weight: 600;
+}
+
+.face-progress-bar {
+    width: 100%;
+    height: 12px;
+    margin-top: 7px;
+    background: #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.face-progress-fill {
+    height: 100%;
+    width: 0;
+    border-radius: 10px;
+    transition: width 0.3s ease;
+    background: #22c55e;
+}
+
+.face-registration-actions {
+    margin-top: 12px;
+}
+
+.face-registration-actions button {
+    width: 100%;
+}
+
+</style>
+
+<div class="subjects-page">
 <div class="dashboard-grid">
+<section class="panel" id="subjectPanel">
+<h2><i class="fa-solid fa-book"></i> Subject Management</h2>
+<label for="subjectCode">Subject Code</label>
+<input id="subjectCode" type="text" placeholder="BMIT2073">
+<label for="subjectName">Subject Name</label>
+<input id="subjectName" type="text" placeholder="Testing Class">
+<label for="semester">Semester</label>
+<input id="semester" type="text" placeholder="2026 Semester 2">
+<button id="addSubjectBtn">Create Subject</button>
+<button id="cancelSubjectEditBtn" class="cancel-btn" type="button" style="display:none">Cancel Edit</button>
+<p id="subjectMessage"></p>
+<hr>
+<h3>Registered Subjects</h3>
+<div class="records-container">
+<table class="attendance-table">
+<thead><tr><th>Code</th><th>Name</th><th>Semester</th><th>Actions</th></tr></thead>
+<tbody id="subjectsBody"><tr><td colspan="4" class="table-empty">Loading subjects...</td></tr></tbody>
+</table>
+</div>
+</section>
 
-    <section class="panel">
+<section class="panel" id="studentPanel">
+<h2><i class="fa-solid fa-user-graduate"></i> Student Registration</h2>
+<form id="studentForm">
+<label for="studentId">Student ID</label>
+<input id="studentId" name="student_id" type="text" placeholder="S001" required>
+<label for="studentName">Student Name</label>
+<input id="studentName" name="student_name" type="text" placeholder="Lee Yen Hong" required>
+<label for="programme">Programme</label>
+<input id="programme" name="programme" type="text" placeholder="Bachelor of Information Technology">
+<label for="studentSubject">Subject</label>
+<select id="studentSubject" name="class_id"><option value="">No subject / Enroll later</option></select>
+<button id="registerStudentBtn" type="submit">Register Student</button>
+<button id="cancelStudentEditBtn" class="cancel-btn" type="button" style="display:none">Cancel Edit</button>
+<p id="studentMessage"></p>
+</form>
+<hr>
+<h3>NAO Face Registration</h3>
+<p id="faceRegistrationMessage">
+    Select <strong>Register Face</strong> from a student record after saving the student details.
+</p>
 
-        <h2><i class="fa-solid fa-book"></i> Subject Management</h2>
+<div id="faceRegistrationProgress" class="face-registration-status">
+    <div>
+        <strong>Status:</strong>
+        <span id="faceStatusText">Ready</span>
+    </div>
 
-        <label>Subject Code</label>
-        <input type="text" placeholder="BMSE3153">
+    <div>
+        <strong>Current Direction:</strong>
+        <span id="faceDirection">-</span>
+    </div>
 
-        <label>Subject Name</label>
-        <input type="text" placeholder="Final Year Project">
+    <div>
+        <strong>Instruction:</strong>
+        <span id="faceInstruction">Waiting to start registration.</span>
+    </div>
 
-        <label>Semester</label>
-        <input type="text" placeholder="2026 Semester 2">
+    <div>
+        <strong>Captured:</strong>
+        <span id="faceCaptured">0 / 15</span>
+    </div>
 
-        <button id="addSubjectBtn">Create Subject</button>
+    <div>
+        <strong>Progress:</strong>
+        <div class="face-progress-bar">
+            <div id="faceProgressFill" class="face-progress-fill" style="width:0%;"></div>
+        </div>
+    </div>
 
-        <hr>
-
-        <h3>Registered Subjects</h3>
-
-        <table class="attendance-table">
-            <tr><th>Code</th><th>Name</th></tr>
-            <tr><td>BMSE3153</td><td>Final Year Project</td></tr>
-            <tr><td>BMIS2113</td><td>IT Infrastructure</td></tr>
-            <tr><td>CCCS3213</td><td>Cloud Computing</td></tr>
-        </table>
-
-    </section>
-
-    <section class="panel">
-
-        <h2><i class="fa-solid fa-user-graduate"></i> Student Registration</h2>
-
-        <label>Student ID</label>
-        <input type="text" placeholder="23WMR001">
-
-        <label>Student Name</label>
-        <input type="text" placeholder="Lee Yen Hong">
-
-        <label>Programme</label>
-        <input type="text" placeholder="Bachelor of Information Technology">
-
-        <label>Subject</label>
-        <select>
-            <option>BMSE3153 - Final Year Project</option>
-        </select>
-
-        <label>Face Images</label>
-        <input type="file" multiple>
-
-        <button id="registerStudentBtn">Register Student</button>
-
-    </section>
-
+    <div class="face-registration-actions">
+        <button
+            id="cancelFaceRegistrationBtn"
+            type="button"
+            class="action-btn delete-btn"
+            style="display:none"
+            onclick="cancelFaceRegistration()">
+            <i class="fa-solid fa-xmark"></i> Cancel Registration
+        </button>
+    </div>
+</div>
+</section>
 </div>
 
 <div class="panel">
-
-    <h2>Registered Students</h2>
-
-    <table class="attendance-table">
-
-        <thead>
-            <tr>
-                <th>Photo</th>
-                <th>Student ID</th>
-                <th>Name</th>
-                <th>Subject</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-
-        <tbody>
-
-            <tr>
-                <td>👤</td>
-                <td>23WMR001</td>
-                <td>Lee Yen Hong</td>
-                <td>BMSE3153</td>
-                <td>Edit | Delete | Register Face</td>
-            </tr>
-
-        </tbody>
-
-    </table>
-
+<h2>Registered Students</h2>
+<div class="records-container">
+<table class="attendance-table">
+<thead><tr><th>Photo</th><th>Student ID</th><th>Name</th><th>Programme</th><th>Subject</th><th>Face</th><th>Actions</th></tr></thead>
+<tbody id="studentsBody"><tr><td colspan="7" class="table-empty">Loading students...</td></tr></tbody>
+</table>
+</div>
+</div>
 </div>
 
+<script>
+const subjectsUrl="{{ url_for('subjects.list_subjects') }}";
+const studentsUrl="{{ url_for('subjects.list_students') }}";
+const subjectCode=document.getElementById("subjectCode"),subjectName=document.getElementById("subjectName"),semester=document.getElementById("semester"),addSubjectBtn=document.getElementById("addSubjectBtn"),cancelSubjectEditBtn=document.getElementById("cancelSubjectEditBtn"),subjectMessage=document.getElementById("subjectMessage");
+const studentForm=document.getElementById("studentForm"),studentId=document.getElementById("studentId"),studentName=document.getElementById("studentName"),programme=document.getElementById("programme"),studentSubject=document.getElementById("studentSubject"),registerStudentBtn=document.getElementById("registerStudentBtn"),cancelStudentEditBtn=document.getElementById("cancelStudentEditBtn"),studentMessage=document.getElementById("studentMessage");
+let editingSubjectId=null,editingStudentId=null,faceStatusTimer=null;
+function escapeHtml(v){return String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
+
+async function loadSubjects(){try{const r=await fetch(subjectsUrl+"?t="+Date.now(),{cache:"no-store"}),d=await r.json();if(!r.ok||!d.success)throw Error(d.message||"Unable to load subjects.");const b=document.getElementById("subjectsBody");b.innerHTML="";studentSubject.innerHTML='<option value="">No subject / Enroll later</option>';if(!d.subjects.length){b.innerHTML='<tr><td colspan="4" class="table-empty">No subjects registered yet.</td></tr>';return}d.subjects.forEach(s=>{const row=document.createElement("tr");row.innerHTML=`<td>${escapeHtml(s.class_code)}</td><td>${escapeHtml(s.class_name)}</td><td>${escapeHtml(s.semester||"-")}</td><td><div class="action-buttons"><button type="button" class="action-btn edit-btn" onclick="editSubject(${Number(s.class_id)},'${escapeHtml(s.class_code)}','${escapeHtml(s.class_name)}','${escapeHtml(s.semester||"")}')"><i class="fa-solid fa-pen"></i> Edit</button><button type="button" class="action-btn delete-btn" onclick="deleteSubject(${Number(s.class_id)},'${escapeHtml(s.class_code)}')"><i class="fa-solid fa-trash"></i> Delete</button></div></td>`;b.appendChild(row);const o=document.createElement("option");o.value=s.class_id;o.textContent=`${s.class_code} - ${s.class_name}`;studentSubject.appendChild(o)})}catch(e){console.error(e);subjectMessage.textContent="Failed to load subjects."}}
+
+addSubjectBtn.addEventListener("click",async()=>{const code=subjectCode.value.trim(),name=subjectName.value.trim(),term=semester.value.trim();if(!code||!name){subjectMessage.textContent="Subject code and name are required.";return}addSubjectBtn.disabled=true;try{const r=await fetch(editingSubjectId!==null?`${subjectsUrl}/${editingSubjectId}`:subjectsUrl,{method:editingSubjectId!==null?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({class_code:code,class_name:name,semester:term})}),d=await r.json();if(!r.ok||!d.success){subjectMessage.textContent=d.message||"Unable to save subject.";return}subjectMessage.textContent=editingSubjectId!==null?"Subject updated successfully.":"Subject created successfully.";resetSubjectForm();await loadSubjects();await loadStudents()}catch(e){console.error(e);subjectMessage.textContent="Unable to connect to the server."}finally{addSubjectBtn.disabled=false}});
+function editSubject(id,code,name,term){editingSubjectId=Number(id);subjectCode.value=code;subjectName.value=name;semester.value=term;addSubjectBtn.textContent="Update Subject";cancelSubjectEditBtn.style.display="inline-block";subjectMessage.textContent="Editing subject.";document.getElementById("subjectPanel").classList.add("form-editing");subjectCode.focus()}
+function resetSubjectForm(){editingSubjectId=null;subjectCode.value="";subjectName.value="";semester.value="";addSubjectBtn.textContent="Create Subject";cancelSubjectEditBtn.style.display="none";document.getElementById("subjectPanel").classList.remove("form-editing")}
+cancelSubjectEditBtn.addEventListener("click",()=>{resetSubjectForm();subjectMessage.textContent=""});
+async function deleteSubject(id,code){if(!confirm(`Delete subject "${code}"?\n\nIts student enrollments and related attendance sessions may also be removed.`))return;try{const r=await fetch(`${subjectsUrl}/${id}`,{method:"DELETE"}),d=await r.json();if(!r.ok||!d.success){alert(d.message||"Unable to delete subject.");return}if(Number(editingSubjectId)===Number(id))resetSubjectForm();subjectMessage.textContent="Subject deleted successfully.";await loadSubjects();await loadStudents()}catch(e){console.error(e);alert("Unable to connect to the server.")}}
+
+studentForm.addEventListener("submit",async e=>{e.preventDefault();const id=studentId.value.trim(),name=studentName.value.trim();if(!id||!name){studentMessage.textContent="Student ID and student name are required.";return}registerStudentBtn.disabled=true;try{const editing=editingStudentId!==null;const r=await fetch(editing?`${studentsUrl}/${encodeURIComponent(editingStudentId)}`:studentsUrl,{method:editing?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({student_id:id,student_name:name,programme:programme.value.trim(),class_id:studentSubject.value})}),d=await r.json();if(!r.ok||!d.success){studentMessage.textContent=d.message||"Unable to save student.";return}studentMessage.textContent=editing?"Student updated successfully.":"Student details saved successfully.";resetStudentForm();await loadStudents()}catch(e){console.error(e);studentMessage.textContent="Unable to connect to the server."}finally{registerStudentBtn.disabled=false}});
+function editStudent(id,name,prog){editingStudentId=id;studentId.value=id;studentName.value=name;programme.value=prog||"";studentId.disabled=true;registerStudentBtn.textContent="Update Student";cancelStudentEditBtn.style.display="inline-block";studentMessage.textContent="Editing student details.";document.getElementById("studentPanel").classList.add("form-editing");studentName.focus()}
+function resetStudentForm(){editingStudentId=null;studentForm.reset();studentId.disabled=false;registerStudentBtn.textContent="Register Student";cancelStudentEditBtn.style.display="none";document.getElementById("studentPanel").classList.remove("form-editing")}
+cancelStudentEditBtn.addEventListener("click",()=>{resetStudentForm();studentMessage.textContent=""});
+async function deleteStudent(id){if(!confirm(`Delete student "${id}"?\n\nThis will also remove the student's subject enrollments and related attendance records.`))return;try{const r=await fetch(`${studentsUrl}/${encodeURIComponent(id)}`,{method:"DELETE"}),d=await r.json();if(!r.ok||!d.success){alert(d.message||"Unable to delete student.");return}if(String(editingStudentId)===String(id))resetStudentForm();studentMessage.textContent="Student deleted successfully.";await loadStudents()}catch(e){console.error(e);alert("Unable to connect to the server.")}}
+
+async function loadStudents(){try{const r=await fetch(studentsUrl+"?t="+Date.now(),{cache:"no-store"}),d=await r.json();if(!r.ok||!d.success)throw Error(d.message||"Unable to load students.");const b=document.getElementById("studentsBody");b.innerHTML="";if(!d.students.length){b.innerHTML='<tr><td colspan="7" class="table-empty">No students registered yet.</td></tr>';return}d.students.forEach(s=>{const registered=Number(s.face_registered)===1,row=document.createElement("tr");row.innerHTML=`<td>👤</td><td>${escapeHtml(s.student_id)}</td><td>${escapeHtml(s.student_name)}</td><td>${escapeHtml(s.programme||"-")}</td><td>${escapeHtml(s.classes||s.subjects||"Not enrolled")}</td><td class="face-status">${registered?"🟢 Registered":"🔴 Not registered"}</td><td><div class="action-buttons"><button type="button" class="action-btn edit-btn" onclick="editStudent('${escapeHtml(s.student_id)}','${escapeHtml(s.student_name)}','${escapeHtml(s.programme||"")}')"><i class="fa-solid fa-pen"></i> Edit</button><button type="button" class="action-btn delete-btn" onclick="deleteStudent('${escapeHtml(s.student_id)}')"><i class="fa-solid fa-trash"></i> Delete</button>${registered?"":`<button type="button" class="action-btn face-btn" onclick="startFaceRegistration('${escapeHtml(s.student_id)}')"><i class="fa-solid fa-camera"></i> Register Face</button>`}</div></td>`;b.appendChild(row)})}catch(e){console.error(e);document.getElementById("studentsBody").innerHTML='<tr><td colspan="7" class="table-empty">Failed to load students.</td></tr>'}}
+
+let activeFaceStudentId = null;
+
+function setFaceRegistrationUI(status, direction, instruction, captured, total) {
+    const statusEl = document.getElementById("faceStatusText");
+    const directionEl = document.getElementById("faceDirection");
+    const instructionEl = document.getElementById("faceInstruction");
+    const capturedEl = document.getElementById("faceCaptured");
+    const progressEl = document.getElementById("faceProgressFill");
+    const cancelBtn = document.getElementById("cancelFaceRegistrationBtn");
+
+    statusEl.textContent = status || "Ready";
+    directionEl.textContent = direction ? String(direction).toUpperCase() : "-";
+    instructionEl.textContent = instruction || "Waiting to start registration.";
+
+    captured = Number(captured || 0);
+    total = Number(total || 15);
+
+    capturedEl.textContent = `${captured} / ${total}`;
+
+    const percentage = total > 0
+        ? Math.min(100, (captured / total) * 100)
+        : 0;
+
+    progressEl.style.width = `${percentage}%`;
+
+    cancelBtn.style.display =
+        status === "Capturing" || status === "Starting"
+            ? "block"
+            : "none";
+}
+
+async function startFaceRegistration(id) {
+    const msg = document.getElementById("faceRegistrationMessage");
+
+    activeFaceStudentId = id;
+
+    msg.textContent = `Starting face registration for ${id}...`;
+
+    setFaceRegistrationUI(
+        "Starting",
+        "-",
+        "NAO is preparing the camera...",
+        0,
+        15
+    );
+
+    try {
+        const r = await fetch(
+            `${studentsUrl}/${encodeURIComponent(id)}/face-registration/start`,
+            { method: "POST" }
+        );
+
+        const d = await r.json();
+
+        if (!r.ok || !d.success) {
+            msg.textContent =
+                d.message || "Unable to start face registration.";
+
+            setFaceRegistrationUI(
+                "Failed",
+                "-",
+                d.message || "Unable to start face registration.",
+                0,
+                15
+            );
+
+            activeFaceStudentId = null;
+            return;
+        }
+
+        msg.textContent =
+            "NAO face registration started. Follow the instructions shown below.";
+
+        pollFaceRegistration(id);
+
+    } catch (e) {
+        console.error(e);
+
+        msg.textContent = "Unable to connect to the server.";
+
+        setFaceRegistrationUI(
+            "Failed",
+            "-",
+            "Unable to connect to the server.",
+            0,
+            15
+        );
+
+        activeFaceStudentId = null;
+    }
+}
+
+function pollFaceRegistration(id) {
+    if (faceStatusTimer) {
+        clearInterval(faceStatusTimer);
+    }
+
+    faceStatusTimer = setInterval(async () => {
+        try {
+            const r = await fetch(
+                `${studentsUrl}/${encodeURIComponent(id)}/face-registration/status?t=${Date.now()}`,
+                { cache: "no-store" }
+            );
+
+            const d = await r.json();
+
+            if (!r.ok || !d.success) {
+                return;
+            }
+
+            // The current backend returns the status fields at the
+            // top level, but this also supports a nested "status" object.
+            const s = d.status || d;
+
+            const running = Boolean(s.running);
+            const completed = Boolean(s.completed);
+            const error = s.error;
+
+            const direction =
+                s.current_direction ||
+                s.direction ||
+                "-";
+
+            const instruction =
+                s.message ||
+                "Waiting for the next instruction.";
+
+            const captured =
+                Number(s.captured ?? s.captured_count ?? 0);
+
+            const total =
+                Number(s.total ?? s.required ?? 15);
+
+            let displayStatus = "Ready";
+
+            if (error) {
+                displayStatus = "Error";
+            } else if (completed) {
+                displayStatus = "Completed";
+            } else if (running) {
+                displayStatus = "Capturing";
+            }
+
+            setFaceRegistrationUI(
+                displayStatus,
+                direction,
+                instruction,
+                captured,
+                total
+            );
+
+            if (running) {
+                document.getElementById(
+                    "faceRegistrationMessage"
+                ).textContent =
+                    "NAO is registering the face. Follow the direction and instruction shown above.";
+            }
+
+            if (error) {
+                document.getElementById(
+                    "faceRegistrationMessage"
+                ).textContent =
+                    `Registration failed: ${error}`;
+
+                clearInterval(faceStatusTimer);
+                faceStatusTimer = null;
+                activeFaceStudentId = null;
+
+                return;
+            }
+
+            if (completed) {
+                document.getElementById(
+                    "faceRegistrationMessage"
+                ).textContent =
+                    "Face registration completed successfully.";
+
+                clearInterval(faceStatusTimer);
+                faceStatusTimer = null;
+                activeFaceStudentId = null;
+
+                await loadStudents();
+            }
+
+        } catch (e) {
+            console.error(
+                "[Face Registration] Status polling error:",
+                e
+            );
+        }
+    }, 500);
+}
+
+async function cancelFaceRegistration() {
+    if (!activeFaceStudentId) {
+        return;
+    }
+
+    try {
+        const r = await fetch(
+            `${studentsUrl}/${encodeURIComponent(activeFaceStudentId)}/face-registration/cancel`,
+            { method: "POST" }
+        );
+
+        const d = await r.json();
+
+        if (!r.ok || !d.success) {
+            alert(
+                d.message ||
+                "Unable to cancel face registration."
+            );
+            return;
+        }
+
+        document.getElementById(
+            "faceRegistrationMessage"
+        ).textContent =
+            "Face registration cancellation requested.";
+
+    } catch (e) {
+        console.error(e);
+        alert("Unable to connect to the server.");
+    }
+}
+async function initializePage(){await loadSubjects();await loadStudents()}initializePage();
+</script>
 {% endblock %}

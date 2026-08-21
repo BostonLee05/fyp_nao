@@ -13,3 +13,9 @@ pip install pyttsx3 <br>
 pip install pillow <br>
 pip install python-dotenv <br>
 pip install google-genai <br>
+
+
+
+I put here for placeholder to test something(17/8/2026) <br>
+python -m pip uninstall opencv-python -y <br>
+python -m pip install opencv-python==4.11.0.86 <br>
