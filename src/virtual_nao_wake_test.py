@@ -14,10 +14,22 @@ from modules.wake_audio import WakeAudio
 from speaker import Speaker
 
 
+SEARCH_COMMAND_EXAMPLES = (
+    "find me videos about python basics",
+    "find me websites about classroom robots",
+)
+
 TOPIC_CONTENT = """topic: ~wake_audio_virtual_test()
 language: enu
 u:(["hey nao" "hey now" "hi now" "hello nao" "hello now"]) $WakeAudio/WakeWord=$Dialog/LastInput
 """
+
+
+class ConsoleSpeaker:
+    """Speaker replacement for direct virtual command tests."""
+
+    def speak(self, text):
+        print(f"[VirtualWakeTest Speaker]\n{text}")
 
 
 class VirtualNAOAudioTransfer:
@@ -152,6 +164,11 @@ class VirtualVoiceRecognition(VoiceRecognition):
             audio_file = self.audio_transfer.record_from_nao(duration=duration)
 
             if audio_file == "__typed_virtual_speech__":
+                print(
+                    "[VirtualVoiceRecognition] Search examples: "
+                    f"'{SEARCH_COMMAND_EXAMPLES[0]}' or "
+                    f"'{SEARCH_COMMAND_EXAMPLES[1]}'."
+                )
                 text = input("[VirtualVoiceRecognition] Type what you said: ").strip()
             elif audio_file and os.path.exists(audio_file):
                 print(f"[VirtualVoiceRecognition] Audio file: {audio_file}")
@@ -301,11 +318,37 @@ def parse_args():
         action="store_true",
         help="Disable Gemini and only test fixed keyword responses.",
     )
+    parser.add_argument(
+        "--command",
+        help=(
+            "Run one spoken command directly without connecting to virtual NAOqi. "
+            "Example: --command \"find me videos about python basics\""
+        ),
+    )
     return parser.parse_args()
+
+
+def run_direct_command(command):
+    voice = VirtualVoiceRecognition.__new__(VirtualVoiceRecognition)
+    voice.session = None
+    voice.speaker = ConsoleSpeaker()
+    voice.use_gemini = False
+    voice.gemini_service = None
+    voice.frame_provider = None
+
+    print(f"[VirtualWakeTest] Direct command: {command}")
+    handled = voice._handle_keyword_command(command)
+    if not handled:
+        print("[VirtualWakeTest] Command was not handled by virtual keywords/search.")
+    return handled
 
 
 def main():
     args = parse_args()
+
+    if args.command:
+        run_direct_command(args.command)
+        return
 
     try:
         session = connect_session(args.url)
@@ -334,6 +377,10 @@ def main():
     print("[VirtualWakeTest] Ready.")
     print("[VirtualWakeTest] Say/type: hey nao, hey now, hi now, hello nao, or hello now.")
     print("[VirtualWakeTest] After NAO says 'Yes?', speak into your laptop mic.")
+    print(
+        "[VirtualWakeTest] Search command examples: "
+        f"'{SEARCH_COMMAND_EXAMPLES[0]}' or '{SEARCH_COMMAND_EXAMPLES[1]}'."
+    )
     print("[VirtualWakeTest] Use --mode type if microphone capture is not available.")
     print("[VirtualWakeTest] Type quit/exit/stop or press Ctrl+C to stop.")
 

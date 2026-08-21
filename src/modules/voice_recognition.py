@@ -1,6 +1,8 @@
 import os
+import re
 import tempfile
 import threading
+import warnings
 from pathlib import Path
 import cv2
 import numpy as np
@@ -10,7 +12,32 @@ from faster_whisper import WhisperModel
 from modules.gemini_service import GeminiService
 from modules.nao_audio_transfer import NAOAudioTransfer
 
+warnings.filterwarnings(
+    "ignore",
+    message=r".*duckduckgo_search.*renamed to.*ddgs.*",
+    category=RuntimeWarning,
+)
+
+try:
+    from ddgs import DDGS as DDGSBackend
+except ImportError:
+    DDGSBackend = None
+
+try:
+    from duckduckgo_search import DDGS as DuckDuckGoSearchBackend
+except ImportError:
+    DuckDuckGoSearchBackend = None
+
 class VoiceRecognition:
+    SEARCH_RESULT_LIMIT = 3
+    SEARCH_COMMAND_RE = re.compile(
+        r"\b(?:find me|find|search for|search|give me|show me)\s+"
+        r"(?P<kind>videos?|websites?|sites?|web\s*pages?|webpages?)\s+"
+        r"(?:about|on|for)\s+"
+        r"(?P<query>.+)",
+        re.IGNORECASE,
+    )
+
     def __init__(
         self,
         session=None,
@@ -243,11 +270,14 @@ class VoiceRecognition:
 
     def _handle_keyword_command(self, text):
         """Handles fixed voice commands with simple keyword matching."""
-        if not self.speaker:
-            return False
-
         normalized_text = text.lower()
         compact_text = normalized_text.replace(" ", "")
+
+        if self._handle_search_command(text):
+            return True
+
+        if not self.speaker:
+            return False
 
         if "attendance mode" in normalized_text:
             self.speaker.speak("Attendance Mode Activating...")
@@ -283,6 +313,142 @@ class VoiceRecognition:
             return True
 
         return False
+
+    def _handle_search_command(self, text):
+        search_request = self._parse_search_command(text)
+        if not search_request:
+            return False
+
+        kind, query = search_request
+        results = self._duckduckgo_search(kind, query, limit=self.SEARCH_RESULT_LIMIT)
+
+        if not results:
+            message = f"I could not find {kind} about {query}."
+            print(f"[VoiceRecognition] {message}")
+            if self.speaker:
+                self.speaker.speak(message)
+            return True
+
+        noun = "Video" if kind == "videos" else "Website"
+        lines = [
+            f"{index}. {noun} Title : {result['title']} : {result['url']}"
+            for index, result in enumerate(results, start=1)
+        ]
+        response = "\n".join(lines)
+
+        print(f"[VoiceRecognition] DuckDuckGo {kind} results for '{query}':\n{response}")
+        if self.speaker:
+            self.speaker.speak(response)
+        return True
+
+    def _parse_search_command(self, text):
+        text = " ".join(text.strip().split())
+        match = self.SEARCH_COMMAND_RE.search(text)
+        if not match:
+            return None
+
+        kind = match.group("kind").lower().replace(" ", "")
+        query = match.group("query").strip(" .?!")
+        if not query:
+            return None
+
+        if kind.startswith("video"):
+            return "videos", query
+        return "websites", query
+
+    def _duckduckgo_search(self, kind, query, limit=3):
+        backends = self._get_search_backends(kind)
+        if not backends:
+            message = (
+                "DuckDuckGo search is not installed. "
+                "Install it with: python -m pip install ddgs duckduckgo-search"
+            )
+            print(f"[VoiceRecognition Warning] {message}")
+            if self.speaker:
+                self.speaker.speak(message)
+            return []
+
+        last_error = None
+        for backend in backends:
+            results, error = self._search_with_backend(backend, kind, query, limit)
+            if results:
+                return results
+            if error:
+                last_error = error
+
+        if kind == "videos":
+            fallback_results = self._video_text_search_fallback(query, limit)
+            if fallback_results:
+                return fallback_results
+
+        if last_error:
+            print(f"[VoiceRecognition Error] DuckDuckGo search failed: {last_error}")
+        return []
+
+    def _get_search_backends(self, kind):
+        if kind == "videos" and DDGSBackend is not None:
+            candidates = [DDGSBackend]
+        elif kind == "videos":
+            candidates = [DuckDuckGoSearchBackend]
+        else:
+            candidates = [DDGSBackend, DuckDuckGoSearchBackend]
+
+        backends = []
+        for backend in candidates:
+            if backend is not None and backend not in backends:
+                backends.append(backend)
+        return backends
+
+    def _search_with_backend(self, backend, kind, query, limit):
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                with backend() as ddgs:
+                    if kind == "videos":
+                        raw_results = ddgs.videos(
+                            query,
+                            region="wt-wt",
+                            safesearch="moderate",
+                            max_results=limit,
+                        )
+                    else:
+                        raw_results = ddgs.text(
+                            query,
+                            region="wt-wt",
+                            safesearch="moderate",
+                            max_results=limit,
+                        )
+
+                    return self._normalize_search_results(raw_results, limit=limit), None
+        except Exception as e:
+            return [], e
+
+    def _video_text_search_fallback(self, query, limit):
+        video_query = f"site:youtube.com/watch {query}"
+        for backend in self._get_search_backends("websites"):
+            results, _ = self._search_with_backend(
+                backend,
+                "websites",
+                video_query,
+                limit,
+            )
+            if results:
+                return results
+        return []
+
+    def _normalize_search_results(self, raw_results, limit=3):
+        results = []
+        for item in raw_results or []:
+            title = item.get("title") or item.get("heading")
+            url = item.get("href") or item.get("url") or item.get("content")
+            if not title or not url:
+                continue
+
+            results.append({"title": title, "url": url})
+            if len(results) >= limit:
+                break
+
+        return results
 
     def _contains_command(self, normalized_text, compact_text, phrases):
         for phrase in phrases:
