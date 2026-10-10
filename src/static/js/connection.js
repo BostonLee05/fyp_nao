@@ -38,6 +38,17 @@ const logBox = document.getElementById("log");
 
 const clock = document.getElementById("clock");
 
+const voiceStatusText = document.getElementById("voiceStatusText");
+const voiceStatusDot = document.getElementById("voiceStatusDot");
+const latestVoiceCommand = document.getElementById("latestVoiceCommand");
+const latestVoiceResult = document.getElementById("latestVoiceResult");
+const voiceHistory = document.getElementById("voiceHistory");
+const searchRecommendationToast = document.getElementById("searchRecommendationToast");
+const searchRecommendationList = document.getElementById("searchRecommendationList");
+const searchToastClose = document.getElementById("searchToastClose");
+
+let lastRecommendationToken = 0;
+
 
 // ======================================================
 // Sidebar
@@ -412,6 +423,177 @@ function updateDashboard(data) {
 
 }
 
+// ======================================================
+// Voice Recognition UI
+// ======================================================
+
+function escapeHtml(value) {
+
+    return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+}
+
+function setVoiceDot(status) {
+
+    if (!voiceStatusDot) return;
+
+    voiceStatusDot.className = "voice-dot";
+
+    const normalized = String(status || "").toLowerCase();
+
+    if (normalized.includes("error")) {
+        voiceStatusDot.classList.add("error");
+        return;
+    }
+
+    if (
+        normalized.includes("completed")
+        || normalized.includes("ready")
+        || normalized.includes("waiting")
+    ) {
+        voiceStatusDot.classList.add("success");
+        return;
+    }
+
+    voiceStatusDot.classList.add("active");
+
+}
+
+function renderVoiceHistory(history) {
+
+    if (!voiceHistory) return;
+
+    if (!history || history.length === 0) {
+        voiceHistory.innerHTML =
+            '<div class="voice-history-empty">No voice commands yet.</div>';
+        return;
+    }
+
+    voiceHistory.innerHTML = history.map((item) => {
+        const command = escapeHtml(item.command || "No command");
+        const action = escapeHtml(item.action || "Unknown");
+        const status = escapeHtml(item.status || "Completed");
+        const time = escapeHtml(item.time || "--:--");
+
+        return `
+            <div class="voice-history-item">
+                <div class="voice-history-main">
+                    <span>${time}</span>
+                    <span class="voice-history-command">"${command}"</span>
+                </div>
+                <div class="voice-history-meta">
+                    ${action} - ${status}
+                </div>
+            </div>
+        `;
+    }).join("");
+
+}
+
+function renderSearchRecommendations(recommendations) {
+
+    if (!searchRecommendationToast || !searchRecommendationList) return;
+
+    if (!recommendations || recommendations.length === 0) {
+        searchRecommendationList.innerHTML =
+            '<div class="search-toast-empty">No web recommendations found.</div>';
+        searchRecommendationToast.classList.remove("hidden");
+        return;
+    }
+
+    searchRecommendationList.innerHTML = recommendations.map((item) => {
+        const title = escapeHtml(item.title || "Untitled result");
+        const url = escapeHtml(item.url || "#");
+        const thumbnail = escapeHtml(item.thumbnail || "");
+
+        return `
+            <a class="search-toast-item" href="${url}" target="_blank" rel="noopener noreferrer">
+                <img class="search-toast-thumbnail" src="${thumbnail}" alt="" loading="lazy" onerror="this.classList.add('thumbnail-failed')">
+                <span class="search-toast-copy">
+                    <span class="search-toast-title">${title}</span>
+                    <span class="search-toast-url">${url}</span>
+                </span>
+            </a>
+        `;
+    }).join("");
+
+    searchRecommendationToast.classList.remove("hidden");
+
+}
+
+function updateVoiceDashboard(voice) {
+
+    if (!voice) return;
+
+    if (voiceStatusText)
+        voiceStatusText.textContent = voice.status || "Ready/listening again";
+
+    setVoiceDot(voice.status);
+
+    if (latestVoiceCommand)
+        latestVoiceCommand.textContent =
+            voice.latest_command || "No command recognized yet.";
+
+    if (latestVoiceResult)
+        latestVoiceResult.textContent =
+            voice.latest_result || voice.latest_error || "Waiting for voice activity.";
+
+    renderVoiceHistory(voice.history);
+
+    if (
+        voice.recommendation_token
+        && voice.recommendation_token !== lastRecommendationToken
+    ) {
+        lastRecommendationToken = voice.recommendation_token;
+        renderSearchRecommendations(voice.recommendations || []);
+    }
+
+}
+
+async function fetchVoiceStatus() {
+
+    try {
+
+        const response = await fetch("/api/voice/status");
+
+        if (!response.ok)
+            throw new Error("Voice status API unavailable");
+
+        const result = await response.json();
+
+        if (result.success)
+            updateVoiceDashboard(result.voice);
+
+    }
+
+    catch (err) {
+
+        console.error(err);
+
+        if (voiceStatusText)
+            voiceStatusText.textContent = "Error";
+
+        setVoiceDot("Error");
+
+    }
+
+}
+
+if (searchToastClose) {
+
+    searchToastClose.addEventListener("click", () => {
+
+        searchRecommendationToast.classList.add("hidden");
+
+    });
+
+}
+
 
 
 // ======================================================
@@ -535,6 +717,9 @@ setInterval(refreshSession, 1000);
 // Robot heartbeat
 setInterval(pingRobot, 5000);
 
+// Voice status
+setInterval(fetchVoiceStatus, 1500);
+
 
 
 // ======================================================
@@ -546,6 +731,8 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchStatus();
 
     refreshSession();
+
+    fetchVoiceStatus();
 
     addLog("Dashboard initialized.");
 
@@ -590,6 +777,8 @@ document.addEventListener("visibilitychange", () => {
         fetchStatus();
 
         refreshSession();
+
+        fetchVoiceStatus();
 
     }
 
@@ -701,6 +890,8 @@ function refreshEverything() {
     refreshReports();
 
     refreshRobotControl();
+
+    fetchVoiceStatus();
 
 }
 

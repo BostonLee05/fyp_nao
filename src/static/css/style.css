@@ -1833,6 +1833,363 @@ select,
 
 }
 
+.voice-panel{
+
+    min-height:360px;
+
+}
+
+.voice-page{
+
+    display:grid;
+
+    grid-template-columns:1fr 1.25fr;
+
+    gap:25px;
+
+    align-items:start;
+
+}
+
+.voice-control-panel,
+.voice-history-panel{
+
+    min-height:420px;
+
+}
+
+.voice-status-row{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:12px;
+
+    padding:14px 16px;
+
+    border:1px solid var(--border);
+
+    border-radius:14px;
+
+    background:#f8fbff;
+
+    font-weight:700;
+
+}
+
+.voice-dot{
+
+    width:12px;
+
+    height:12px;
+
+    border-radius:50%;
+
+    background:#94a3b8;
+
+}
+
+.voice-dot.active{
+
+    background:var(--primary);
+
+    box-shadow:0 0 0 5px rgba(37,99,235,.12);
+
+    animation:pulse 1.8s infinite;
+
+}
+
+.voice-dot.success{
+
+    background:var(--success);
+
+}
+
+.voice-dot.error{
+
+    background:var(--danger);
+
+}
+
+.voice-current{
+
+    display:grid;
+
+    grid-template-columns:1fr;
+
+    gap:16px;
+
+    margin:18px 0;
+
+}
+
+.voice-current p{
+
+    margin-top:6px;
+
+    padding:12px 14px;
+
+    border-radius:12px;
+
+    background:#f8fafc;
+
+    border:1px solid var(--border);
+
+    color:var(--text);
+
+    word-break:break-word;
+
+}
+
+.voice-panel h3{
+
+    margin:8px 0 12px;
+
+}
+
+.voice-history{
+
+    max-height:260px;
+
+    overflow-y:auto;
+
+    border:1px solid var(--border);
+
+    border-radius:14px;
+
+}
+
+.voice-history-large{
+
+    max-height:560px;
+
+}
+
+.voice-history-item,
+.voice-history-empty{
+
+    padding:13px 14px;
+
+    border-bottom:1px solid var(--border);
+
+}
+
+.voice-history-item:last-child,
+.voice-history-empty:last-child{
+
+    border-bottom:none;
+
+}
+
+.voice-history-main{
+
+    display:flex;
+
+    gap:8px;
+
+    flex-wrap:wrap;
+
+    font-weight:700;
+
+}
+
+.voice-history-command{
+
+    color:var(--text);
+
+}
+
+.voice-history-meta{
+
+    margin-top:6px;
+
+    color:var(--text-light);
+
+    font-size:13px;
+
+}
+
+.search-toast{
+
+    position:fixed;
+
+    right:28px;
+
+    bottom:28px;
+
+    width:min(520px, calc(100vw - 36px));
+
+    background:white;
+
+    border:1px solid var(--border);
+
+    border-radius:18px;
+
+    box-shadow:0 24px 55px rgba(15,23,42,.18);
+
+    z-index:1200;
+
+    overflow:hidden;
+
+}
+
+.search-toast.hidden{
+
+    display:none;
+
+}
+
+.search-toast-header{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:space-between;
+
+    gap:16px;
+
+    padding:16px 18px;
+
+    border-bottom:1px solid var(--border);
+
+}
+
+.search-toast-header div{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:10px;
+
+}
+
+.search-toast-header i{
+
+    color:var(--primary);
+
+}
+
+#searchToastClose{
+
+    width:38px;
+
+    height:38px;
+
+    padding:0;
+
+    border-radius:50%;
+
+    background:#f1f5f9;
+
+    color:var(--text);
+
+}
+
+.search-toast-list{
+
+    max-height:430px;
+
+    overflow-y:auto;
+
+    padding:8px 0;
+
+}
+
+.search-toast-item{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:14px;
+
+    padding:13px 18px;
+
+    border-bottom:1px solid var(--border);
+
+    transition:background .2s ease;
+
+}
+
+.search-toast-item:hover{
+
+    background:#f8fbff;
+
+}
+
+.search-toast-item:last-child{
+
+    border-bottom:none;
+
+}
+
+.search-toast-title{
+
+    display:block;
+
+    font-weight:700;
+
+    color:var(--text);
+
+    margin-bottom:5px;
+
+}
+
+.search-toast-thumbnail{
+
+    width:112px;
+
+    height:68px;
+
+    flex:0 0 112px;
+
+    object-fit:cover;
+
+    border-radius:10px;
+
+    background:#eaf2ff;
+
+    border:1px solid var(--border);
+
+}
+
+.search-toast-thumbnail.thumbnail-failed{
+
+    visibility:hidden;
+
+}
+
+.search-toast-copy{
+
+    min-width:0;
+
+    flex:1;
+
+}
+
+.search-toast-url{
+
+    display:block;
+
+    color:var(--primary-dark);
+
+    font-size:13px;
+
+    word-break:break-all;
+
+}
+
+.search-toast-empty{
+
+    padding:16px 18px;
+
+    color:var(--text-light);
+
+}
+
 
 /* ==========================================================
    CARD ICONS (Future Ready)
@@ -2019,6 +2376,12 @@ select,
     .camera-panel{
 
         grid-row:auto;
+
+    }
+
+    .voice-page{
+
+        grid-template-columns:1fr;
 
     }
 

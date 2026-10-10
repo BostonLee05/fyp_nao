@@ -5,6 +5,7 @@ Robot API blueprint.
 
 from flask import Blueprint, jsonify, request
 
+from modules.robot_services import robot_services
 from robot_session import robot_session
 from nao_api import get_nao_manager
 
@@ -30,6 +31,7 @@ def connect():
 
     try:
         robot_api.connect(robot_ip, robot_port)
+        robot_services.start_for_session(robot_api.get_session())
 
         robot_session.start_session(
             robot_ip=robot_ip,
@@ -54,6 +56,8 @@ def connect():
 
 @robot_bp.route("/disconnect", methods=["POST"])
 def disconnect():
+
+    robot_services.stop_robot_services()
 
     try:
         robot_api.disconnect()

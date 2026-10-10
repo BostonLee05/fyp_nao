@@ -5,14 +5,9 @@ Flask entry point for the NAO Smart Classroom Monitoring System.
 
 import sys
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, request, jsonify
 
-from speaker import Speaker
-from modules.fall_recovery import FallRecovery
-from modules.voice_recognition import VoiceRecognition
-from modules.wake_audio import WakeAudio
-from modules.gemini_service import GeminiService
-from integrated_monitoring import monitor
+from modules.robot_services import robot_services
 
 from nao_api import get_nao_manager
 import config
@@ -25,24 +20,20 @@ from routes.subjects import subjects_bp
 from routes.behaviour import behaviour_bp
 from routes.reports import reports_bp
 from routes.settings import settings_bp
+from routes.voice import voice_bp, voice_page_bp
 
 app = Flask(__name__)
 
 nao_manager = get_nao_manager()
 
 robot_manager = None
-speaker = None
-fall = None
-voice = None
-wake_audio = None
-gemini = None
 
 # ---------------------------------------------------
 # Robot Initialization
 # ---------------------------------------------------
 
 def initialize_robot():
-    global robot_manager, speaker, fall, voice, wake_audio, gemini
+    global robot_manager
 
     robot_manager = get_nao_manager()
     session = None
@@ -54,41 +45,11 @@ def initialize_robot():
         print(f"\n[System Warning] Could not connect to NAO ({e}).")
         print("[System Warning] Running server in Web-Only Mode (Robot hardware offline).\n")
 
-    # Initialize Gemini Service regardless of robot status
-    gemini = GeminiService()
-    print(
-        f"[System] Gemini Service status: "
-        f"{'Ready' if getattr(gemini, 'client', None) else 'No API Key'}"
-    )
+    # Initialize Gemini Service regardless of robot status.
+    robot_services.ensure_gemini()
 
     if session:
-        speaker = Speaker(session)
-
-        try:
-            # 1. Start Fall Recovery
-            fall = FallRecovery(session, speaker)
-            fall.start()
-        except Exception as e:
-            print(f"[System Warning] Fall Recovery did not start: {e}")
-
-        try:
-            # 2. Prepare Voice Recognition for wake-word-triggered recording
-            voice = VoiceRecognition(
-                session,
-                speaker,
-                gemini_service=gemini,
-                frame_provider=monitor.get_frame,
-            )
-        except Exception as e:
-            print(f"[System Warning] Voice Recognition did not start: {e}")
-
-        if voice:
-            try:
-                # 3. Start NAOqi wake-word recognition
-                wake_audio = WakeAudio(session, speaker, voice)
-                wake_audio.start()
-            except Exception as e:
-                print(f"[System Warning] Wake Audio did not start: {e}")
+        robot_services.start_for_session(session)
 
         print("\n[System] Robot module initialization finished.")
 
@@ -105,16 +66,13 @@ app.register_blueprint(subjects_bp)
 app.register_blueprint(behaviour_bp)
 app.register_blueprint(reports_bp)
 app.register_blueprint(settings_bp)
+app.register_blueprint(voice_bp)
+app.register_blueprint(voice_page_bp)
 
 
 # ---------------------------------------------------
 # Basic Flask Routes
 # ---------------------------------------------------
-
-@app.route("/")
-def index():
-    return render_template("index.html")
-
 
 @app.route("/say", methods=["POST"])
 def say_something():
@@ -122,7 +80,13 @@ def say_something():
     text = data.get("text", "")
 
     try:
-        speaker.speak(str(text))
+        if not robot_services.speaker:
+            return jsonify({
+                "status": "error",
+                "message": "Speaker is not available. Connect NAO first."
+            }), 503
+
+        robot_services.speaker.speak(str(text))
 
         return jsonify({
             "status": "success",
@@ -161,11 +125,7 @@ if __name__ == "__main__":
     finally:
         print("\n[System] Shutting down services...")
 
-        if wake_audio:
-            wake_audio.stop()
-
-        if fall:
-            fall.stop()
+        robot_services.stop_robot_services()
 
         if nao_manager.is_connected():
             nao_manager.disconnect()

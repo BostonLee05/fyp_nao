@@ -13,12 +13,14 @@ class WakeAudio:
         voice_recognition,
         confidence_threshold=0.35,
         cooldown_seconds=3.0,
+        state_manager=None,
     ):
         self.session = session
         self.speaker = speaker
         self.voice_recognition = voice_recognition
         self.confidence_threshold = confidence_threshold
         self.cooldown_seconds = cooldown_seconds
+        self.state_manager = state_manager
 
         self.memory = self.session.service("ALMemory")
         self.speech_recognition = None
@@ -48,6 +50,7 @@ class WakeAudio:
             if self.speech_recognition:
                 self.speech_recognition.subscribe("WakeAudio")
             self.running = True
+            self._set_status("Waiting for wake word")
             print("[WakeAudio] Listening for wake phrases. Call 'Hey Nao' to wake.")
 
     def stop(self):
@@ -70,6 +73,7 @@ class WakeAudio:
                     pass
 
             self.event_connections = []
+            self._set_status("Ready/listening again")
             print("[WakeAudio] Stopped.")
 
     def _subscribe_event(self, event_name, callback):
@@ -147,6 +151,7 @@ class WakeAudio:
 
     def _handle_wake_phrase(self, phrase, confidence):
         print(f"[WakeAudio] Wake phrase heard: '{phrase}' ({confidence:.2f})")
+        self._set_status("Wake word detected")
         self._pause_wake_listening()
 
         try:
@@ -164,6 +169,7 @@ class WakeAudio:
                 self._resume_wake_listening()
         except Exception as e:
             print(f"[WakeAudio Error] Wake handling failed: {e}")
+            self._set_status("Error", str(e))
             self._resume_wake_listening()
 
     def _pause_wake_listening(self):
@@ -180,11 +186,18 @@ class WakeAudio:
             return
 
         if not self.speech_recognition:
+            self._set_status("Ready/listening again")
             print("[WakeAudio] Wake listening resumed.")
             return
 
         try:
             self.speech_recognition.subscribe("WakeAudio")
+            self._set_status("Waiting for wake word")
             print("[WakeAudio] Wake listening resumed.")
         except Exception as e:
+            self._set_status("Error", str(e))
             print(f"[WakeAudio Error] Could not resume wake listening: {e}")
+
+    def _set_status(self, status, error=""):
+        if self.state_manager:
+            self.state_manager.set_status(status, error=error)

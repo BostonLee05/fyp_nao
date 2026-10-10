@@ -35,9 +35,14 @@
 
         <nav>
 
-            <a class="active" href="/">
+            <a class="{{ 'active' if request.path == '/' else '' }}" href="/">
                 <i class="fa-solid fa-house"></i>
                 <span>Dashboard</span>
+            </a>
+
+            <a class="{{ 'active' if request.path.startswith('/voice') else '' }}" href="/voice">
+                <i class="fa-solid fa-microphone-lines"></i>
+                <span>Voice Recognition</span>
             </a>
 
             <a href="/vision">
@@ -117,6 +122,19 @@
 
     </div>
 
+</div>
+
+<div id="searchRecommendationToast" class="search-toast hidden" aria-live="polite">
+    <div class="search-toast-header">
+        <div>
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <strong>DuckDuckGo Recommendations</strong>
+        </div>
+        <button id="searchToastClose" type="button" aria-label="Close recommendations">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    </div>
+    <div id="searchRecommendationList" class="search-toast-list"></div>
 </div>
 
 <script>

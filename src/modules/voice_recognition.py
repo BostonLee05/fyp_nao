@@ -4,6 +4,7 @@ import tempfile
 import threading
 import warnings
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 import cv2
 import numpy as np
 
@@ -37,6 +38,11 @@ class VoiceRecognition:
         r"(?P<query>.+)",
         re.IGNORECASE,
     )
+    SIMPLE_SEARCH_COMMAND_RE = re.compile(
+        r"\b(?:find me|find|search for|search|look up|google)\s+"
+        r"(?P<query>.+)",
+        re.IGNORECASE,
+    )
 
     def __init__(
         self,
@@ -46,6 +52,7 @@ class VoiceRecognition:
         gemini_service=None,
         use_gemini=True,
         frame_provider=None,
+        state_manager=None,
     ):
         self.session = session
         self.speaker = speaker
@@ -53,6 +60,7 @@ class VoiceRecognition:
         self.use_gemini = use_gemini
         self.gemini_service = gemini_service
         self.frame_provider = frame_provider
+        self.state_manager = state_manager
         self.recording_lock = threading.Lock()
 
         module_dir = Path(__file__).resolve().parent
@@ -66,7 +74,7 @@ class VoiceRecognition:
 
         # Initialize Whisper Model
         print("[VoiceRecognition] Initializing Whisper model...")
-        self.model = WhisperModel("base", device="cpu", compute_type="int8")
+        self.model = WhisperModel("base", device="cuda", compute_type="float16")
 
         # Initialize NAO Audio Recorder proxy if session exists
         self.audio_recorder = None
@@ -148,6 +156,7 @@ class VoiceRecognition:
 
         try:
             print(f"[VoiceRecognition] Starting one-shot recording ({duration}s)...")
+            self._set_status("Recording")
 
             if self.audio_recorder:
                 print("[VoiceRecognition] Using NAO ALAudioRecorder.")
@@ -160,18 +169,37 @@ class VoiceRecognition:
 
             if audio_file and os.path.exists(audio_file):
                 print("[VoiceRecognition] Starting transcription...")
+                self._set_status("Transcribing")
 
                 text = self._transcribe(audio_file)
 
                 print(f"[VoiceRecognition] Transcription: '{text}'")
 
                 if text:
-                    self._on_speech_recognized(text)
+                    self._set_status("Processing command")
+                    result = self._on_speech_recognized(text)
+                    self._record_result(text, result)
+                    self._set_status("Command completed")
+                    self._set_status("Ready/listening again")
+                else:
+                    self._record_result(
+                        "",
+                        {
+                            "action": "Unknown",
+                            "response": "No speech was recognized.",
+                            "status": "Error",
+                        },
+                    )
+                    self._set_status("Ready/listening again")
 
                 return text
 
             print("[VoiceRecognition] No audio file available.")
+            self._set_status("Error", "No audio file available.")
             return ""
+        except Exception as e:
+            self._set_status("Error", str(e))
+            raise
 
         finally:
             self.recording_lock.release()
@@ -203,11 +231,7 @@ class VoiceRecognition:
                 video = self.session.service("ALVideoDevice")
                 client_name = f"VoiceRecognitionVision_{threading.get_ident()}"
                 client_name = video.subscribeCamera(
-                    client_name,
-                    0,
-                    2,
-                    11,
-                    5,
+                    client_name,0,2,11,5,
                 )
                 try:
                     image = video.getImageRemote(client_name)
@@ -245,14 +269,19 @@ class VoiceRecognition:
         print(f"\n[VoiceRecognition] Heard: \"{text}\"")
 
         if not text:
-            return
+            return {
+                "action": "Unknown",
+                "response": "No command was recognized.",
+                "status": "Error",
+            }
 
         # Simple keyword matching stays first so fixed classroom commands are fast
         # and keep working without Gemini.
-        if self._handle_keyword_command(text):
-            return
+        keyword_result = self._handle_keyword_command(text)
+        if keyword_result:
+            return keyword_result
 
-        if self.speaker and self.gemini_service and self.use_gemini:
+        if self.gemini_service and self.use_gemini:
             image = self._capture_camera_frame()
 
             prompt = text
@@ -266,53 +295,112 @@ class VoiceRecognition:
             response = self.gemini_service.ask(prompt, image=image)
             if response:
                 print(f"[VoiceRecognition] Gemini: \"{response}\"")
-                self.speaker.speak(response)
+                if self.speaker:
+                    self.speaker.speak(response)
+                return {
+                    "action": "Gemini",
+                    "response": response,
+                    "status": "Completed",
+                }
+
+        response = "I did not understand that command."
+        if self.speaker:
+            self.speaker.speak(response)
+        return {
+            "action": "Unknown",
+            "response": response,
+            "status": "Completed",
+        }
 
     def _handle_keyword_command(self, text):
         """Handles fixed voice commands with simple keyword matching."""
         normalized_text = text.lower()
         compact_text = normalized_text.replace(" ", "")
 
-        if self._handle_search_command(text):
-            return True
+        search_result = self._handle_search_command(text)
+        if search_result:
+            return search_result
 
         if not self.speaker:
-            return False
+            return None
 
         if "attendance mode" in normalized_text:
-            self.speaker.speak("Attendance Mode Activating...")
-            return True
+            response = "Attendance Mode Activating..."
+            self.speaker.speak(response)
+            return {
+                "action": "Attendance",
+                "response": response,
+                "status": "Completed",
+            }
 
         if "hello" in normalized_text:
-            self.speaker.speak("Hello, this is from pre-built keyword...")
-            return True
+            response = "Hello, this is from pre-built keyword..."
+            self.speaker.speak(response)
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
 
         if self._contains_command(normalized_text, compact_text, ["stand up", "standup"]):
-            self.speaker.speak("Standing up.")
+            response = "Standing up."
+            self.speaker.speak(response)
             self._go_to_posture("StandInit")
-            return True
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
 
         if self._contains_command(normalized_text, compact_text, ["sit down", "sitdown"]):
-            self.speaker.speak("Sitting down.")
+            response = "Sitting down."
+            self.speaker.speak(response)
             self._go_to_posture("Sit")
-            return True
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
 
         if self._contains_command(normalized_text, compact_text, ["wake up", "wakeup"]):
-            self.speaker.speak("Waking up.")
+            response = "Waking up."
+            self.speaker.speak(response)
             self._wake_up()
-            return True
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
 
         if "rest" in normalized_text:
-            self.speaker.speak("Going to rest mode.")
+            response = "Going to rest mode."
+            self.speaker.speak(response)
             self._rest()
-            return True
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
 
         if "crouch" in normalized_text:
-            self.speaker.speak("Crouching.")
+            response = "Crouching."
+            self.speaker.speak(response)
             self._go_to_posture("Crouch")
-            return True
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
 
-        return False
+        if (
+            "camera" in normalized_text
+            or "vision" in normalized_text
+            or "classroom" in normalized_text
+            or "what do you see" in normalized_text
+        ):
+            return None
+
+        return None
 
     def _handle_search_command(self, text):
         search_request = self._parse_search_command(text)
@@ -327,25 +415,48 @@ class VoiceRecognition:
             print(f"[VoiceRecognition] {message}")
             if self.speaker:
                 self.speaker.speak(message)
-            return True
+            return {
+                "action": "Web Search",
+                "response": message,
+                "status": "Completed",
+                "recommendations": [],
+            }
 
-        noun = "Video" if kind == "videos" else "Website"
+        noun = "videos" if kind == "videos" else "websites"
         lines = [
-            f"{index}. {noun} Title : {result['title']} : {result['url']}"
+            f"{index}. {noun.title()} title: {result['title']}"
             for index, result in enumerate(results, start=1)
         ]
         response = "\n".join(lines)
+        spoken_response = f"Search result about {query} found."
 
         print(f"[VoiceRecognition] DuckDuckGo {kind} results for '{query}':\n{response}")
         if self.speaker:
-            self.speaker.speak(response)
-        return True
+            self.speaker.speak(spoken_response)
+        return {
+            "action": "Web Search",
+            "response": spoken_response,
+            "status": "Completed",
+            "recommendations": results,
+        }
 
     def _parse_search_command(self, text):
         text = " ".join(text.strip().split())
         match = self.SEARCH_COMMAND_RE.search(text)
         if not match:
-            return None
+            match = self.SIMPLE_SEARCH_COMMAND_RE.search(text)
+            if not match:
+                return None
+
+            query = match.group("query").strip(" .?!")
+            if not query:
+                return None
+
+            kind = "videos" if query.lower().startswith(("video ", "videos ")) else "websites"
+            query = re.sub(r"^(?:videos?|websites?|sites?)\s+(?:about|on|for)?\s*", "", query, flags=re.IGNORECASE)
+            if not query:
+                return None
+            return kind, query
 
         kind = match.group("kind").lower().replace(" ", "")
         query = match.group("query").strip(" .?!")
@@ -441,14 +552,59 @@ class VoiceRecognition:
         for item in raw_results or []:
             title = item.get("title") or item.get("heading")
             url = item.get("href") or item.get("url") or item.get("content")
-            if not title or not url:
+            if not title or not url or not self._is_http_url(url):
                 continue
 
-            results.append({"title": title, "url": url})
+            results.append({
+                "title": title,
+                "url": url,
+                "thumbnail": self._result_thumbnail(item, url),
+            })
             if len(results) >= limit:
                 break
 
         return results
+
+    @staticmethod
+    def _is_http_url(url):
+        parsed = urlparse(str(url))
+        return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+    @classmethod
+    def _result_thumbnail(cls, item, url):
+        """Use the provider thumbnail, then a YouTube image, then a favicon."""
+        thumbnail = item.get("thumbnail") or item.get("image") or item.get("image_url")
+        if thumbnail and cls._is_http_url(thumbnail):
+            return thumbnail
+
+        parsed = urlparse(url)
+        video_id = ""
+        if parsed.netloc.lower().endswith("youtube.com"):
+            video_id = parse_qs(parsed.query).get("v", [""])[0]
+        elif parsed.netloc.lower() in {"youtu.be", "www.youtu.be"}:
+            video_id = parsed.path.strip("/").split("/")[0]
+
+        if video_id:
+            return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+
+        return f"https://www.google.com/s2/favicons?domain={parsed.netloc}&sz=128"
+
+    def _set_status(self, status, error=""):
+        if self.state_manager:
+            self.state_manager.set_status(status, error=error)
+
+    def _record_result(self, text, result):
+        if not self.state_manager:
+            return
+
+        result = result or {}
+        self.state_manager.record_command(
+            command=text,
+            action=result.get("action", "Unknown"),
+            result=result.get("response", ""),
+            status=result.get("status", "Completed"),
+            recommendations=result.get("recommendations"),
+        )
 
     def _contains_command(self, normalized_text, compact_text, phrases):
         for phrase in phrases:
