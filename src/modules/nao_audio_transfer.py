@@ -1,8 +1,8 @@
 import os
 import posixpath
 import time
+import wave
 from pathlib import Path
-
 
 class NAOAudioTransfer:
     """Handles NAO audio capture, download, and local test-audio fallback."""
@@ -23,7 +23,7 @@ class NAOAudioTransfer:
         self.test_audio_path = test_audio_path
         self.use_test_audio = use_test_audio
 
-    def record_from_nao(self, duration=4):
+    def record_from_nao(self, duration):
         """Records audio on NAO and downloads it to the local machine."""
         if not self.audio_recorder:
             print("[NAOAudioTransfer Warning] No ALAudioRecorder available.")
@@ -33,7 +33,7 @@ class NAOAudioTransfer:
             self.remote_path = self._get_recording_remote_path()
             print(f"[NAOAudioTransfer] Recording on NAO: {self.remote_path}")
             self.audio_recorder.startMicrophonesRecording(
-                self.remote_path, "wav", 16000, [0, 0, 1, 0]
+                self.remote_path, "wav", 16000, [1, 1, 1, 1]
             )
 
             print(f"[NAOAudioTransfer] Recording for {duration} seconds...")
@@ -46,6 +46,85 @@ class NAOAudioTransfer:
         except Exception as e:
             print(f"[NAOAudioTransfer Error] Failed to record from NAO: {e}")
             return None
+
+    def record_until_silence(
+        self,
+        speech_detector,
+        chunk_duration=0.25,
+        start_timeout=8,
+        silence_duration=1.2,
+        max_duration=20,
+    ):
+        """Capture short NAO chunks until speech starts and then ends."""
+        if not self.audio_recorder:
+            print("[NAOAudioTransfer Warning] No ALAudioRecorder available.")
+            return None
+
+        chunks = []
+        pre_roll = []
+        started = False
+        elapsed = 0.0
+        silence = 0.0
+
+        while elapsed < max_duration:
+            audio_path = self.record_from_nao(duration=chunk_duration)
+            if not audio_path or not os.path.exists(audio_path):
+                return None
+
+            chunk = self._read_wav_chunk(audio_path)
+            if chunk is None:
+                return None
+
+            has_speech = bool(speech_detector(audio_path))
+            elapsed += chunk_duration
+
+            if not started:
+                pre_roll.append(chunk)
+                pre_roll = pre_roll[-2:]
+                if has_speech:
+                    started = True
+                    chunks.extend(pre_roll)
+                    silence = 0.0
+                elif elapsed >= start_timeout:
+                    print("[NAOAudioTransfer] No speech detected before timeout.")
+                    return None
+                continue
+
+            chunks.append(chunk)
+            if has_speech:
+                silence = 0.0
+            else:
+                silence += chunk_duration
+                if silence >= silence_duration:
+                    break
+
+        if not chunks:
+            return None
+
+        self._write_wav_chunks(chunks)
+        print(
+            f"[NAOAudioTransfer] Speech capture complete ({elapsed:.2f}s observed)."
+        )
+        return self.local_path
+
+    @staticmethod
+    def _read_wav_chunk(path):
+        try:
+            with wave.open(path, "rb") as wav_file:
+                params = wav_file.getparams()
+                frames = wav_file.readframes(wav_file.getnframes())
+            return params, frames
+        except Exception as e:
+            print(f"[NAOAudioTransfer Warning] Could not read audio chunk: {e}")
+            return None
+
+    def _write_wav_chunks(self, chunks):
+        params = chunks[0][0]
+        with wave.open(self.local_path, "wb") as wav_file:
+            wav_file.setnchannels(params.nchannels)
+            wav_file.setsampwidth(params.sampwidth)
+            wav_file.setframerate(params.framerate)
+            wav_file.writeframes(b"".join(frames for _, frames in chunks))
 
     def get_test_audio(self):
         """Returns the local test WAV if offline fallback is enabled."""

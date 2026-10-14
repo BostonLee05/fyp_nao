@@ -11,7 +11,7 @@ class WakeAudio:
         session,
         speaker,
         voice_recognition,
-        confidence_threshold=0.35,
+        confidence_threshold=0.45,
         cooldown_seconds=3.0,
         state_manager=None,
     ):
@@ -104,9 +104,10 @@ class WakeAudio:
     def _on_word_recognized(self, value):
         if not self.running or not value or len(value) < 2:
             return
-
+        """ Text Cleaning """
         phrase = str(value[0]).strip().lower()
         try:
+            """ Confidence score """
             confidence = float(value[1])
         except (TypeError, ValueError):
             confidence = 0.0
@@ -162,7 +163,6 @@ class WakeAudio:
             time.sleep(1.0)
 
             started = self.voice_recognition.listen_once_async(
-                duration=4,
                 on_complete=self._resume_wake_listening,
             )
             if not started:

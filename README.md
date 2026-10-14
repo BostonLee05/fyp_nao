@@ -13,7 +13,8 @@ pip install pyttsx3 <br>
 pip install pillow <br>
 pip install python-dotenv <br>
 pip install google-genai <br>
-pip install ddgs duckduckgo-search <br>
+pip install ddgs <br>
+python -m pip install silero-vad torch <br>
 
 
 

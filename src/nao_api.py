@@ -137,6 +137,33 @@ class NAOManager:
                 # Avoid letting logging/printing break the connection
                 pass
 
+    def connect_with_virtual_fallback(
+        self,
+        robot_ip: str,
+        robot_port: int = 9559,
+        virtual_ip: str = "127.0.0.1",
+        virtual_port: int = 9559,
+    ) -> tuple[str, int, bool]:
+        """Connect to the requested NAO, then try Choregraphe's virtual NAO.
+
+        Returns ``(connected_ip, connected_port, used_virtual_fallback)``.
+        The fallback is only attempted when the requested endpoint fails.
+        """
+        try:
+            self.connect(robot_ip, robot_port)
+            return robot_ip, robot_port, False
+        except Exception as real_error:
+            logger.warning(
+                "NAO endpoint %s:%s unavailable; trying Choregraphe virtual NAO at %s:%s: %s",
+                robot_ip, robot_port, virtual_ip, virtual_port, real_error,
+            )
+
+        if robot_ip == virtual_ip and robot_port == virtual_port:
+            raise RuntimeError(f"Unable to connect to NAO at {robot_ip}:{robot_port}")
+
+        self.connect(virtual_ip, virtual_port)
+        return virtual_ip, virtual_port, True
+
     def disconnect(self):
         """Disconnect from robot and clear cached services."""
 
@@ -191,13 +218,21 @@ class NAOManager:
             "system": "ALSystem",
         }
 
+        services = {}
+
+        # ALAnimatedSpeech adds coordinated NAO gestures while preserving the
+        # same ``say`` interface. It is optional so older robots can still use
+        # ALTextToSpeech.
+        try:
+            services["animated_tts"] = session.service("ALAnimatedSpeech")
+        except Exception:
+            services["animated_tts"] = None
+
         optional = {
             "motion": "ALMotion",
             "posture": "ALRobotPosture",
             "life": "ALAutonomousLife",
         }
-
-        services = {}
 
         # Load required services
         for key, name in needed.items():
@@ -287,11 +322,17 @@ class NAOManager:
         if not self.is_connected():
             raise RuntimeError("Cannot speak: robot is not connected")
 
-        tts = self._services.get("tts")
+        tts = self._services.get("animated_tts") or self._services.get("tts")
         if tts is None:
             raise RuntimeError("ALTextToSpeech service not available")
 
         try:
+            if tts is self._services.get("animated_tts"):
+                try:
+                    tts.setBodyLanguageMode("contextual")
+                except Exception:
+                    pass
+                text = f"^start(animations/Stand/Gestures/Explain_1) {str(text).replace('^', '')}"
             tts.say(text)
         except Exception as e:
             logger.exception("TTS failed: %s", e)

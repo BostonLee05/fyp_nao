@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Voice Recognition{% endblock %}
+
+{% block page_title %}
+Voice Recognition
+{% endblock %}
+
+{% block content %}
+
+<div class="voice-page">
+
+    <section class="panel voice-panel voice-control-panel">
+
+        <h2>
+            <i class="fa-solid fa-microphone-lines"></i>
+            Voice Recognition Status
+        </h2>
+
+        <div class="voice-status-row">
+            <span id="voiceStatusDot" class="voice-dot idle"></span>
+            <span id="voiceStatusText">Ready/listening again</span>
+        </div>
+
+        <div class="voice-current">
+            <div>
+                <h4>Latest Command</h4>
+                <p id="latestVoiceCommand">No command recognized yet.</p>
+            </div>
+
+            <div>
+                <h4>Command Result</h4>
+                <p id="latestVoiceResult">Waiting for voice activity.</p>
+            </div>
+        </div>
+
+    </section>
+
+    <section class="panel voice-history-panel">
+
+        <h2>
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            Voice Command History
+        </h2>
+
+        <div id="voiceHistory" class="voice-history voice-history-large">
+            <div class="voice-history-empty">No voice commands yet.</div>
+        </div>
+
+    </section>
+
+</div>
+
+{% endblock %}
