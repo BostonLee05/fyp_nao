@@ -2,6 +2,7 @@ import os
 import re
 import tempfile
 import threading
+import time
 import warnings
 import wave
 from pathlib import Path
@@ -40,6 +41,10 @@ except ImportError:
 
 class VoiceRecognition:
     SEARCH_RESULT_LIMIT = 3
+    RECORDING_CHUNK_DURATION = 0.25
+    SPEECH_END_SILENCE_DURATION = 0.75
+    SPEECH_START_TIMEOUT = 8.0
+    MAX_RECORDING_DURATION = 20.0
     """ Commands Structure """
     SEARCH_COMMAND_RE = re.compile(
         r"\b(?:find me|find|search for|search|give me|show me)\s+"
@@ -71,6 +76,8 @@ class VoiceRecognition:
         self.frame_provider = frame_provider
         self.state_manager = state_manager
         self.recording_lock = threading.Lock()
+        self._vad_load_lock = threading.Lock()
+        self._vad_load_attempted = False
         self.vad_model = None
         self.vad_enabled = all(
             helper is not None
@@ -84,7 +91,8 @@ class VoiceRecognition:
         self.temp_audio_path = str(Path(tempfile.gettempdir()) / "nao_speech.wav")
 
         if self.vad_enabled:
-            print("[VoiceRecognition] Silero VAD enabled; model will load on first recording.")
+            print("[VoiceRecognition] Silero VAD enabled; loading model during startup...")
+            self._ensure_vad_model()
         else:
             print(
                 "[VoiceRecognition] Silero VAD unavailable; Try install it with: python -m pip install silero-vad. "
@@ -152,6 +160,37 @@ class VoiceRecognition:
             local_path=self.temp_audio_path,
         )
 
+    @staticmethod
+    def _log_performance(stage, started_at):
+        print(f"[Performance] {stage}: {time.perf_counter() - started_at:.3f}s")
+
+    def _ensure_vad_model(self):
+        """Load Silero once, while retaining a safe no-VAD fallback."""
+        if not self.vad_enabled or self.vad_model is not None:
+            return self.vad_model
+
+        with self._vad_load_lock:
+            if self.vad_model is not None or self._vad_load_attempted:
+                return self.vad_model
+
+            self._vad_load_attempted = True
+            started_at = time.perf_counter()
+            try:
+                self.vad_model = load_silero_vad()
+                if self.vad_model is None:
+                    raise RuntimeError("load_silero_vad returned no model")
+                self._log_performance("Silero VAD initialization", started_at)
+                print("[VoiceRecognition] Silero VAD model loaded.")
+            except Exception as e:
+                self.vad_enabled = False
+                self.vad_model = None
+                self._log_performance("Silero VAD initialization", started_at)
+                print(
+                    f"[VoiceRecognition Warning] Silero VAD could not be loaded; "
+                    f"using full audio without VAD: {e}"
+                )
+        return self.vad_model
+
     def listen_once_async(self, duration=None, on_complete=None):
         """Starts one recording/transcription pass in the background."""
         if self.recording_lock.locked():
@@ -173,23 +212,48 @@ class VoiceRecognition:
             print("[VoiceRecognition] Recording already in progress. Skipping.")
             return ""
 
+        interaction_started_at = time.perf_counter()
         try:
             print("[VoiceRecognition] Waiting for speech to start...")
             self._set_status("Recording")
 
             if self.audio_recorder:
                 print("[VoiceRecognition] Using NAO ALAudioRecorder.")
-                # The wake-word listener has already established that the
-                # user is speaking. A fixed recording avoids losing the first
-                # utterance when VAD cannot score NAO's quiet microphone input.
-                capture_duration = duration if duration is not None else 5.0
-                print(
-                    f"[VoiceRecognition] Recording fixed utterance ({capture_duration:.1f}s)."
-                )
-                audio_file = self.audio_transfer.record_from_nao(capture_duration)
+                recording_started_at = time.perf_counter()
+                try:
+                    if duration is not None:
+                        # An explicit duration remains available for callers
+                        # that need deterministic capture, but normal robot
+                        # interactions use speech-end detection below.
+                        capture_duration = duration
+                        print(
+                            f"[VoiceRecognition] Recording fixed utterance "
+                            f"({capture_duration:.1f}s)."
+                        )
+                        audio_file = self.audio_transfer.record_from_nao(
+                            capture_duration
+                        )
+                    else:
+                        print(
+                            "[VoiceRecognition] Recording until speech ends "
+                            f"({self.SPEECH_END_SILENCE_DURATION:.2f}s silence, "
+                            f"max {self.MAX_RECORDING_DURATION:.1f}s)."
+                        )
+                        audio_file = self.audio_transfer.record_until_silence(
+                            speech_detector=self._speech_detected,
+                            chunk_duration=self.RECORDING_CHUNK_DURATION,
+                            start_timeout=self.SPEECH_START_TIMEOUT,
+                            silence_duration=self.SPEECH_END_SILENCE_DURATION,
+                            max_duration=self.MAX_RECORDING_DURATION,
+                        )
+                finally:
+                    self._log_performance("Audio acquisition", recording_started_at)
             else:
-                print("[VoiceRecognition] Using test audio.")
-                audio_file = self.audio_transfer.get_test_audio()
+                print(
+                    "[VoiceRecognition Warning] ALAudioRecorder unavailable; "
+                    "real NAO recording cannot start."
+                )
+                audio_file = None
 
             print(f"[VoiceRecognition] Audio file: {audio_file}")
 
@@ -205,7 +269,13 @@ class VoiceRecognition:
                     self._set_status("Processing command")
                     if self.speaker:
                         self.speaker.speak("I'm thinking.", animated=False)
-                    result = self._on_speech_recognized(text)
+                    routing_started_at = time.perf_counter()
+                    try:
+                        result = self._on_speech_recognized(text)
+                    finally:
+                        self._log_performance(
+                            "Command parsing and routing", routing_started_at
+                        )
                     self._record_result(text, result)
                     self._set_status("Command completed")
                     self._set_status("Ready/listening again")
@@ -230,6 +300,7 @@ class VoiceRecognition:
             raise
 
         finally:
+            self._log_performance("Total interaction", interaction_started_at)
             self.recording_lock.release()
 
     def _speech_detected(self, audio_path):
@@ -237,8 +308,8 @@ class VoiceRecognition:
         if not self.vad_enabled:
             return False
 
-        if self.vad_model is None:
-            self.vad_model = load_silero_vad()
+        if self._ensure_vad_model() is None:
+            return False
 
         audio = self._read_audio_for_vad(audio_path)
         timestamps = get_speech_timestamps(
@@ -262,23 +333,28 @@ class VoiceRecognition:
 
     def _transcribe(self, audio_path):
         """Converts audio file to text using faster-whisper."""
-        speech_audio_path = self._extract_speech_audio(audio_path)
+        vad_started_at = time.perf_counter()
+        try:
+            speech_audio_path = self._extract_speech_audio(audio_path)
+        finally:
+            self._log_performance("VAD processing", vad_started_at)
         if not speech_audio_path:
             print("[VoiceRecognition] Silero VAD found no speech.")
             return ""
 
+        transcription_started_at = time.perf_counter()
         try:
             segments, _ = self.model.transcribe(
                 speech_audio_path,
                 beam_size=5,
                 task="translate",
             )
-            transcription = "".join([segment.text for segment in segments]).strip()
-            return transcription
+            return "".join([segment.text for segment in segments]).strip()
         except Exception as e:
             print(f"[VoiceRecognition Error] Transcription failed: {e}")
             return ""
         finally:
+            self._log_performance("Whisper transcription", transcription_started_at)
             if speech_audio_path != audio_path:
                 try:
                     os.remove(speech_audio_path)
@@ -291,8 +367,8 @@ class VoiceRecognition:
             return audio_path
 
         try:
-            if self.vad_model is None:
-                self.vad_model = load_silero_vad()
+            if self._ensure_vad_model() is None:
+                return audio_path
 
             audio = self._read_audio_for_vad(audio_path)
             timestamps = get_speech_timestamps(
@@ -447,7 +523,11 @@ class VoiceRecognition:
                     f"User said: {text}"
                 )
 
-            response = self.gemini_service.ask(prompt, image=image)
+            gemini_started_at = time.perf_counter()
+            try:
+                response = self.gemini_service.ask(prompt, image=image)
+            finally:
+                self._log_performance("Gemini response", gemini_started_at)
             if response:
                 print(f"[VoiceRecognition] Gemini: \"{response}\"")
                 if self.speaker:
@@ -563,7 +643,13 @@ class VoiceRecognition:
             return False
 
         kind, query = search_request
-        results = self._duckduckgo_search(kind, query, limit=self.SEARCH_RESULT_LIMIT)
+        search_started_at = time.perf_counter()
+        try:
+            results = self._duckduckgo_search(
+                kind, query, limit=self.SEARCH_RESULT_LIMIT
+            )
+        finally:
+            self._log_performance("Web search execution", search_started_at)
 
         if not results:
             message = f"I could not find relevant {kind} about {query}."
@@ -818,10 +904,13 @@ class VoiceRecognition:
             print("[VoiceRecognition] ALMotion unavailable; wake up skipped.")
             return
 
+        action_started_at = time.perf_counter()
         try:
             motion.wakeUp()
         except Exception as e:
             print(f"[VoiceRecognition Error] Wake up command failed: {e}")
+        finally:
+            self._log_performance("Robot action (wake up)", action_started_at)
 
     def _rest(self):
         motion = self._get_nao_service("ALMotion")
@@ -829,10 +918,13 @@ class VoiceRecognition:
             print("[VoiceRecognition] ALMotion unavailable; rest skipped.")
             return
 
+        action_started_at = time.perf_counter()
         try:
             motion.rest()
         except Exception as e:
             print(f"[VoiceRecognition Error] Rest command failed: {e}")
+        finally:
+            self._log_performance("Robot action (rest)", action_started_at)
 
     def _go_to_posture(self, posture_name, speed=0.6):
         posture = self._get_nao_service("ALRobotPosture")
@@ -845,6 +937,7 @@ class VoiceRecognition:
 
         self._wake_up()
 
+        action_started_at = time.perf_counter()
         try:
             success = posture.goToPosture(posture_name, speed)
             if not success:
@@ -856,4 +949,8 @@ class VoiceRecognition:
             print(
                 f"[VoiceRecognition Error] "
                 f"Posture command {posture_name} failed: {e}"
+            )
+        finally:
+            self._log_performance(
+                f"Robot action (posture {posture_name})", action_started_at
             )

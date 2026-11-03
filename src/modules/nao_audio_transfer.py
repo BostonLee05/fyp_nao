@@ -13,22 +13,19 @@ class NAOAudioTransfer:
         file_manager=None,
         remote_path="/home/nao/nao_speech.wav",
         local_path=None,
-        test_audio_path=None,
-        use_test_audio=True,
     ):
         self.audio_recorder = audio_recorder
         self.file_manager = file_manager
         self.remote_path = remote_path
         self.local_path = local_path
-        self.test_audio_path = test_audio_path
-        self.use_test_audio = use_test_audio
 
-    def record_from_nao(self, duration):
+    def record_from_nao(self, duration, log_performance=True):
         """Records audio on NAO and downloads it to the local machine."""
         if not self.audio_recorder:
             print("[NAOAudioTransfer Warning] No ALAudioRecorder available.")
             return None
 
+        recording_started_at = time.perf_counter()
         try:
             self.remote_path = self._get_recording_remote_path()
             print(f"[NAOAudioTransfer] Recording on NAO: {self.remote_path}")
@@ -42,32 +39,42 @@ class NAOAudioTransfer:
             self.audio_recorder.stopMicrophonesRecording()
             print("[NAOAudioTransfer] NAO recording stopped.")
 
-            return self.download()
+            return self.download(log_performance=log_performance)
         except Exception as e:
             print(f"[NAOAudioTransfer Error] Failed to record from NAO: {e}")
             return None
+        finally:
+            if log_performance:
+                print(
+                    f"[Performance] Audio recording: "
+                    f"{time.perf_counter() - recording_started_at:.3f}s"
+                )
 
     def record_until_silence(
         self,
         speech_detector,
         chunk_duration=0.25,
         start_timeout=8,
-        silence_duration=1.2,
+        silence_duration=0.75,
         max_duration=20,
     ):
-        """Capture short NAO chunks until speech starts and then ends."""
+        """Capture short NAO chunks until speech ends or the safety limit hits."""
         if not self.audio_recorder:
             print("[NAOAudioTransfer Warning] No ALAudioRecorder available.")
             return None
 
         chunks = []
+        capture_started_at = time.perf_counter()
         pre_roll = []
         started = False
         elapsed = 0.0
         silence = 0.0
 
         while elapsed < max_duration:
-            audio_path = self.record_from_nao(duration=chunk_duration)
+            audio_path = self.record_from_nao(
+                duration=chunk_duration,
+                log_performance=False,
+            )
             if not audio_path or not os.path.exists(audio_path):
                 return None
 
@@ -105,6 +112,10 @@ class NAOAudioTransfer:
         print(
             f"[NAOAudioTransfer] Speech capture complete ({elapsed:.2f}s observed)."
         )
+        print(
+            f"[Performance] Audio recording and transfer (speech-end capture): "
+            f"{time.perf_counter() - capture_started_at:.3f}s"
+        )
         return self.local_path
 
     @staticmethod
@@ -126,24 +137,15 @@ class NAOAudioTransfer:
             wav_file.setframerate(params.framerate)
             wav_file.writeframes(b"".join(frames for _, frames in chunks))
 
-    def get_test_audio(self):
-        """Returns the local test WAV if offline fallback is enabled."""
-        if not self.use_test_audio:
-            print("[NAOAudioTransfer] Test audio fallback disabled.")
-            return None
-
-        if self.test_audio_path and os.path.exists(self.test_audio_path):
-            return self.test_audio_path
-
-        print(
-            f"[NAOAudioTransfer] '{self.test_audio_path}' not found. "
-            "Skipping offline fallback."
-        )
-        return None
-
-    def download(self):
+    def download(self, log_performance=True):
+        transfer_started_at = time.perf_counter()
         if not self.file_manager:
             print("[NAOAudioTransfer Warning] No ALFileManager available.")
+            if log_performance:
+                print(
+                    f"[Performance] Audio transfer: "
+                    f"{time.perf_counter() - transfer_started_at:.3f}s"
+                )
             return None
 
         try:
@@ -167,6 +169,12 @@ class NAOAudioTransfer:
         except Exception as e:
             print(f"[NAOAudioTransfer Error] Could not download NAO audio: {e}")
             return None
+        finally:
+            if log_performance:
+                print(
+                    f"[Performance] Audio transfer: "
+                    f"{time.perf_counter() - transfer_started_at:.3f}s"
+                )
 
     def _download_with_file_manager(self):
         """

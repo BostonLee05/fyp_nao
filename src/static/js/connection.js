@@ -48,6 +48,7 @@ const searchRecommendationList = document.getElementById("searchRecommendationLi
 const searchToastClose = document.getElementById("searchToastClose");
 
 let lastRecommendationToken = 0;
+let voiceStatusRequestInFlight = false;
 
 
 // ======================================================
@@ -557,9 +558,14 @@ function updateVoiceDashboard(voice) {
 
 async function fetchVoiceStatus() {
 
+    if (voiceStatusRequestInFlight) return;
+    voiceStatusRequestInFlight = true;
+
     try {
 
-        const response = await fetch("/api/voice/status");
+        const response = await fetch(`/api/voice/status?t=${Date.now()}`, {
+            cache: "no-store",
+        });
 
         if (!response.ok)
             throw new Error("Voice status API unavailable");
@@ -580,6 +586,8 @@ async function fetchVoiceStatus() {
 
         setVoiceDot("Error");
 
+    } finally {
+        voiceStatusRequestInFlight = false;
     }
 
 }
@@ -718,7 +726,7 @@ setInterval(refreshSession, 1000);
 setInterval(pingRobot, 5000);
 
 // Voice status
-setInterval(fetchVoiceStatus, 1500);
+setInterval(fetchVoiceStatus, 750);
 
 
 
