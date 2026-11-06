@@ -17,7 +17,7 @@ class GeminiService(object):
             self.client = genai.Client(api_key=self.api_key)
             self.system_instruction = system_instruction or (
                 "You are NAO, a friendly humanoid robot. "
-                "Keep all answers very short, concise, and direct (1 to 2 sentences maximum). "
+                "Keep all answers very short, concise, and direct. "
                 "Use simple English only. "
                 "If the user speaks another language, translate it internally and respond only in English. "
                 "If an image is provided, use it as the current NAO camera view when answering."
@@ -40,14 +40,7 @@ class GeminiService(object):
             contents = []
             if image is not None:
                 if isinstance(image, bytes):
-                    contents.append(
-                        types.Part.from_bytes(
-                            data=image,
-                            mime_type="image/jpeg",
-                        )
-                    )
-                else:
-                    contents.append(image)
+                     contents.append(image)
             contents.append(prompt)
 
             response = self.chat.send_message(contents)
