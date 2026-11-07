@@ -681,6 +681,7 @@ class VoiceRecognition:
             "recommendations": results,
         }
 
+    """Identifies the requested search category"""
     def _parse_search_command(self, text):
         text = " ".join(text.strip().split())
         match = self.SEARCH_COMMAND_RE.search(text)
@@ -737,6 +738,7 @@ class VoiceRecognition:
             print(f"[VoiceRecognition Error] DuckDuckGo search failed: {last_error}")
         return []
 
+    """Selects the search providers"""
     def _get_search_backends(self, kind):
         # Prefer the maintained package exclusively when it is installed.
         # Falling through to duckduckgo_search only creates deprecation warnings
@@ -757,6 +759,7 @@ class VoiceRecognition:
                 backends.append(backend)
         return backends
 
+    """Performs category-specific searches"""
     def _search_with_backend(self, backend, kind, query, limit):
         try:
             with warnings.catch_warnings():
@@ -783,6 +786,7 @@ class VoiceRecognition:
         except Exception as e:
             return [], e
 
+    """Provides alternative video discovery"""
     def _video_text_search_fallback(self, query, limit):
         # The DDG video endpoint often raises "No results found" even for
         # broad queries. Use the more reliable text endpoint, then retain only
@@ -803,6 +807,7 @@ class VoiceRecognition:
                 return youtube_results[:limit]
         return []
 
+    """Filters and ranks search results"""
     def _normalize_search_results(self, raw_results, query="", limit=3):
         stop_words = {
             "a", "an", "and", "about", "for", "find", "me", "of", "on",
@@ -845,6 +850,7 @@ class VoiceRecognition:
         parsed = urlparse(str(url))
         return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
+    """Retrieves thumbail or favicon images"""
     @classmethod
     def _result_thumbnail(cls, item, url):
         """Use the provider thumbnail, then a YouTube image, then a favicon."""
