@@ -502,7 +502,7 @@ function renderSearchRecommendations(recommendations) {
 
     if (!recommendations || recommendations.length === 0) {
         searchRecommendationList.innerHTML =
-            '<div class="search-toast-empty">No web recommendations found.</div>';
+            '<div class="search-toast-empty">No search results found.</div>';
         searchRecommendationToast.classList.remove("hidden");
         return;
     }

@@ -3,12 +3,14 @@ import re
 import tempfile
 import threading
 import time
-import warnings
 import wave
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+
 import cv2
 import numpy as np
+import requests
+from dotenv import load_dotenv
 
 from faster_whisper import WhisperModel
 
@@ -23,21 +25,7 @@ except ImportError:
     load_silero_vad = None
     torch = None
 
-warnings.filterwarnings(
-    "ignore",
-    message=r".*duckduckgo_search.*renamed to.*ddgs.*",
-    category=RuntimeWarning,
-)
-
-try:
-    from ddgs import DDGS as DDGSBackend
-except ImportError:
-    DDGSBackend = None
-
-try:
-    from duckduckgo_search import DDGS as DuckDuckGoSearchBackend
-except ImportError:
-    DuckDuckGoSearchBackend = None
+load_dotenv()
 
 class VoiceRecognition:
     SEARCH_RESULT_LIMIT = 3
@@ -48,7 +36,8 @@ class VoiceRecognition:
     """ Commands Structure """
     SEARCH_COMMAND_RE = re.compile(
         r"\b(?:find me|find|search for|search|give me|show me)\s+"
-        r"(?P<kind>videos?|websites?|sites?|web\s*pages?|webpages?)\s+"
+        r"(?P<kind>videos?|websites?|sites?|images?|pictures?|photos?|"
+        r"news|articles?|web\s*pages?|webpages?)\s+"
         r"(?:about|on|for)\s+"
         r"(?P<query>.+)",
         re.IGNORECASE,
@@ -75,6 +64,7 @@ class VoiceRecognition:
         self.gemini_service = gemini_service
         self.frame_provider = frame_provider
         self.state_manager = state_manager
+        self.brave_search_api_key = os.getenv("BRAVE_SEARCH_API_KEY", "").strip()
         self.recording_lock = threading.Lock()
         self._vad_load_lock = threading.Lock()
         self._vad_load_attempted = False
@@ -559,7 +549,18 @@ class VoiceRecognition:
         if not self.speaker:
             return None
 
-        if "attendance mode" in normalized_text:
+        if self._contains_command(
+            normalized_text,
+            compact_text,
+            [
+                "attendance mode",
+                "start attendance",
+                "begin attendance",
+                "take attendance",
+                "mark attendance",
+                "record attendance",
+            ],
+        ):
             response = "Attendance Mode Activating..."
             self.speaker.speak(response)
             return {
@@ -645,7 +646,7 @@ class VoiceRecognition:
         kind, query = search_request
         search_started_at = time.perf_counter()
         try:
-            results = self._duckduckgo_search(
+            results = self._brave_search(
                 kind, query, limit=self.SEARCH_RESULT_LIMIT
             )
         finally:
@@ -663,7 +664,11 @@ class VoiceRecognition:
                 "recommendations": [],
             }
 
-        noun = "videos" if kind == "videos" else "websites"
+        noun = {
+            "videos": "videos",
+            "images": "images",
+            "news": "news articles",
+        }.get(kind, "websites")
         lines = [
             f"{index}. {noun.title()} title: {result['title']}"
             for index, result in enumerate(results, start=1)
@@ -671,7 +676,7 @@ class VoiceRecognition:
         response = "\n".join(lines)
         spoken_response = f"Search result about {query} found."
 
-        print(f"[VoiceRecognition] DuckDuckGo {kind} results for '{query}':\n{response}")
+        print(f"[VoiceRecognition] Brave {kind} results for '{query}':\n{response}")
         if self.speaker:
             self.speaker.speak(spoken_response)
         return {
@@ -684,6 +689,7 @@ class VoiceRecognition:
     """Identifies the requested search category"""
     def _parse_search_command(self, text):
         text = " ".join(text.strip().split())
+
         match = self.SEARCH_COMMAND_RE.search(text)
         if not match:
             match = self.SIMPLE_SEARCH_COMMAND_RE.search(text)
@@ -694,8 +700,22 @@ class VoiceRecognition:
             if not query:
                 return None
 
-            kind = "videos" if query.lower().startswith(("video ", "videos ")) else "websites"
-            query = re.sub(r"^(?:videos?|websites?|sites?)\s+(?:about|on|for)?\s*", "", query, flags=re.IGNORECASE)
+            lowered_query = query.lower()
+            if lowered_query.startswith(("video ", "videos ")):
+                kind = "videos"
+            elif lowered_query.startswith(("image ", "images ", "picture ", "pictures ", "photo ", "photos ")):
+                kind = "images"
+            elif lowered_query.startswith(("news ", "article ", "articles ")):
+                kind = "news"
+            else:
+                kind = "websites"
+            query = re.sub(
+                r"^(?:videos?|websites?|sites?|images?|pictures?|photos?|news|articles?)\s+"
+                r"(?:about|on|for)?\s*",
+                "",
+                query,
+                flags=re.IGNORECASE,
+            )
             if not query:
                 return None
             return kind, query
@@ -707,168 +727,116 @@ class VoiceRecognition:
 
         if kind.startswith("video"):
             return "videos", query
+        if kind.startswith(("image", "picture", "photo")):
+            return "images", query
+        if kind.startswith(("news", "article")):
+            return "news", query
         return "websites", query
 
-    def _duckduckgo_search(self, kind, query, limit=3):
-        backends = self._get_search_backends(kind)
-        if not backends:
+    """Search Brave's web or video endpoint."""
+    def _brave_search(self, kind, query, limit=3):
+
+        if not self.brave_search_api_key:
             message = (
-                "DuckDuckGo search is not installed. "
-                "Install it with: python -m pip install ddgs duckduckgo-search"
+                "Brave Search is not configured. Add BRAVE_SEARCH_API_KEY to .env."
             )
             print(f"[VoiceRecognition Warning] {message}")
+
             if self.speaker:
                 self.speaker.speak(message)
             return []
 
-        last_error = None
-        for backend in backends:
-            results, error = self._search_with_backend(backend, kind, query, limit)
-            if results:
-                return results
-            if error:
-                last_error = error
+        endpoint = {
+            "videos": "videos",
+            "images": "images",
+            "news": "news",
+        }.get(kind, "web")
 
-        if kind == "videos":
-            fallback_results = self._video_text_search_fallback(query, limit)
-            if fallback_results:
-                return fallback_results
+        search_query = f"site:youtube.com {query}" if kind == "videos" else query
 
-        if last_error:
-            print(f"[VoiceRecognition Error] DuckDuckGo search failed: {last_error}")
-        return []
-
-    """Selects the search providers"""
-    def _get_search_backends(self, kind):
-        # Prefer the maintained package exclusively when it is installed.
-        # Falling through to duckduckgo_search only creates deprecation warnings
-        # and can produce inconsistent provider behavior.
-        if DDGSBackend is not None:
-            return [DDGSBackend]
-
-        if kind == "videos" and DDGSBackend is not None:
-            candidates = [DDGSBackend]
-        elif kind == "videos":
-            candidates = [DuckDuckGoSearchBackend]
-        else:
-            candidates = [DDGSBackend, DuckDuckGoSearchBackend]
-
-        backends = []
-        for backend in candidates:
-            if backend is not None and backend not in backends:
-                backends.append(backend)
-        return backends
-
-    """Performs category-specific searches"""
-    def _search_with_backend(self, backend, kind, query, limit):
         try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", RuntimeWarning)
-                with backend() as ddgs:
-                    if kind == "videos":
-                        raw_results = ddgs.videos(
-                            query,
-                            region="wt-wt",
-                            safesearch="moderate",
-                            max_results=limit,
-                        )
-                    else:
-                        raw_results = ddgs.text(
-                            query,
-                            region="wt-wt",
-                            safesearch="moderate",
-                            max_results=limit,
-                        )
-
-                    return self._normalize_search_results(
-                        raw_results, query=query, limit=limit
-                    ), None
-        except Exception as e:
-            return [], e
-
-    """Provides alternative video discovery"""
-    def _video_text_search_fallback(self, query, limit):
-        # The DDG video endpoint often raises "No results found" even for
-        # broad queries. Use the more reliable text endpoint, then retain only
-        # actual YouTube links.
-        for backend in self._get_search_backends("websites"):
-            results, _ = self._search_with_backend(
-                backend,
-                "websites",
-                query,
-                limit * 2,
+            response = requests.get(
+                f"https://api.search.brave.com/res/v1/{endpoint}/search",
+                headers={
+                    "Accept": "application/json",
+                    "X-Subscription-Token": self.brave_search_api_key,
+                },
+                params={
+                    "q": search_query,
+                    "count": limit * 3 if kind == "videos" else limit,
+                    "country": "ALL",
+                    "search_lang": "en",
+                    "safesearch": "moderate",
+                },
+                timeout=20,
             )
-            youtube_results = [
-                result for result in results
-                if "youtube.com" in result["url"].lower()
-                or "youtu.be" in result["url"].lower()
-            ]
-            if youtube_results:
-                return youtube_results[:limit]
-        return []
 
-    """Filters and ranks search results"""
-    def _normalize_search_results(self, raw_results, query="", limit=3):
-        stop_words = {
-            "a", "an", "and", "about", "for", "find", "me", "of", "on",
-            "search", "the", "to", "video", "videos", "website", "websites",
-            "what", "where", "who", "is", "are", "how",
-        }
-        query_tokens = {
-            token for token in re.findall(r"[a-z0-9]+", query.lower())
-            if len(token) > 2 and token not in stop_words
-        }
-        query_phrase = " ".join(query.lower().split())
-        ranked = []
-        for item in raw_results or []:
-            title = item.get("title") or item.get("heading")
-            url = item.get("href") or item.get("url") or item.get("content")
-            if not title or not url or not self._is_http_url(url):
-                continue
+            response.raise_for_status()
+            payload = response.json()
 
-            snippet = item.get("body") or item.get("content") or ""
-            searchable = f"{title} {snippet} {url}".lower()
-            result_tokens = set(re.findall(r"[a-z0-9]+", searchable))
-            overlap = query_tokens & result_tokens
-            if query_tokens and not overlap:
-                continue
+            raw_results = (
+                payload.get("web", {}).get("results", [])
 
-            score = len(overlap) / max(len(query_tokens), 1)
-            if query_phrase and query_phrase in searchable:
-                score += 0.5
-            ranked.append((score, {
-                "title": title,
-                "url": url,
-                "thumbnail": self._result_thumbnail(item, url),
-            }))
+                if kind == "websites"
+                else payload.get("results", [])
+            )
 
-        ranked.sort(key=lambda entry: entry[0], reverse=True)
-        return [result for _, result in ranked[:limit]]
+            results = []
+            for item in raw_results:
+                title = item.get("title")
+                url = item.get("url")
+                parsed_url = urlparse(str(url))
+                hostname = parsed_url.netloc.lower().split(":", 1)[0].rstrip(".")
 
-    @staticmethod
-    def _is_http_url(url):
-        parsed = urlparse(str(url))
-        return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+                """Validates results format, if not matches then skip result"""
+                if (
+                    not title #must have title
+                    or parsed_url.scheme not in {"http", "https"} #URL is http/https
+                    or not parsed_url.netloc #Valid Hostname
+                ):
+                    continue
+                if kind == "videos" and not (
+                    hostname == "youtu.be"
+                    or hostname == "youtube.com"
+                    or hostname.endswith(".youtube.com")
+                ):
+                    continue
 
-    """Retrieves thumbail or favicon images"""
-    @classmethod
-    def _result_thumbnail(cls, item, url):
-        """Use the provider thumbnail, then a YouTube image, then a favicon."""
-        thumbnail = item.get("thumbnail") or item.get("image") or item.get("image_url")
-        if thumbnail and cls._is_http_url(thumbnail):
-            return thumbnail
+                thumbnail = item.get("thumbnail")
+                if isinstance(thumbnail, dict):
+                    thumbnail = thumbnail.get("src") or thumbnail.get("original")
 
-        parsed = urlparse(url)
-        video_id = ""
-        if parsed.netloc.lower().endswith("youtube.com"):
-            video_id = parse_qs(parsed.query).get("v", [""])[0]
-        elif parsed.netloc.lower() in {"youtu.be", "www.youtu.be"}:
-            video_id = parsed.path.strip("/").split("/")[0]
+                """Thumbnail backups"""
+                thumbnail_url = urlparse(str(thumbnail)) if thumbnail else None # Check valid URL
+                if not thumbnail_url or thumbnail_url.scheme not in {"http", "https"} or not thumbnail_url.netloc: #Generates a replacement\
 
-        if video_id:
-            return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+                    video_id = ""
+                    if hostname.endswith("youtube.com"):
+                        video_id = parse_qs(parsed_url.query).get("v", [""])[0]
+                    elif hostname == "youtu.be":
+                        video_id = parsed_url.path.strip("/").split("/")[0]
 
-        return f"https://www.google.com/s2/favicons?domain={parsed.netloc}&sz=128"
+                    if video_id:
+                        thumbnail = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg" #Generates a general website thumbnail png
+                    else:
+                        thumbnail = (
+                            "https://www.google.com/s2/favicons?"
+                            f"domain={parsed_url.netloc}&sz=128"
+                        )
+
+                """Store the final results"""
+                results.append(
+                    {
+                        "title": title,
+                        "url": url,
+                        "thumbnail": thumbnail,
+                    }
+                )
+
+            return results[:limit]
+        except (requests.RequestException, ValueError) as error:
+            print(f"[VoiceRecognition Error] Brave search failed: {error}")
+            return []
 
     def _set_status(self, status, error=""):
         if self.state_manager:
