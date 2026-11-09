@@ -25,7 +25,9 @@ except ImportError:  # pragma: no cover - environment dependent
 
 from database import (
     get_all_students,
+    get_active_session,
 )
+from config import ATTENDANCE_COOLDOWN_SECONDS
 
 from modules.attendance import (
     mark_attendance,
@@ -122,6 +124,8 @@ class VisionSystem:
         self.pending_confirmations = {}
 
         self.attendance_attempted_tracks = set()
+        self.attendance_attempt_times = {}
+        self._attendance_session_id = None
 
         self.behaviour_tracker = BehaviourTracker()
 
@@ -158,6 +162,13 @@ class VisionSystem:
         self.registered_students = self.load_registered_students()
 
         self._models_loaded = True
+
+    def refresh_registered_students(self):
+        """Reload face embeddings without reloading the AI models."""
+        if not self._models_loaded:
+            return
+
+        self.registered_students = self.load_registered_students()
 
     # =====================================================
     # NORMALIZE
@@ -866,6 +877,12 @@ class VisionSystem:
                             f"[Vision] Track {track_id}: identity cache refreshed for {recognized_student_id}"
                         )
 
+                    self._try_mark_attendance(
+                            track_id,
+                            cache,
+                            current_time
+                    )
+
                 continue
 
             if track_id not in self.pending_confirmations:
@@ -967,38 +984,71 @@ class VisionSystem:
                 f"{pending['best_similarity']:.3f}"
             )
 
-            if track_id not in self.attendance_attempted_tracks:
-
-                attendance_result = mark_attendance(
-                    student_id=pending["student_id"],
-                    similarity=pending["best_similarity"],
-                    track_id=track_id
-                )
-
-                self.attendance_attempted_tracks.add(track_id)
-
-                if attendance_result == RESULT_RECORDED:
-                    print("Attendance : RECORDED")
-                elif attendance_result == RESULT_ALREADY_RECORDED:
-                    print("Attendance : ALREADY RECORDED")
-                elif attendance_result == RESULT_NO_ACTIVE_SESSION:
-                    print("Attendance : NO ACTIVE SESSION")
-                elif attendance_result == RESULT_NOT_ENROLLED:
-                    print("Attendance : NOT ENROLLED")
-
-                self._emit_attendance_event({
-                    "track_id": track_id,
-                    "student_id": pending["student_id"],
-                    "name": pending["name"],
-                    "similarity": pending["best_similarity"],
-                    "result": attendance_result,
-                    "timestamp": current_time,
-                })
+            self._try_mark_attendance(
+                track_id,
+                self.identity_cache[track_id],
+                current_time
+            )
 
             confirmed_tracks.append(track_id)
 
         for track_id in confirmed_tracks:
             self.pending_confirmations.pop(track_id, None)
+
+    def _try_mark_attendance(self, track_id, identity, current_time):
+        """Attempt attendance and keep retryable failures eligible."""
+        active_session = get_active_session()
+        session_id = (
+            active_session["session_id"]
+            if active_session is not None
+            else None
+        )
+
+        if session_id != self._attendance_session_id:
+            self.attendance_attempted_tracks.clear()
+            self.attendance_attempt_times.clear()
+            self._attendance_session_id = session_id
+
+        if track_id in self.attendance_attempted_tracks:
+            return
+
+        last_attempt = self.attendance_attempt_times.get(track_id)
+        if (
+            last_attempt is not None
+            and current_time - last_attempt < ATTENDANCE_COOLDOWN_SECONDS
+        ):
+            return
+
+        attendance_result = mark_attendance(
+            student_id=identity["student_id"],
+            similarity=identity["similarity"],
+            track_id=track_id
+        )
+        self.attendance_attempt_times[track_id] = current_time
+
+        if attendance_result in (
+            RESULT_RECORDED,
+            RESULT_ALREADY_RECORDED
+        ):
+            self.attendance_attempted_tracks.add(track_id)
+
+        if attendance_result == RESULT_RECORDED:
+            print("Attendance : RECORDED")
+        elif attendance_result == RESULT_ALREADY_RECORDED:
+            print("Attendance : ALREADY RECORDED")
+        elif attendance_result == RESULT_NO_ACTIVE_SESSION:
+            print("Attendance : NO ACTIVE SESSION; will retry")
+        elif attendance_result == RESULT_NOT_ENROLLED:
+            print("Attendance : NOT ENROLLED; will retry")
+
+        self._emit_attendance_event({
+            "track_id": track_id,
+            "student_id": identity["student_id"],
+            "name": identity["name"],
+            "similarity": identity["similarity"],
+            "result": attendance_result,
+            "timestamp": current_time,
+        })
 
     # =====================================================
     # DETECT HEAD BEHAVIOUR
@@ -1526,6 +1576,11 @@ class VisionSystem:
         self.attendance_attempted_tracks = {
             track_id
             for track_id in self.attendance_attempted_tracks
+            if track_id in active_tracks
+        }
+        self.attendance_attempt_times = {
+            track_id: attempt_time
+            for track_id, attempt_time in self.attendance_attempt_times.items()
             if track_id in active_tracks
         }
 

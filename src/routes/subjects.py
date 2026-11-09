@@ -30,6 +30,18 @@ from modules.face_registration import get_face_registration
 subjects_bp = Blueprint("subjects", __name__)
 
 
+def _refresh_vision_face_embeddings():
+    """Refresh active vision recognition after a face is registered."""
+    try:
+        from routes.vision import vision_system
+        vision_system.refresh_registered_students()
+    except Exception as exc:
+        print(
+            f"[Face Registration] Could not refresh vision embeddings: {exc}",
+            flush=True
+        )
+
+
 # =========================================================
 # PAGE
 # =========================================================
@@ -356,9 +368,9 @@ def start_face_registration(student_id):
             speaker=None,
             student_id=student_id,
             dataset_folder=dataset_folder,
-            on_complete=lambda folder: update_face_registration(
-                student_id,
-                folder
+            on_complete=lambda folder: (
+                update_face_registration(student_id, folder),
+                _refresh_vision_face_embeddings()
             )
         )
     except Exception as exc:
