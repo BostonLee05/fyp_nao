@@ -86,6 +86,7 @@ class BehaviourTracker:
         # }
 
         self.phone_states = {}
+        self.phone_history = {}
 
     # =====================================================
     # ENSURE TRACK EXISTS
@@ -384,7 +385,8 @@ class BehaviourTracker:
                     "first_detected": current_time,
                     "last_detected": current_time,
                     "confirmed": False,
-                    "confirmed_since": None
+                    "confirmed_since": None,
+                    "usage_counted": False
                 }
 
                 return False
@@ -435,6 +437,13 @@ class BehaviourTracker:
                     phone_state[
                         "confirmed_since"
                     ] = current_time
+                    phone_state["usage_counted"] = True
+
+                    history = self.phone_history.setdefault(
+                        track_id,
+                        {"count": 0, "total_duration": 0.0}
+                    )
+                    history["count"] += 1
 
                     print(
                         "\nPHONE USAGE CONFIRMED"
@@ -487,6 +496,17 @@ class BehaviourTracker:
             print(
                 f"Track ID: {track_id}"
             )
+
+            if phone_state["confirmed_since"] is not None:
+                history = self.phone_history.setdefault(
+                    track_id,
+                    {"count": 0, "total_duration": 0.0}
+                )
+                history["total_duration"] += max(
+                    0.0,
+                    phone_state["last_detected"]
+                    - phone_state["confirmed_since"]
+                )
 
             del self.phone_states[
                 track_id
@@ -655,6 +675,21 @@ class BehaviourTracker:
                     track_id,
                     None
                 )
+
+                phone_state = self.phone_states.get(track_id)
+                if (
+                    phone_state is not None
+                    and phone_state["confirmed_since"] is not None
+                ):
+                    history = self.phone_history.setdefault(
+                        track_id,
+                        {"count": 0, "total_duration": 0.0}
+                    )
+                    history["total_duration"] += max(
+                        0.0,
+                        phone_state["last_detected"]
+                        - phone_state["confirmed_since"]
+                    )
 
                 self.phone_states.pop(
                     track_id,

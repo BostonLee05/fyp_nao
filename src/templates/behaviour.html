@@ -4,48 +4,91 @@
 {% block page_title %}Behaviour Analysis{% endblock %}
 
 {% block content %}
-
-<div class="panel" style="text-align:center;padding:60px;">
-
-    <i class="fa-solid fa-person-circle-exclamation"
-       style="font-size:80px;color:#2d8cff;"></i>
-
-    <h2 style="margin-top:20px;">
-        Behaviour Analysis Module
-    </h2>
-
-    <h3 style="margin-top:10px;color:#888;">
-        🚧 Work In Progress
-    </h3>
-
-    <p style="margin-top:25px;line-height:1.8;color:#666;">
-        This module will be implemented in the next phase of the project.
-    </p>
-
-    <div class="dashboard-grid" style="margin-top:40px;">
-
-        <div class="panel">
-            <h3>📱 Phone Detection</h3>
-            <p>Coming Soon</p>
-        </div>
-
-        <div class="panel">
-            <h3>😴 Sleeping Detection</h3>
-            <p>Coming Soon</p>
-        </div>
-
-        <div class="panel">
-            <h3>👀 Looking Away</h3>
-            <p>Coming Soon</p>
-        </div>
-
-        <div class="panel">
-            <h3>✋ Hand Raise Detection</h3>
-            <p>Coming Soon</p>
-        </div>
-
-    </div>
-
+<div class="stats">
+    <div class="stat"><h4>Students Tracked</h4><h2 id="trackedCount">0</h2></div>
+    <div class="stat"><h4>Using Phone</h4><h2 id="phoneCount">0</h2></div>
+    <div class="stat"><h4>Active Alerts</h4><h2 id="alertCount">0</h2></div>
 </div>
 
+<div class="panel">
+    <h2><i class="fa-solid fa-eye"></i> Live Behaviour Log</h2>
+    <p id="behaviourMessage">Start Vision Monitoring to detect classroom behaviour.</p>
+    <table class="attendance-table">
+        <thead>
+            <tr>
+                <th>Student</th>
+                <th>Current Behaviour</th>
+                <th>Duration</th>
+                <th>Phone Uses</th>
+                <th>Total Phone Time</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody id="behaviourBody">
+            <tr><td colspan="6" style="text-align:center;">No tracked students.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+const behaviourStatusUrl = "{{ url_for('behaviour.behaviour_status') }}";
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;").replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+async function refreshBehaviour() {
+    try {
+        const response = await fetch(behaviourStatusUrl + "?t=" + Date.now(), {
+            cache: "no-store"
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || "Unable to load behaviour status.");
+        }
+
+        const statistics = data.statistics || {};
+        const records = data.records || [];
+        document.getElementById("trackedCount").textContent = statistics.tracked || 0;
+        document.getElementById("phoneCount").textContent = statistics.using_phone || 0;
+        document.getElementById("alertCount").textContent = statistics.alerts || 0;
+        document.getElementById("behaviourMessage").textContent = data.running
+            ? "Monitoring live camera behaviour."
+            : "Start Vision Monitoring to detect classroom behaviour.";
+
+        const body = document.getElementById("behaviourBody");
+        if (!records.length) {
+            body.innerHTML = '<tr><td colspan="6" style="text-align:center;">No tracked students.</td></tr>';
+            return;
+        }
+
+        body.innerHTML = records.map(record => {
+            const student = record.student_id
+                ? `${escapeHtml(record.student_id)} - ${escapeHtml(record.student_name)}`
+                : `Unknown Track ${escapeHtml(record.track_id)}`;
+            const status = record.severity === "danger"
+                ? "🔴 Alert"
+                : record.severity === "warning" ? "🟠 Warning" : "🟢 Normal";
+            return `<tr>
+                <td>${student}</td>
+                <td>${escapeHtml(record.behaviour)}</td>
+                <td>${Number(record.duration || 0).toFixed(1)}s</td>
+                <td>${record.phone_use_count}</td>
+                <td>${Number(record.phone_total_duration || 0).toFixed(1)}s</td>
+                <td>${status}</td>
+            </tr>`;
+        }).join("");
+    } catch (error) {
+        document.getElementById("behaviourMessage").textContent =
+            "Behaviour status could not be refreshed.";
+        console.error("Behaviour refresh error:", error);
+    }
+}
+
+refreshBehaviour();
+setInterval(refreshBehaviour, 1500);
+</script>
 {% endblock %}

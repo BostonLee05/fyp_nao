@@ -1535,6 +1535,54 @@ class VisionSystem:
     def get_statistics(self):
         return dict(self._latest_statistics)
 
+    def get_behaviour_records(self):
+        """Return current behaviour and accumulated phone-use records."""
+        now = time.time()
+        records = []
+
+        for track_id in sorted(self.tracked_people):
+            identity = self.identity_cache.get(track_id, {})
+            behaviour = self.behaviour_tracker.get_behaviour(track_id, now)
+            duration = self.behaviour_tracker.get_behaviour_duration(
+                track_id,
+                now
+            )
+            phone_history = self.behaviour_tracker.phone_history.get(
+                track_id,
+                {"count": 0, "total_duration": 0.0}
+            )
+            phone_state = self.behaviour_tracker.phone_states.get(track_id)
+            phone_total = phone_history["total_duration"]
+
+            if phone_state and phone_state["confirmed_since"] is not None:
+                phone_total += max(
+                    0.0,
+                    now - phone_state["confirmed_since"]
+                )
+
+            records.append({
+                "track_id": track_id,
+                "student_id": identity.get("student_id"),
+                "student_name": identity.get("name", "Unknown"),
+                "behaviour": self.get_behaviour_display_name(behaviour),
+                "behaviour_code": behaviour,
+                "duration": round(duration, 1),
+                "phone_use_count": phone_history["count"],
+                "phone_total_duration": round(phone_total, 1),
+                "severity": (
+                    "danger"
+                    if behaviour == BEHAVIOUR_USING_PHONE
+                    else "warning"
+                    if behaviour in (
+                        BEHAVIOUR_DOWN,
+                        BEHAVIOUR_FACE_NOT_VISIBLE
+                    )
+                    else "normal"
+                )
+            })
+
+        return records
+
     # =====================================================
     # CLEANUP
     # =====================================================
