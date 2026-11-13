@@ -7,6 +7,7 @@ Home Blueprint for the NAO Smart Classroom System.
 from flask import Blueprint, render_template
 
 from robot_session import robot_session
+from nao_api import get_nao_manager
 
 home_bp = Blueprint("home", __name__)
 
@@ -44,6 +45,10 @@ def inject_robot_status():
         {{ robot.remaining }}
     """
     status = robot_session.get_status()
+    status["connected"] = (
+        status.get("connected", False)
+        and get_nao_manager().is_connected()
+    )
 
     return {
         "robot": {

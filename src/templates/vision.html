@@ -4,6 +4,15 @@
 {% block page_title %}Vision Monitoring{% endblock %}
 
 {% block content %}
+<style>
+.vision-camera {
+    height: auto !important;
+    min-height: 0 !important;
+    aspect-ratio: auto !important;
+    display: block !important;
+}
+</style>
+
 <div class="panel">
     <h2><i class="fa-solid fa-camera"></i> Vision Monitoring</h2>
 
@@ -12,8 +21,8 @@
         <button id="stopVisionBtn" type="button" style="width:auto; padding:12px 18px;">Stop Vision</button>
     </div>
 
-    <div class="camera-placeholder vision-camera" style="padding:0; overflow:hidden; background:#000;">
-        <img id="visionStream" alt="Live vision stream" style="width:100%; height:auto; max-height:none; display:block; object-fit:contain;" />
+    <div class="camera-placeholder vision-camera" style="padding:0; overflow:visible; background:#000;">
+        <img id="visionStream" alt="Live vision stream" style="width:100%; height:auto !important; max-height:none !important; display:block !important; object-fit:contain;" />
     </div>
 </div>
 
