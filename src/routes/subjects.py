@@ -18,6 +18,7 @@ from database import (
     get_all_classes,
     get_all_students_with_classes,
     get_student,
+    set_student_enrollments,
     update_class,
     update_face_registration,
     update_student_profile,
@@ -193,24 +194,20 @@ def register_student():
             "message": "Student ID and student name are required."
         }), 400
 
-    existing = get_student(student_id)
+    if get_student(student_id) is not None:
+        return jsonify({
+            "success": False,
+            "message": (
+                "This student is already registered. "
+                "Use Edit in Registered Students to manage subjects."
+            )
+        }), 409
 
-    if existing is None:
-        if not add_student(
-            student_id,
-            student_name,
-            programme
-        ):
-            return jsonify({
-                "success": False,
-                "message": "Unable to create student."
-            }), 500
-    else:
-        update_student_profile(
-            student_id,
-            student_name,
-            programme
-        )
+    if not add_student(student_id, student_name, programme):
+        return jsonify({
+            "success": False,
+            "message": "Unable to create student."
+        }), 500
 
     # Optional subject enrollment
     if class_id:
@@ -222,20 +219,17 @@ def register_student():
                 "message": "Invalid subject selected."
             }), 400
 
-        if not enroll_student(
-            class_id_int,
-            student_id
-        ):
-            # Already enrolled is harmless.
-            pass
+        if not set_student_enrollments(student_id, [class_id_int]):
+            return jsonify({
+                "success": False,
+                "message": "Invalid subject selected."
+            }), 400
 
     return jsonify({
         "success": True,
         "message": "Student details saved successfully.",
         "student_id": student_id,
-        "face_registered": bool(
-            existing and existing["face_registered"]
-        ) if existing else False
+        "face_registered": False
     })
 
 @subjects_bp.route("/api/students/<student_id>", methods=["DELETE"])
@@ -294,6 +288,7 @@ def edit_student(student_id):
     programme = str(
         data.get("programme", "")
     ).strip() or None
+    class_ids = data.get("class_ids", [])
 
     if not student_name:
         return jsonify({
@@ -312,6 +307,15 @@ def edit_student(student_id):
             "success": False,
             "message": "Student not found."
         }), 404
+
+    if not isinstance(class_ids, list) or not set_student_enrollments(
+        student_id,
+        class_ids
+    ):
+        return jsonify({
+            "success": False,
+            "message": "Unable to update subject enrollments."
+        }), 400
 
     return jsonify({
         "success": True,

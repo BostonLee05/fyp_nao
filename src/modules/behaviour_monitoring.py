@@ -35,7 +35,7 @@ FACE_NOT_VISIBLE_SECONDS = 2.0
 
 # Phone must be detected continuously for this many seconds
 # before USING_PHONE is confirmed.
-PHONE_CONFIRMATION_SECONDS = 2.0
+PHONE_CONFIRMATION_SECONDS = 0.5
 
 # After USING_PHONE has been confirmed, the phone must remain
 # undetected for this duration before phone usage is cleared.
