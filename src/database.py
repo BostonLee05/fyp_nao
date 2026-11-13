@@ -1,11 +1,13 @@
 import sqlite3
+from datetime import datetime
+from pathlib import Path
 
 
 # =========================================================
 # CONFIGURATION
 # =========================================================
 
-DATABASE_FILE = "classroom.db"
+DATABASE_FILE = Path(__file__).resolve().parent / "classroom.db"
 
 
 # =========================================================
@@ -222,6 +224,16 @@ def initialize_database():
         )
     """)
 
+    # An ACTIVE row cannot survive an application restart as a live
+    # attendance session. Require the user to explicitly start it again.
+    cursor.execute("""
+        UPDATE attendance_sessions
+        SET
+            status = 'ENDED',
+            end_time = COALESCE(end_time, ?)
+        WHERE status = 'ACTIVE'
+    """, (datetime.now().strftime("%H:%M:%S"),))
+
     connection.commit()
 
     connection.close()
@@ -356,7 +368,8 @@ def get_all_students_with_classes():
             GROUP_CONCAT(
                 classes.class_code || ' - ' || classes.class_name,
                 ', '
-            ) AS classes
+            ) AS classes,
+            GROUP_CONCAT(class_enrollments.class_id) AS class_ids
 
         FROM students
 
@@ -639,6 +652,30 @@ def enroll_student(
 
     finally:
 
+        connection.close()
+
+
+def set_student_enrollments(student_id, class_ids):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        normalized_ids = sorted(set(int(class_id) for class_id in class_ids))
+        cursor.execute(
+            "DELETE FROM class_enrollments WHERE student_id = ?",
+            (student_id,)
+        )
+        for class_id in normalized_ids:
+            cursor.execute("""
+                INSERT INTO class_enrollments (class_id, student_id)
+                VALUES (?, ?)
+            """, (class_id, student_id))
+        connection.commit()
+        return True
+    except (ValueError, sqlite3.IntegrityError):
+        connection.rollback()
+        return False
+    finally:
         connection.close()
 
 

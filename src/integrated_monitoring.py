@@ -135,6 +135,7 @@ class IntegratedMonitoring:
         last_tick = time.time()
         frame_count = 0
         latest_error = None
+        connection_lost = False
 
         while True:
             with self._lock:
@@ -197,16 +198,30 @@ class IntegratedMonitoring:
 
             except Exception as exc:
                 latest_error = str(exc)
-                print(f"[Monitor] ERROR: {latest_error}")
+                connection_lost = not self._api.is_connected()
 
                 with self._lock:
                     self._status["last_error"] = latest_error
 
+                if connection_lost:
+                    print(
+                        "[Monitor] NAO connection lost; stopping camera stream: "
+                        f"{latest_error}"
+                    )
+                    with self._lock:
+                        self._running = False
+                    break
+
+                print(f"[Monitor] ERROR: {latest_error}")
                 time.sleep(0.1)
 
         with self._lock:
             if latest_error is not None:
                 self._status["last_error"] = latest_error
+            self._status["running"] = False
+            self._status["camera_ready"] = False
+            if connection_lost:
+                self._status["connected"] = False
             self._unsubscribe_camera()
 
     def get_frame(self):

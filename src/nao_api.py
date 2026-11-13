@@ -190,9 +190,16 @@ class NAOManager:
                 logger.info("Disconnected from NAO")
 
     def is_connected(self) -> bool:
-        """Return True if a session object exists. Does not verify services to avoid recursion."""
+        """Return whether the cached NAOqi session is still connected."""
 
-        return self._session is not None
+        with self._lock:
+            if self._session is None:
+                return False
+
+            try:
+                return bool(self._session.isConnected())
+            except Exception:
+                return False
 
     # ==========================================================
     # Session

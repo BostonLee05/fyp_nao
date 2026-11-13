@@ -998,10 +998,11 @@ class VisionSystem:
     def _try_mark_attendance(self, track_id, identity, current_time):
         """Attempt attendance and keep retryable failures eligible."""
         active_session = get_active_session()
+        if active_session is None:
+            return
+
         session_id = (
             active_session["session_id"]
-            if active_session is not None
-            else None
         )
 
         if session_id != self._attendance_session_id:

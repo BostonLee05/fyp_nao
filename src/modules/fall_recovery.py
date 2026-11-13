@@ -123,7 +123,19 @@ class FallRecovery(threading.Thread):
                     self.is_recovering = False
 
             except Exception as e:
-                # Prevents socket exceptions from crashing the thread or flooding stdout rapidly
+                try:
+                    connected = bool(self.session and self.session.isConnected())
+                except Exception:
+                    connected = False
+
+                if not connected:
+                    print(
+                        "[FallRecovery] NAO connection lost; "
+                        f"stopping fall recovery: {e}"
+                    )
+                    self.running = False
+                    break
+
                 print(f"[FallRecovery] Connection issue encountered: {e}")
                 time.sleep(2.0)
 
