@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import tempfile
 import threading
 import time
@@ -33,6 +34,7 @@ class VoiceRecognition:
     SPEECH_END_SILENCE_DURATION = 0.75
     SPEECH_START_TIMEOUT = 8.0
     MAX_RECORDING_DURATION = 20.0
+    DEFAULT_RECORDING_DURATION = 4.0
     """ Commands Structure """
     SEARCH_COMMAND_RE = re.compile(
         r"\b(?:find me|find|search for|search|give me|show me)\s+"
@@ -166,11 +168,17 @@ class VoiceRecognition:
             self._vad_load_attempted = True
             started_at = time.perf_counter()
             try:
-                self.vad_model = load_silero_vad()
+                # Silero's TorchScript model calls torch.jit.load(), which
+                # PyTorch does not support on Python 3.14+. Use the bundled
+                # ONNX model there instead; it has the same VAD interface and
+                # avoids the warning and the impending TorchScript failure.
+                use_onnx = sys.version_info >= (3, 14)
+                self.vad_model = load_silero_vad(onnx=use_onnx)
                 if self.vad_model is None:
                     raise RuntimeError("load_silero_vad returned no model")
                 self._log_performance("Silero VAD initialization", started_at)
-                print("[VoiceRecognition] Silero VAD model loaded.")
+                backend = "ONNX" if use_onnx else "TorchScript"
+                print(f"[VoiceRecognition] Silero VAD model loaded ({backend}).")
             except Exception as e:
                 self.vad_enabled = False
                 self.vad_model = None
@@ -211,31 +219,21 @@ class VoiceRecognition:
                 print("[VoiceRecognition] Using NAO ALAudioRecorder.")
                 recording_started_at = time.perf_counter()
                 try:
-                    if duration is not None:
-                        # An explicit duration remains available for callers
-                        # that need deterministic capture, but normal robot
-                        # interactions use speech-end detection below.
-                        capture_duration = duration
-                        print(
-                            f"[VoiceRecognition] Recording fixed utterance "
-                            f"({capture_duration:.1f}s)."
-                        )
-                        audio_file = self.audio_transfer.record_from_nao(
-                            capture_duration
-                        )
-                    else:
-                        print(
-                            "[VoiceRecognition] Recording until speech ends "
-                            f"({self.SPEECH_END_SILENCE_DURATION:.2f}s silence, "
-                            f"max {self.MAX_RECORDING_DURATION:.1f}s)."
-                        )
-                        audio_file = self.audio_transfer.record_until_silence(
-                            speech_detector=self._speech_detected,
-                            chunk_duration=self.RECORDING_CHUNK_DURATION,
-                            start_timeout=self.SPEECH_START_TIMEOUT,
-                            silence_duration=self.SPEECH_END_SILENCE_DURATION,
-                            max_duration=self.MAX_RECORDING_DURATION,
-                        )
+                    # ALAudioRecorder is file-based, so capture one complete
+                    # utterance instead of repeatedly restarting it for tiny
+                    # chunks.
+                    capture_duration = (
+                        duration
+                        if duration is not None
+                        else self.DEFAULT_RECORDING_DURATION
+                    )
+                    print(
+                        f"[VoiceRecognition] Recording fixed utterance "
+                        f"({capture_duration:.1f}s)."
+                    )
+                    audio_file = self.audio_transfer.record_from_nao(
+                        capture_duration
+                    )
                 finally:
                     self._log_performance("Audio acquisition", recording_started_at)
             else:
