@@ -6,7 +6,15 @@
 {% block content %}
 <style>
 .subjects-page .panel{height:auto!important;min-height:0!important;overflow:visible!important}
-.subjects-page .dashboard-grid{align-items:start}
+.subjects-page .dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;align-items:start}
+.subjects-page > .panel{margin-top:28px}
+.subjects-page form{display:flex;flex-direction:column;gap:10px}
+.subjects-page h2,.subjects-page h3{margin-bottom:16px}
+.subjects-page hr{margin:24px 0;border:0;border-top:1px solid #e2e8f0}
+.subjects-page small{display:block;color:#64748b;line-height:1.5;margin-top:-3px}
+.subjects-page table th,.subjects-page table td{vertical-align:top;padding:12px 10px}
+.subjects-page .student-subjects{line-height:1.7;white-space:normal}
+.vision-camera{height:auto!important;min-height:0!important;aspect-ratio:4 / 3;display:block!important}
 .records-container{width:100%;overflow-x:auto}
 .records-container table{width:100%;min-width:650px}
 .action-buttons{display:flex;gap:6px;justify-content:center;align-items:center;flex-wrap:wrap}
@@ -67,12 +75,18 @@
     width: 100%;
 }
 
+@media (max-width: 900px) {
+    .subjects-page .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 </style>
 
 <div class="subjects-page">
 <div class="dashboard-grid">
 <section class="panel" id="subjectPanel">
-<h2><i class="fa-solid fa-book"></i> Subject Management</h2>
+<h2><i class="fa-solid fa-book"></i> Manage Subjects</h2>
 <label for="subjectCode">Subject Code</label>
 <input id="subjectCode" type="text" placeholder="BMIT2073">
 <label for="subjectName">Subject Name</label>
@@ -83,7 +97,7 @@
 <button id="cancelSubjectEditBtn" class="cancel-btn" type="button" style="display:none">Cancel Edit</button>
 <p id="subjectMessage"></p>
 <hr>
-<h3>Registered Subjects</h3>
+<h3>Available Subjects</h3>
 <div class="records-container">
 <table class="attendance-table">
 <thead><tr><th>Code</th><th>Name</th><th>Semester</th><th>Actions</th></tr></thead>
@@ -93,7 +107,7 @@
 </section>
 
 <section class="panel" id="studentPanel">
-<h2><i class="fa-solid fa-user-graduate"></i> Student Registration</h2>
+<h2><i class="fa-solid fa-user-graduate"></i> Register New Student</h2>
 <form id="studentForm">
 <label for="studentId">Student ID</label>
 <input id="studentId" name="student_id" type="text" placeholder="S001" required>
@@ -157,11 +171,11 @@
 </div>
 
 <div class="panel">
-<h2>Registered Students</h2>
+<h2>Registered Students &amp; Enrollments</h2>
 <div class="records-container">
 <table class="attendance-table">
 <thead><tr><th>Photo</th><th>Student ID</th><th>Name</th><th>Programme</th><th>Subject</th><th>Face</th><th>Actions</th></tr></thead>
-<tbody id="studentsBody"><tr><td colspan="7" class="table-empty">Loading students...</td></tr></tbody>
+<tbody id="studentsBody"><tr><td colspan="7" class="table-empty">Loading students</td></tr></tbody>
 </table>
 </div>
 </div>
@@ -189,7 +203,9 @@ function resetStudentForm(){editingStudentId=null;studentForm.reset();studentId.
 cancelStudentEditBtn.addEventListener("click",()=>{resetStudentForm();studentMessage.textContent=""});
 async function deleteStudent(id){if(!confirm(`Delete student "${id}"?\n\nThis will also remove the student's subject enrollments and related attendance records.`))return;try{const r=await fetch(`${studentsUrl}/${encodeURIComponent(id)}`,{method:"DELETE"}),d=await r.json();if(!r.ok||!d.success){alert(d.message||"Unable to delete student.");return}if(String(editingStudentId)===String(id))resetStudentForm();studentMessage.textContent="Student deleted successfully.";await loadStudents()}catch(e){console.error(e);alert("Unable to connect to the server.")}}
 
-async function loadStudents(){try{const r=await fetch(studentsUrl+"?t="+Date.now(),{cache:"no-store"}),d=await r.json();if(!r.ok||!d.success)throw Error(d.message||"Unable to load students.");const b=document.getElementById("studentsBody");b.innerHTML="";if(!d.students.length){b.innerHTML='<tr><td colspan="7" class="table-empty">No students registered yet.</td></tr>';return}d.students.forEach(s=>{const registered=Number(s.face_registered)===1,row=document.createElement("tr");row.innerHTML=`<td>👤</td><td>${escapeHtml(s.student_id)}</td><td>${escapeHtml(s.student_name)}</td><td>${escapeHtml(s.programme||"-")}</td><td>${escapeHtml(s.classes||s.subjects||"Not enrolled")}</td><td class="face-status">${registered?"🟢 Registered":"🔴 Not registered"}</td><td><div class="action-buttons"><button type="button" class="action-btn edit-btn" onclick="editStudent('${escapeHtml(s.student_id)}','${escapeHtml(s.student_name)}','${escapeHtml(s.programme||"")}',[${String(s.class_ids||"").split(",").filter(Boolean).join(",")}])"><i class="fa-solid fa-pen"></i> Edit</button><button type="button" class="action-btn delete-btn" onclick="deleteStudent('${escapeHtml(s.student_id)}')"><i class="fa-solid fa-trash"></i> Delete</button>${registered?"":`<button type="button" class="action-btn face-btn" onclick="startFaceRegistration('${escapeHtml(s.student_id)}')"><i class="fa-solid fa-camera"></i> Register Face</button>`}</div></td>`;b.appendChild(row)})}catch(e){console.error(e);document.getElementById("studentsBody").innerHTML='<tr><td colspan="7" class="table-empty">Failed to load students.</td></tr>'}}
+async function loadStudents(){try{const r=await fetch(studentsUrl+"?t="+Date.now(),{cache:"no-store"}),d=await r.json();if(!r.ok||!d.success)throw Error(d.message||"Unable to load students.");const b=document.getElementById("studentsBody");b.innerHTML="";if(!d.students.length){b.innerHTML='<tr><td colspan="7" class="table-empty">No students registered yet.</td></tr>';return}d.students.forEach(s=>{const registered=Number(s.face_registered)===1,row=document.createElement("tr");row.innerHTML=`<td>👤</td><td>${escapeHtml(s.student_id)}</td><td>${escapeHtml(s.student_name)}</td><td>${escapeHtml(s.programme||"-")}</td><td class="student-subjects">${formatSubjects(s.classes||s.subjects)}</td><td class="face-status">${registered?"🟢 Registered":"🔴 Not registered"}</td><td><div class="action-buttons"><button type="button" class="action-btn edit-btn" onclick="editStudent('${escapeHtml(s.student_id)}','${escapeHtml(s.student_name)}','${escapeHtml(s.programme||"")}',[${String(s.class_ids||"").split(",").filter(Boolean).join(",")}])"><i class="fa-solid fa-pen"></i> Edit</button><button type="button" class="action-btn delete-btn" onclick="deleteStudent('${escapeHtml(s.student_id)}')"><i class="fa-solid fa-trash"></i> Delete</button>${registered?"":`<button type="button" class="action-btn face-btn" onclick="startFaceRegistration('${escapeHtml(s.student_id)}')"><i class="fa-solid fa-camera"></i> Register Face</button>`}</div></td>`;b.appendChild(row)})}catch(e){console.error(e);document.getElementById("studentsBody").innerHTML='<tr><td colspan="7" class="table-empty">Failed to load students.</td></tr>'}}
+
+function formatSubjects(value){if(!value)return "Not enrolled";return value.split(",").map(subject=>escapeHtml(subject.trim())).join("<br>")}
 
 let activeFaceStudentId = null;
 
@@ -372,6 +388,14 @@ function pollFaceRegistration(id) {
                 faceStatusTimer = null;
                 activeFaceStudentId = null;
 
+                setFaceRegistrationUI(
+                    "Ready",
+                    "-",
+                    "Waiting to start registration.",
+                    0,
+                    15
+                );
+                resetStudentForm();
                 await loadStudents();
             }
 
