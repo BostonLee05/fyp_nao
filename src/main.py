@@ -10,6 +10,7 @@ from flask import Flask, request, jsonify
 from modules.robot_services import robot_services
 
 from nao_api import get_nao_manager
+from robot_session import robot_session
 import config
 
 from routes.home import home_bp
@@ -41,6 +42,7 @@ def initialize_robot():
     try:
         robot_manager.connect(config.ROBOT_IP, config.ROBOT_PORT)
         session = robot_manager.get_session()
+        robot_session.start_session(config.ROBOT_IP)
     except Exception as e:
         print(f"\n[System Warning] Could not connect to NAO ({e}).")
         print("[System Warning] Running server in Web-Only Mode (Robot hardware offline).\n")

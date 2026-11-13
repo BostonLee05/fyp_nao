@@ -14,6 +14,17 @@ robot_bp = Blueprint("robot", __name__, url_prefix="/api")
 robot_api = get_nao_manager()
 
 
+def _refresh_robot_status():
+    if robot_session.is_connected() and not robot_api.is_connected():
+        robot_services.stop_robot_services()
+        robot_api.disconnect()
+        robot_session.stop_session("Robot connection lost")
+
+    status = robot_session.get_status()
+    status["remaining"] = robot_session.formatted_remaining()
+    return status
+
+
 @robot_bp.route("/connect", methods=["POST"])
 def connect():
 
@@ -79,9 +90,7 @@ def disconnect():
 
 @robot_bp.route("/status")
 def status():
-
-    status = robot_session.get_status()
-    status["remaining"] = robot_session.formatted_remaining()
+    status = _refresh_robot_status()
 
     return jsonify({
         "success": True,
@@ -90,9 +99,7 @@ def status():
 
 @robot_bp.route("/session")
 def session():
-
-    status = robot_session.get_status()
-    status["remaining"] = robot_session.formatted_remaining()
+    status = _refresh_robot_status()
 
     return jsonify({
         "success": True,
@@ -101,8 +108,7 @@ def session():
 
 @robot_bp.route("/ping")
 def ping():
-
-    connected = robot_session.get_status()["connected"]
+    connected = _refresh_robot_status()["connected"]
 
     return jsonify({
         "success": True,
