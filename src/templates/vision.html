@@ -100,20 +100,30 @@
     }
 
     startBtn.addEventListener("click", async () => {
-        const response = await fetch(startUrl, { method: "POST" });
-        if (!response.ok) {
-            return;
-        }
+        window.processingOverlay.show("Starting Vision", "Loading the NAO camera and AI models...");
+        try {
+            const response = await fetch(startUrl, { method: "POST" });
+            if (!response.ok) {
+                return;
+            }
 
-        streamImg.src = `${streamUrl}?ts=${Date.now()}`;
-        startPolling();
+            streamImg.src = `${streamUrl}?ts=${Date.now()}`;
+            startPolling();
+        } finally {
+            setTimeout(() => window.processingOverlay.hide(), 450);
+        }
     });
 
     stopBtn.addEventListener("click", async () => {
-        await fetch(stopUrl, { method: "POST" });
-        streamImg.removeAttribute("src");
-        stopPolling();
-        await refreshStatus();
+        window.processingOverlay.show("Stopping Vision", "Closing the camera stream...");
+        try {
+            await fetch(stopUrl, { method: "POST" });
+            streamImg.removeAttribute("src");
+            stopPolling();
+            await refreshStatus();
+        } finally {
+            window.processingOverlay.hide();
+        }
     });
 
     refreshStatus();
