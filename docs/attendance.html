@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+</head>
+<body>
+<template id="pageTemplate">
+    <div class="panel">
+        <h2><i class="fa-solid fa-user-check"></i> Attendance Management</h2>
+        <div class="attendance-toolbar">
+            <div><label>Subject</label><select id="subjectSelect"><option value="">Select Subject</option></select></div>
+            <div><label>Date</label><input type="date" id="attendanceDate"></div>
+            <div><label>Current Session</label><div id="attendanceSessionStatus">No Active Session</div></div>
+        </div>
+        <div class="button-group">
+            <button id="startSessionBtn">Start Attendance Session</button>
+            <button id="endSessionBtn">End Attendance Session</button>
+            <button id="exportAttendanceBtn">Export CSV</button>
+        </div>
+    </div>
+    <div class="stats">
+        <div class="stat"><h4>Total Students</h4><h2 id="totalStudents">0</h2></div>
+        <div class="stat"><h4>Present</h4><h2 id="presentStudents">0</h2></div>
+        <div class="stat"><h4>Absent</h4><h2 id="absentStudents">0</h2></div>
+        <div class="stat"><h4>Attendance Rate</h4><h2 id="attendanceRate">0%</h2></div>
+    </div>
+    <div class="panel">
+        <h2>Live Attendance</h2>
+        <table class="attendance-table">
+            <thead><tr><th>Student ID</th><th>Name</th><th>Status</th><th>Time</th><th>Similarity</th></tr></thead>
+            <tbody id="attendanceBody"><tr><td colspan="5" style="text-align:center">Start an attendance session to begin.</td></tr></tbody>
+        </table>
+    </div>
+</template>
+<script src="js/api.js"></script>
+<script>
+renderNav("attendance.html");
+document.getElementById("staticPageTitle").textContent = "Attendance";
+
+let currentSessionId = null;
+
+function setDefaultDate() {
+    const today = new Date().toISOString().slice(0, 10);
+    document.getElementById("attendanceDate").value = today;
+    document.getElementById("attendanceDate").max = today;
+}
+
+async function loadSubjects() {
+    const data = await apiFetch("/api/attendance/classes");
+    const select = document.getElementById("subjectSelect");
+    select.innerHTML = '<option value="">Select Subject</option>';
+    (data.classes || []).forEach(item => {
+        select.insertAdjacentHTML("beforeend",
+            `<option value="${item.class_id}">${escapeHtml(item.class_code)} - ${escapeHtml(item.class_name)}</option>`);
+    });
+}
+
+async function refreshStatus() {
+    if (!getApiBase()) return;
+    const data = await apiFetch("/api/attendance/status");
+    if (data.active && data.session) {
+        currentSessionId = data.session.session_id;
+        document.getElementById("attendanceSessionStatus").textContent =
+            `${data.session.class_code} - ${data.session.class_name} | ${data.session.session_date}`;
+    } else {
+        currentSessionId = null;
+        document.getElementById("attendanceSessionStatus").textContent = "No Active Session";
+    }
+}
+
+async function refreshAttendance() {
+    if (!getApiBase() || !currentSessionId) return;
+    const data = await apiFetch(`/api/attendance/current?session_id=${currentSessionId}`);
+    const stats = data.statistics || {};
+    document.getElementById("totalStudents").textContent = stats.total || 0;
+    document.getElementById("presentStudents").textContent = stats.present || 0;
+    document.getElementById("absentStudents").textContent = stats.absent || 0;
+    document.getElementById("attendanceRate").textContent = `${stats.attendance_rate || 0}%`;
+    const body = document.getElementById("attendanceBody");
+    if (!data.records || !data.records.length) {
+        body.innerHTML = '<tr><td colspan="5" style="text-align:center">No students enrolled.</td></tr>';
+        return;
+    }
+    body.innerHTML = data.records.map(record => {
+        const similarity = record.recognition_similarity == null
+            ? "-" : `${(Number(record.recognition_similarity) * 100).toFixed(1)}%`;
+        return `<tr><td>${escapeHtml(record.student_id)}</td><td>${escapeHtml(record.student_name)}</td>
+            <td>${record.status === "Present" ? "Present" : "Absent"}</td>
+            <td>${escapeHtml(record.attendance_time || "-")}</td><td>${similarity}</td></tr>`;
+    }).join("");
+}
+
+document.getElementById("startSessionBtn").addEventListener("click", async () => {
+    const classId = document.getElementById("subjectSelect").value;
+    const date = document.getElementById("attendanceDate").value;
+    if (!classId || !date) return alert("Select a subject and date.");
+    try {
+        const data = await apiFetch("/api/attendance/start", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({class_id: classId, session_date: date, session_name: "Attendance Session"})
+        });
+        currentSessionId = data.session_id;
+        await refreshStatus();
+        await refreshAttendance();
+    } catch (error) {
+        alert(error.message);
+    }
+});
+
+document.getElementById("endSessionBtn").addEventListener("click", async () => {
+    if (!confirm("End the current attendance session?")) return;
+    try {
+        await apiFetch("/api/attendance/end", {method: "POST"});
+        await refreshStatus();
+    } catch (error) {
+        alert(error.message);
+    }
+});
+
+document.getElementById("exportAttendanceBtn").addEventListener("click", () => {
+    if (!currentSessionId) return alert("No attendance session is available.");
+    window.location.href = apiUrl(`/api/attendance/export?session_id=${currentSessionId}`);
+});
+
+setDefaultDate();
+Promise.resolve(loadSubjects()).then(refreshStatus).then(refreshAttendance).catch(error => alert(error.message));
+setInterval(() => refreshStatus().then(refreshAttendance), 2000);
+</script>
+</body>
+</html>

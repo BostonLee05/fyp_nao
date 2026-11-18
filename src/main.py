@@ -6,6 +6,7 @@ Flask entry point for the NAO Smart Classroom Monitoring System.
 import sys
 
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 from modules.robot_services import robot_services
 
@@ -24,6 +25,12 @@ from routes.settings import settings_bp
 from routes.voice import voice_bp, voice_page_bp
 
 app = Flask(__name__)
+
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["https://bostonlee05.github.io"]
+    }
+})
 
 nao_manager = get_nao_manager()
 

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+</head>
+<body>
+<template id="pageTemplate">
+    <div class="panel">
+        <h2><i class="fa-solid fa-server"></i> Flask Backend</h2>
+        <label>Backend HTTPS URL</label>
+        <input id="backendUrl" type="url" placeholder="https://example.trycloudflare.com">
+        <button id="saveBackendBtn">Save Backend URL</button>
+        <p id="backendStatus"></p>
+    </div>
+</template>
+<script src="js/api.js"></script>
+<script>
+renderNav("settings.html");
+document.getElementById("staticPageTitle").textContent = "Settings";
+document.getElementById("backendUrl").value = getApiBase();
+
+document.getElementById("saveBackendBtn").addEventListener("click", async () => {
+    try {
+        setApiBase(document.getElementById("backendUrl").value);
+        await apiFetch("/api/status");
+        document.getElementById("backendStatus").textContent =
+            "Backend is configured and reachable.";
+    } catch (error) {
+        document.getElementById("backendStatus").textContent = error.message;
+    }
+});
+</script>
+</body>
+</html>

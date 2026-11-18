@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vision Monitoring</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+</head>
+<body>
+<template id="pageTemplate">
+    <div class="panel">
+        <h2><i class="fa-solid fa-camera"></i> Vision Monitoring</h2>
+        <div class="button-group">
+            <button id="startVisionBtn">Start Vision</button>
+            <button id="stopVisionBtn">Stop Vision</button>
+        </div>
+        <div style="margin-top:16px;overflow:hidden">
+            <img id="visionStream" alt="Live vision stream" style="width:100%;display:block;min-height:360px;object-fit:cover">
+        </div>
+    </div>
+    <div class="panel">
+        <h2>Vision Statistics</h2>
+        <table class="info-table">
+            <tr><td>Stream</td><td id="visionRunning">Stopped</td></tr>
+            <tr><td>FPS</td><td id="visionFps">0.0</td></tr>
+            <tr><td>Persons</td><td id="visionPersons">0</td></tr>
+            <tr><td>Recognized</td><td id="visionRecognized">0</td></tr>
+            <tr><td>Unknown</td><td id="visionUnknown">0</td></tr>
+            <tr><td>Phones</td><td id="visionPhones">0</td></tr>
+            <tr><td>Resolution</td><td id="visionResolution">-</td></tr>
+            <tr><td>Last Error</td><td id="visionError">None</td></tr>
+        </table>
+    </div>
+</template>
+<script src="js/api.js"></script>
+<script>
+renderNav("vision.html");
+document.getElementById("staticPageTitle").textContent = "Vision Monitoring";
+
+async function refreshVision() {
+    if (!getApiBase()) return;
+    try {
+        const data = await apiFetch("/api/vision/status");
+        const status = data.status || {};
+        const vision = data.vision || {};
+        document.getElementById("visionRunning").textContent =
+            status.running ? "Running" : "Stopped";
+        document.getElementById("visionFps").textContent =
+            Number(vision.fps ?? status.fps ?? 0).toFixed(1);
+        document.getElementById("visionPersons").textContent = vision.persons ?? 0;
+        document.getElementById("visionRecognized").textContent = vision.recognized ?? 0;
+        document.getElementById("visionUnknown").textContent = vision.unknown ?? 0;
+        document.getElementById("visionPhones").textContent = vision.phones ?? 0;
+        document.getElementById("visionResolution").textContent =
+            status.width && status.height ? `${status.width} x ${status.height}` : "-";
+        document.getElementById("visionError").textContent = status.last_error || "None";
+    } catch (error) {
+        document.getElementById("visionError").textContent = error.message;
+    }
+}
+
+document.getElementById("startVisionBtn").addEventListener("click", async () => {
+    try {
+        await apiFetch("/api/vision/start", {method: "POST"});
+        document.getElementById("visionStream").src =
+            `${apiUrl("/video_feed")}?t=${Date.now()}`;
+        refreshVision();
+    } catch (error) {
+        alert(error.message);
+    }
+});
+
+document.getElementById("stopVisionBtn").addEventListener("click", async () => {
+    try {
+        await apiFetch("/api/vision/stop", {method: "POST"});
+        document.getElementById("visionStream").removeAttribute("src");
+        refreshVision();
+    } catch (error) {
+        alert(error.message);
+    }
+});
+
+refreshVision();
+setInterval(refreshVision, 1500);
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Recognition</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+</head>
+<body>
+<template id="pageTemplate">
+    <div class="panel">
+        <h2><i class="fa-solid fa-microphone-lines"></i> Voice Recognition</h2>
+        <p id="voiceStatus">Checking voice status...</p>
+        <pre id="voiceHistory" style="white-space:pre-wrap">No voice commands loaded.</pre>
+    </div>
+</template>
+<script src="js/api.js"></script>
+<script>
+renderNav("voice.html");
+document.getElementById("staticPageTitle").textContent = "Voice Recognition";
+
+async function refreshVoice() {
+    if (!getApiBase()) return;
+    try {
+        const [status, history] = await Promise.all([
+            apiFetch("/api/voice/status"),
+            apiFetch("/api/voice/history")
+        ]);
+        document.getElementById("voiceStatus").textContent =
+            typeof status === "string" ? status : JSON.stringify(status);
+        document.getElementById("voiceHistory").textContent =
+            JSON.stringify(history, null, 2);
+    } catch (error) {
+        document.getElementById("voiceStatus").textContent =
+            "Voice endpoint unavailable: " + error.message;
+    }
+}
+
+refreshVoice();
+setInterval(refreshVoice, 3000);
+</script>
+</body>
+</html>

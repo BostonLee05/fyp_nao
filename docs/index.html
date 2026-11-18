@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NAO Classroom Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+</head>
+<body>
+<template id="pageTemplate">
+    <div class="stats">
+        <div class="stat"><h4>Robot</h4><h2 id="robotCard">Checking</h2></div>
+        <div class="stat"><h4>Camera</h4><h2 id="cameraCard">Checking</h2></div>
+        <div class="stat"><h4>Active Session</h4><h2 id="attendanceCard">-</h2></div>
+        <div class="stat"><h4>Students</h4><h2 id="studentCard">0</h2></div>
+    </div>
+    <div class="dashboard">
+        <section class="panel camera-panel">
+            <h2><i class="fa-solid fa-video"></i> Live Camera Preview</h2>
+            <div class="camera-placeholder" style="padding:0;overflow:hidden">
+                <img id="dashboardStream" alt="NAO camera stream" style="width:100%;display:block">
+            </div>
+        </section>
+        <section class="panel session-panel">
+            <h2><i class="fa-solid fa-robot"></i> Robot Session</h2>
+            <table class="info-table">
+                <tr><td>Status</td><td id="sessionStatus">Checking</td></tr>
+                <tr><td>Session</td><td id="sessionID">-</td></tr>
+                <tr><td>Remaining</td><td id="remainingTime">-</td></tr>
+                <tr><td>Last Reason</td><td id="disconnectReason">-</td></tr>
+            </table>
+        </section>
+    </div>
+</template>
+<script src="js/api.js"></script>
+<script>
+renderNav("index.html");
+document.getElementById("staticPageTitle").textContent = "Dashboard";
+
+async function refreshDashboard() {
+    if (!getApiBase()) return;
+    try {
+        const [robot, attendance, students, vision] = await Promise.all([
+            apiFetch("/api/status"),
+            apiFetch("/api/attendance/status"),
+            apiFetch("/api/students"),
+            apiFetch("/api/vision/status")
+        ]);
+        const rs = robot.status || {};
+        document.getElementById("robotCard").textContent =
+            rs.connected ? "Connected" : "Offline";
+        document.getElementById("sessionStatus").textContent =
+            rs.connected ? "Connected" : "Offline";
+        document.getElementById("sessionID").textContent =
+            rs.session_id || "-";
+        document.getElementById("remainingTime").textContent =
+            rs.remaining || "-";
+        document.getElementById("disconnectReason").textContent =
+            rs.last_disconnect_reason || rs.disconnect_reason || "-";
+        document.getElementById("attendanceCard").textContent =
+            attendance.active ? "Active" : "None";
+        document.getElementById("studentCard").textContent =
+            (students.students || []).length;
+        document.getElementById("cameraCard").textContent =
+            vision.status && vision.status.running ? "Running" : "Idle";
+    } catch (error) {
+        console.error(error);
+        document.getElementById("sessionStatus").textContent = "Unavailable";
+    }
+}
+
+refreshDashboard();
+setInterval(refreshDashboard, 3000);
+</script>
+</body>
+</html>

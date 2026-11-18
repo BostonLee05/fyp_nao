@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Reports</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+</head>
+<body>
+<template id="pageTemplate">
+    <div class="panel">
+        <h2><i class="fa-solid fa-chart-line"></i> Attendance Report</h2>
+        <div class="attendance-toolbar">
+            <div><label>Subject</label><select id="reportSubject"><option value="">Select Subject</option></select></div>
+            <div><label>Date</label><input type="date" id="reportDate"></div>
+            <div><button id="loadReportBtn">Load Report</button></div>
+        </div>
+        <p id="reportMessage"></p>
+        <table class="attendance-table">
+            <thead><tr><th>Student ID</th><th>Name</th><th>Status</th><th>Time</th></tr></thead>
+            <tbody id="reportBody"><tr><td colspan="4" style="text-align:center">No report loaded.</td></tr></tbody>
+        </table>
+    </div>
+</template>
+<script src="js/api.js"></script>
+<script>
+renderNav("reports.html");
+document.getElementById("staticPageTitle").textContent = "Reports";
+document.getElementById("reportDate").value = new Date().toISOString().slice(0, 10);
+document.getElementById("reportDate").max = new Date().toISOString().slice(0, 10);
+
+async function loadReportSubjects() {
+    if (!getApiBase()) return;
+    const data = await apiFetch("/api/reports/classes");
+    const select = document.getElementById("reportSubject");
+    select.innerHTML = '<option value="">Select Subject</option>';
+    (data.classes || []).forEach(item => {
+        select.insertAdjacentHTML("beforeend",
+            `<option value="${item.class_id}">${escapeHtml(item.class_code)} - ${escapeHtml(item.class_name)}</option>`);
+    });
+}
+
+document.getElementById("loadReportBtn").addEventListener("click", async () => {
+    try {
+        const classId = document.getElementById("reportSubject").value;
+        const date = document.getElementById("reportDate").value;
+        const data = await apiFetch(`/api/reports/attendance?class_id=${classId}&date=${encodeURIComponent(date)}`);
+        document.getElementById("reportMessage").textContent =
+            `${data.total_students || 0} students: ${data.present_count || 0} present`;
+        const body = document.getElementById("reportBody");
+        if (!data.records || !data.records.length) {
+            body.innerHTML = '<tr><td colspan="4" style="text-align:center">No students found.</td></tr>';
+            return;
+        }
+        body.innerHTML = data.records.map(record =>
+            `<tr><td>${escapeHtml(record.student_id)}</td><td>${escapeHtml(record.student_name)}</td>
+            <td>${escapeHtml(record.status)}</td><td>${escapeHtml(record.attendance_time || "-")}</td></tr>`
+        ).join("");
+    } catch (error) {
+        document.getElementById("reportMessage").textContent = error.message;
+    }
+});
+
+loadReportSubjects().catch(error => alert(error.message));
+</script>
+</body>
+</html>

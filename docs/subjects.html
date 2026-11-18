@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subjects & Students</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+</head>
+<body>
+<template id="pageTemplate">
+    <div class="dashboard-grid">
+        <section class="panel">
+            <h2><i class="fa-solid fa-book"></i> Create Subject</h2>
+            <label>Subject Code</label><input id="subjectCode" type="text" placeholder="BMIT2073">
+            <label>Subject Name</label><input id="subjectName" type="text" placeholder="Testing Class">
+            <label>Semester</label><input id="semester" type="text" placeholder="2026 Semester 2">
+            <button id="addSubjectBtn">Create Subject</button><p id="subjectMessage"></p>
+        </section>
+        <section class="panel">
+            <h2><i class="fa-solid fa-user-graduate"></i> Register Student</h2>
+            <label>Student ID</label><input id="studentId" type="text" placeholder="S001">
+            <label>Student Name</label><input id="studentName" type="text" placeholder="Student Name">
+            <label>Programme</label><input id="programme" type="text" placeholder="Bachelor of Information Technology">
+            <label>Subject</label><select id="studentSubject"><option value="">No subject</option></select>
+            <button id="registerStudentBtn">Register Student</button><p id="studentMessage"></p>
+        </section>
+    </div>
+    <div class="panel">
+        <h2>Registered Students</h2>
+        <table class="attendance-table">
+            <thead><tr><th>Student ID</th><th>Name</th><th>Programme</th><th>Subject</th><th>Face</th><th>Actions</th></tr></thead>
+            <tbody id="studentsBody"><tr><td colspan="6" style="text-align:center">Loading students...</td></tr></tbody>
+        </table>
+    </div>
+</template>
+<script src="js/api.js"></script>
+<script>
+renderNav("subjects.html");
+document.getElementById("staticPageTitle").textContent = "Subjects & Students";
+
+async function loadSubjects() {
+    const data = await apiFetch("/api/subjects");
+    const select = document.getElementById("studentSubject");
+    select.innerHTML = '<option value="">No subject</option>';
+    (data.subjects || []).forEach(subject => {
+        select.insertAdjacentHTML("beforeend",
+            `<option value="${subject.class_id}">${escapeHtml(subject.class_code)} - ${escapeHtml(subject.class_name)}</option>`);
+    });
+}
+
+async function loadStudents() {
+    const data = await apiFetch("/api/students");
+    const body = document.getElementById("studentsBody");
+    if (!data.students || !data.students.length) {
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center">No students registered.</td></tr>';
+        return;
+    }
+    body.innerHTML = data.students.map(student => {
+        const registered = Number(student.face_registered) === 1;
+        return `<tr><td>${escapeHtml(student.student_id)}</td><td>${escapeHtml(student.student_name)}</td>
+            <td>${escapeHtml(student.programme || "-")}</td><td>${escapeHtml(student.classes || "Not enrolled")}</td>
+            <td>${registered ? "Registered" : "Not registered"}</td>
+            <td>${registered ? "" : `<button type="button" onclick="startFaceRegistration('${escapeHtml(student.student_id)}')">Register Face</button>`}</td></tr>`;
+    }).join("");
+}
+
+document.getElementById("addSubjectBtn").addEventListener("click", async () => {
+    try {
+        await apiFetch("/api/subjects", {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({
+                class_code: document.getElementById("subjectCode").value.trim(),
+                class_name: document.getElementById("subjectName").value.trim(),
+                semester: document.getElementById("semester").value.trim()
+            })
+        });
+        document.getElementById("subjectMessage").textContent = "Subject created successfully.";
+        await loadSubjects();
+    } catch (error) {
+        document.getElementById("subjectMessage").textContent = error.message;
+    }
+});
+
+document.getElementById("registerStudentBtn").addEventListener("click", async () => {
+    try {
+        await apiFetch("/api/students", {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({
+                student_id: document.getElementById("studentId").value.trim(),
+                student_name: document.getElementById("studentName").value.trim(),
+                programme: document.getElementById("programme").value.trim(),
+                class_id: document.getElementById("studentSubject").value
+            })
+        });
+        document.getElementById("studentMessage").textContent = "Student registered successfully.";
+        await loadStudents();
+    } catch (error) {
+        document.getElementById("studentMessage").textContent = error.message;
+    }
+});
+
+async function startFaceRegistration(studentId) {
+    try {
+        await apiFetch(`/api/students/${encodeURIComponent(studentId)}/face-registration/start`, {method:"POST"});
+        alert("Face registration started.");
+        setInterval(async () => {
+            const status = await apiFetch(`/api/students/${encodeURIComponent(studentId)}/face-registration/status`);
+            if (status.completed) {
+                alert("Face registration completed.");
+                await loadStudents();
+            } else if (status.error) {
+                alert(status.error);
+            }
+        }, 1000);
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+Promise.resolve(loadSubjects()).then(loadStudents).catch(error => alert(error.message));
+</script>
+</body>
+</html>

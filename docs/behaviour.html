@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Behaviour Analysis</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+</head>
+<body>
+<template id="pageTemplate">
+    <div class="stats">
+        <div class="stat"><h4>Students Tracked</h4><h2 id="trackedCount">0</h2></div>
+        <div class="stat"><h4>Using Phone</h4><h2 id="phoneCount">0</h2></div>
+        <div class="stat"><h4>Active Alerts</h4><h2 id="alertCount">0</h2></div>
+    </div>
+    <div class="panel">
+        <h2><i class="fa-solid fa-eye"></i> Live Behaviour Log</h2>
+        <p id="behaviourMessage">Checking Vision status...</p>
+        <table class="attendance-table">
+            <thead><tr><th>Student</th><th>Behaviour</th><th>Duration</th><th>Phone Uses</th><th>Total Phone Time</th><th>Status</th></tr></thead>
+            <tbody id="behaviourBody"><tr><td colspan="6" style="text-align:center">No tracked students.</td></tr></tbody>
+        </table>
+    </div>
+</template>
+<script src="js/api.js"></script>
+<script>
+renderNav("behaviour.html");
+document.getElementById("staticPageTitle").textContent = "Behaviour Analysis";
+
+async function refreshBehaviour() {
+    if (!getApiBase()) return;
+    try {
+        const data = await apiFetch("/api/behaviour/status");
+        const records = data.records || [];
+        const stats = data.statistics || {};
+        document.getElementById("trackedCount").textContent = stats.tracked || 0;
+        document.getElementById("phoneCount").textContent = stats.using_phone || 0;
+        document.getElementById("alertCount").textContent = stats.alerts || 0;
+        document.getElementById("behaviourMessage").textContent =
+            data.running ? "Monitoring live camera behaviour." : "Vision is stopped.";
+        const body = document.getElementById("behaviourBody");
+        if (!records.length) {
+            body.innerHTML = '<tr><td colspan="6" style="text-align:center">No tracked students.</td></tr>';
+            return;
+        }
+        body.innerHTML = records.map(record => {
+            const student = record.student_id
+                ? `${escapeHtml(record.student_id)} - ${escapeHtml(record.student_name)}`
+                : `Unknown Track ${escapeHtml(record.track_id)}`;
+            const status = record.severity === "danger"
+                ? "Alert" : record.severity === "warning" ? "Warning" : "Normal";
+            return `<tr><td>${student}</td><td>${escapeHtml(record.behaviour)}</td>
+                <td>${Number(record.duration || 0).toFixed(1)}s</td>
+                <td>${record.phone_use_count}</td>
+                <td>${Number(record.phone_total_duration || 0).toFixed(1)}s</td>
+                <td>${status}</td></tr>`;
+        }).join("");
+    } catch (error) {
+        document.getElementById("behaviourMessage").textContent = error.message;
+    }
+}
+
+refreshBehaviour();
+setInterval(refreshBehaviour, 1500);
+</script>
+</body>
+</html>
