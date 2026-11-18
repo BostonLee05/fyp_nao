@@ -10,14 +10,14 @@ class WakeAudio:
         self,
         session,
         speaker,
-        voice_recognition,
+        voice_recognition_service,
         confidence_threshold=0.45,
         cooldown_seconds=3.0,
         state_manager=None,
     ):
         self.session = session
         self.speaker = speaker
-        self.voice_recognition = voice_recognition
+        self.voice_recognition_service = voice_recognition_service
         self.confidence_threshold = confidence_threshold
         self.cooldown_seconds = cooldown_seconds
         self.state_manager = state_manager
@@ -159,10 +159,11 @@ class WakeAudio:
             if self.speaker:
                 self.speaker.speak("Yes?")
 
-            # Give the short reply a moment so it is less likely to be recorded.
-            time.sleep(1.0)
+            # A short guard avoids capturing the acknowledgement; this is much
+            # shorter than the previous fixed one-second pause.
+            time.sleep(0.25)
 
-            started = self.voice_recognition.listen_once_async(
+            started = self.voice_recognition_service.listen_once_async(
                 on_complete=self._resume_wake_listening,
             )
             if not started:

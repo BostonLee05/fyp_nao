@@ -3,7 +3,7 @@ from speaker import Speaker
 
 from modules.fall_recovery import FallRecovery
 from modules.gemini_service import GeminiService
-from modules.voice_recognition import VoiceRecognition
+from modules.voice_recognition import VoiceRecognitionService
 from modules.voice_state import voice_state
 from modules.wake_audio import WakeAudio
 
@@ -14,7 +14,7 @@ class RobotServices:
     def __init__(self):
         self.speaker = None
         self.fall = None
-        self.voice = None
+        self.voice_recognition_service = None
         self.wake_audio = None
         self.gemini = None
 
@@ -46,7 +46,7 @@ class RobotServices:
             print(f"[System Warning] Fall Recovery did not start: {e}")
 
         try:
-            self.voice = VoiceRecognition(
+            self.voice_recognition_service = VoiceRecognitionService(
                 session,
                 self.speaker,
                 gemini_service=self.gemini,
@@ -54,16 +54,16 @@ class RobotServices:
                 state_manager=voice_state,
             )
         except Exception as e:
-            self.voice = None
+            self.voice_recognition_service = None
             voice_state.set_status("Error", f"Voice recognition did not start: {e}")
             print(f"[System Warning] Voice Recognition did not start: {e}")
 
-        if self.voice:
+        if self.voice_recognition_service:
             try:
                 self.wake_audio = WakeAudio(
                     session,
                     self.speaker,
-                    self.voice,
+                    self.voice_recognition_service,
                     state_manager=voice_state,
                 )
                 self.wake_audio.start()
@@ -86,7 +86,7 @@ class RobotServices:
                 print(f"[System Warning] Fall Recovery did not stop cleanly: {e}")
 
         self.wake_audio = None
-        self.voice = None
+        self.voice_recognition_service = None
         self.fall = None
         self.speaker = None
         voice_state.set_speaking(False)
