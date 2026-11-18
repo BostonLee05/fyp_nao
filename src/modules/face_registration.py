@@ -49,6 +49,7 @@ class FaceRegistration:
         self._folder = None
         self._current_direction = None
         self._captured = 0
+        self._capture_event = 0
         self._total = (
                 len(self.DIRECTIONS)
                 * self.PHOTOS_PER_DIRECTION
@@ -56,6 +57,7 @@ class FaceRegistration:
         self._message = "Ready."
         self._error = None
         self._completed = False
+        self._cancelled = False
 
         self._face_analyzer = None
 
@@ -70,15 +72,31 @@ class FaceRegistration:
                 or self._student_id == student_id
             )
 
+            if not same_student:
+                return {
+                    "running": False,
+                    "student_id": self._student_id,
+                    "current_direction": None,
+                    "captured": 0,
+                    "capture_event": 0,
+                    "total": self._total,
+                    "message": "Ready.",
+                    "error": None,
+                    "completed": False,
+                    "cancelled": False,
+                }
+
             return {
                 "running": self._running and same_student,
                 "student_id": self._student_id,
                 "current_direction": self._current_direction,
                 "captured": self._captured,
+                "capture_event": self._capture_event,
                 "total": self._total,
                 "message": self._message,
                 "error": self._error,
                 "completed": self._completed and same_student,
+                "cancelled": self._cancelled,
             }
 
     def start(
@@ -104,9 +122,11 @@ class FaceRegistration:
             self._folder = dataset_folder
             self._current_direction = None
             self._captured = 0
+            self._capture_event = 0
             self._message = "Starting camera..."
             self._error = None
             self._completed = False
+            self._cancelled = False
 
         os.makedirs(dataset_folder, exist_ok=True)
 
@@ -124,6 +144,7 @@ class FaceRegistration:
         with self._lock:
             self._cancel_requested = True
             self._message = "Cancelling registration..."
+            self._cancelled = True
 
     def _set_status(self, **values):
         with self._lock:
@@ -408,6 +429,9 @@ class FaceRegistration:
                 "[FaceRegistration] Getting ALVideoDevice...",
                 flush=True
             )
+            self._set_status(
+                message="Connecting to the NAO camera..."
+            )
 
             video = session.service("ALVideoDevice")
 
@@ -419,6 +443,9 @@ class FaceRegistration:
             print(
                 "[FaceRegistration] Subscribing to NAO camera...",
                 flush=True
+            )
+            self._set_status(
+                message="Starting the NAO camera..."
             )
 
             client_name = video.subscribeCamera(
@@ -523,6 +550,8 @@ class FaceRegistration:
                     with self._lock:
                         self._captured += 1
                         captured = self._captured
+                        self._capture_event += 1
+                        capture_event = self._capture_event
 
                     self._set_status(
                         message=(
@@ -536,14 +565,26 @@ class FaceRegistration:
                     # Small pause between photos.
                     time.sleep(0.7)
 
+            self._set_status(
+                current_direction=None,
+                message="Finalizing face registration..."
+            )
+
             if on_complete:
                 on_complete(self._folder)
 
-            self._speak(
-                speaker,
-                session,
-                "Face registration completed successfully."
-            )
+            try:
+                self._speak(
+                    speaker,
+                    session,
+                    "Face registration completed successfully."
+                )
+            except Exception as speak_exc:
+                print(
+                    f"[FaceRegistration Warning] "
+                    f"Could not announce completion: {speak_exc}",
+                    flush=True
+                )
 
             self._set_status(
                 running=False,
@@ -564,6 +605,19 @@ class FaceRegistration:
                 flush=True
 
             )
+
+            try:
+                self._speak(
+                    speaker,
+                    session,
+                    "Face registration failed."
+                )
+            except Exception as speak_exc:
+                print(
+                    f"[FaceRegistration Warning] "
+                    f"Could not announce failure: {speak_exc}",
+                    flush=True
+                )
 
             self._set_status(
 

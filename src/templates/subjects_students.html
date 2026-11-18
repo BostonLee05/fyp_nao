@@ -187,7 +187,21 @@ const subjectCode=document.getElementById("subjectCode"),subjectName=document.ge
 const studentForm=document.getElementById("studentForm"),studentId=document.getElementById("studentId"),studentName=document.getElementById("studentName"),programme=document.getElementById("programme"),studentSubject=document.getElementById("studentSubject"),registerStudentBtn=document.getElementById("registerStudentBtn"),cancelStudentEditBtn=document.getElementById("cancelStudentEditBtn"),studentMessage=document.getElementById("studentMessage");
 let editingSubjectId=null,editingStudentId=null,faceStatusTimer=null;
 let lastFaceCaptureCount=0;
+let lastFaceCaptureEvent=0;
 let faceCaptureAudioContext=null;
+
+function prepareCaptureAudio(){
+    try{
+        const AudioContext=window.AudioContext||window.webkitAudioContext;
+        if(!AudioContext)return;
+        faceCaptureAudioContext=faceCaptureAudioContext||new AudioContext();
+        if(faceCaptureAudioContext.state==="suspended"){
+            faceCaptureAudioContext.resume().catch(()=>{});
+        }
+    }catch(error){
+        console.warn("Capture audio could not be initialized.",error);
+    }
+}
 
 function playCaptureDing(){
     try{
@@ -282,6 +296,8 @@ async function startFaceRegistration(id) {
 
     activeFaceStudentId = id;
     lastFaceCaptureCount = 0;
+    lastFaceCaptureEvent = 0;
+    prepareCaptureAudio();
 
     msg.textContent = `Starting face registration for ${id}...`;
 
@@ -344,7 +360,7 @@ function pollFaceRegistration(id) {
         clearInterval(faceStatusTimer);
     }
 
-    faceStatusTimer = setInterval(async () => {
+    async function pollOnce() {
         try {
             const r = await fetch(
                 `${studentsUrl}/${encodeURIComponent(id)}/face-registration/status?t=${Date.now()}`,
@@ -363,6 +379,7 @@ function pollFaceRegistration(id) {
 
             const running = Boolean(s.running);
             const completed = Boolean(s.completed);
+            const cancelled = Boolean(s.cancelled);
             const error = s.error;
 
             const direction =
@@ -380,15 +397,46 @@ function pollFaceRegistration(id) {
             const total =
                 Number(s.total ?? s.required ?? 15);
 
-            if (captured > lastFaceCaptureCount) {
-                playCaptureDing();
+            const captureEvent =
+                Number(s.capture_event ?? 0);
+
+            if (
+                captureEvent > lastFaceCaptureEvent
+            ) {
+                const missedCaptures =
+                    captureEvent - lastFaceCaptureEvent;
+                for (let i = 0; i < missedCaptures; i++) {
+                    playCaptureDing();
+                }
                 lastFaceCaptureCount = captured;
+                lastFaceCaptureEvent = captureEvent;
+            } else if (
+                captureEvent === 0 &&
+                captured > lastFaceCaptureCount
+            ) {
+                const missedCaptures =
+                    captured - lastFaceCaptureCount;
+                for (let i = 0; i < missedCaptures; i++) {
+                    playCaptureDing();
+                }
+                lastFaceCaptureCount = captured;
+            } else {
+                lastFaceCaptureCount = Math.max(
+                    lastFaceCaptureCount,
+                    captured
+                );
+                lastFaceCaptureEvent = Math.max(
+                    lastFaceCaptureEvent,
+                    captureEvent
+                );
             }
 
             let displayStatus = "Ready";
 
             if (error) {
                 displayStatus = "Error";
+            } else if (cancelled) {
+                displayStatus = "Cancelled";
             } else if (completed) {
                 displayStatus = "Completed";
             } else if (running) {
@@ -423,6 +471,20 @@ function pollFaceRegistration(id) {
                 return;
             }
 
+            if (cancelled && !running) {
+                document.getElementById(
+                    "faceRegistrationMessage"
+                ).textContent =
+                    "Face registration cancelled.";
+
+                clearInterval(faceStatusTimer);
+                faceStatusTimer = null;
+                activeFaceStudentId = null;
+
+                resetStudentForm();
+                return;
+            }
+
             if (completed) {
                 document.getElementById(
                     "faceRegistrationMessage"
@@ -434,11 +496,11 @@ function pollFaceRegistration(id) {
                 activeFaceStudentId = null;
 
                 setFaceRegistrationUI(
-                    "Ready",
+                    "Completed",
                     "-",
-                    "Waiting to start registration.",
-                    0,
-                    15
+                    "Face registration completed successfully.",
+                    captured,
+                    total
                 );
                 resetStudentForm();
                 await loadStudents();
@@ -450,7 +512,10 @@ function pollFaceRegistration(id) {
                 e
             );
         }
-    }, 500);
+    }
+
+    pollOnce();
+    faceStatusTimer = setInterval(pollOnce, 500);
 }
 
 async function cancelFaceRegistration() {

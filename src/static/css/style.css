@@ -2010,6 +2010,68 @@ select,
 
 }
 
+.robot-disconnect-popup{
+    position:fixed;
+    inset:0;
+    z-index:10000;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:24px 16px;
+    background:rgba(15,23,42,.18);
+}
+
+.robot-disconnect-popup.hidden{
+    display:none;
+}
+
+.robot-disconnect-card{
+    width:min(520px, calc(100vw - 32px));
+    display:grid;
+    grid-template-columns:auto 1fr auto;
+    gap:14px;
+    align-items:center;
+    padding:18px;
+    border:1px solid #fecaca;
+    border-radius:14px;
+    background:#fff;
+    box-shadow:0 20px 50px rgba(127,29,29,.22);
+    color:#991b1b;
+}
+
+.robot-disconnect-card strong,
+.robot-disconnect-card span{
+    display:block;
+}
+
+.robot-disconnect-card strong{
+    font-size:16px;
+}
+
+.robot-disconnect-card span{
+    margin-top:4px;
+    color:#7f1d1d;
+    line-height:1.4;
+}
+
+.robot-disconnect-icon{
+    width:42px;
+    height:42px;
+    display:grid;
+    place-items:center;
+    border-radius:50%;
+    background:#fee2e2;
+    font-size:18px;
+}
+
+#robotDisconnectClose{
+    border:0;
+    background:transparent;
+    color:#991b1b;
+    cursor:pointer;
+    padding:8px;
+}
+
 .search-toast{
 
     position:fixed;

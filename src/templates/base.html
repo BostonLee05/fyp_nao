@@ -145,6 +145,22 @@
     <div id="searchRecommendationList" class="search-toast-list"></div>
 </div>
 
+<div id="robotDisconnectPopup" class="robot-disconnect-popup hidden" role="alertdialog"
+     aria-modal="true" aria-labelledby="robotDisconnectTitle">
+    <div class="robot-disconnect-card">
+        <div class="robot-disconnect-icon">
+            <i class="fa-solid fa-plug-circle-xmark"></i>
+        </div>
+        <div>
+            <strong id="robotDisconnectTitle">NAO Robot Disconnected</strong>
+            <span id="robotDisconnectMessage">The NAO robot connection was lost. Reconnect it before continuing.</span>
+        </div>
+        <button id="robotDisconnectClose" type="button" aria-label="Close">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    </div>
+</div>
+
 <script>
 window.ROBOT_STATUS = {
     connected: {{ robot.connected | tojson }},
