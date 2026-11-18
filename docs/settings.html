@@ -26,7 +26,7 @@ document.getElementById("backendUrl").value = getApiBase();
 document.getElementById("saveBackendBtn").addEventListener("click", async () => {
     try {
         setApiBase(document.getElementById("backendUrl").value);
-        await apiFetch("/api/status");
+        await apiFetch("/api/ping");
         document.getElementById("backendStatus").textContent =
             "Backend is configured and reachable.";
     } catch (error) {

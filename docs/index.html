@@ -42,7 +42,7 @@ async function refreshDashboard() {
     if (!getApiBase()) return;
     try {
         const [robot, attendance, students, vision] = await Promise.all([
-            apiFetch("/api/status"),
+            apiFetch("/api/ping"),
             apiFetch("/api/attendance/status"),
             apiFetch("/api/students"),
             apiFetch("/api/vision/status")

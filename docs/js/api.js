@@ -27,7 +27,15 @@ function apiUrl(path) {
 }
 
 async function apiFetch(path, options = {}) {
-    const response = await fetch(apiUrl(path), options);
+    let response;
+    try {
+        response = await fetch(apiUrl(path), options);
+    } catch (error) {
+        throw new Error(
+            "Failed to reach the Flask backend. Start Flask and Cloudflare Tunnel, " +
+            "then update the backend URL in Settings."
+        );
+    }
     const contentType = response.headers.get("content-type") || "";
     const data = contentType.includes("application/json")
         ? await response.json()
