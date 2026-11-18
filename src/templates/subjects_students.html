@@ -186,6 +186,60 @@ const studentsUrl="{{ url_for('subjects.list_students') }}";
 const subjectCode=document.getElementById("subjectCode"),subjectName=document.getElementById("subjectName"),semester=document.getElementById("semester"),addSubjectBtn=document.getElementById("addSubjectBtn"),cancelSubjectEditBtn=document.getElementById("cancelSubjectEditBtn"),subjectMessage=document.getElementById("subjectMessage");
 const studentForm=document.getElementById("studentForm"),studentId=document.getElementById("studentId"),studentName=document.getElementById("studentName"),programme=document.getElementById("programme"),studentSubject=document.getElementById("studentSubject"),registerStudentBtn=document.getElementById("registerStudentBtn"),cancelStudentEditBtn=document.getElementById("cancelStudentEditBtn"),studentMessage=document.getElementById("studentMessage");
 let editingSubjectId=null,editingStudentId=null,faceStatusTimer=null;
+let lastFaceCaptureCount=0;
+let lastFaceCaptureEvent=0;
+let faceCaptureAudioContext=null;
+
+function prepareCaptureAudio(){
+    try{
+        const AudioContext=window.AudioContext||window.webkitAudioContext;
+        if(!AudioContext)return;
+        faceCaptureAudioContext=faceCaptureAudioContext||new AudioContext();
+        if(faceCaptureAudioContext.state==="suspended"){
+            faceCaptureAudioContext.resume().catch(()=>{});
+        }
+    }catch(error){
+        console.warn("Capture audio could not be initialized.",error);
+    }
+}
+
+function playCaptureDing(){
+    try{
+        const AudioContext=window.AudioContext||window.webkitAudioContext;
+        if(!AudioContext)return;
+        faceCaptureAudioContext=faceCaptureAudioContext||new AudioContext();
+        const context=faceCaptureAudioContext;
+        if(context.state==="suspended"){
+            context.resume();
+        }
+        const oscillator=context.createOscillator();
+        const gain=context.createGain();
+        oscillator.type="sine";
+        oscillator.frequency.setValueAtTime(880,context.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(1320,context.currentTime+0.08);
+        gain.gain.setValueAtTime(0.0001,context.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.18,context.currentTime+0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001,context.currentTime+0.16);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start();
+        oscillator.stop(context.currentTime+0.17);
+    }catch(error){
+        console.warn("Capture ding could not be played.",error);
+    }
+}
+
+function formatFaceDirection(direction){
+    if(!direction||direction==="-"||direction==="none")return "Waiting";
+    const labels={
+        front:"Front",
+        left:"Turn Left",
+        right:"Turn Right",
+        up:"Look Up",
+        down:"Look Down"
+    };
+    return labels[String(direction).toLowerCase()]||String(direction).toUpperCase();
+}
 function escapeHtml(v){return String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
 
 async function loadSubjects(){try{const r=await fetch(subjectsUrl+"?t="+Date.now(),{cache:"no-store"}),d=await r.json();if(!r.ok||!d.success)throw Error(d.message||"Unable to load subjects.");const b=document.getElementById("subjectsBody");b.innerHTML="";studentSubject.innerHTML='<option value="">No subject / Enroll later</option>';if(!d.subjects.length){b.innerHTML='<tr><td colspan="4" class="table-empty">No subjects registered yet.</td></tr>';return}d.subjects.forEach(s=>{const row=document.createElement("tr");row.innerHTML=`<td>${escapeHtml(s.class_code)}</td><td>${escapeHtml(s.class_name)}</td><td>${escapeHtml(s.semester||"-")}</td><td><div class="action-buttons"><button type="button" class="action-btn edit-btn" onclick="editSubject(${Number(s.class_id)},'${escapeHtml(s.class_code)}','${escapeHtml(s.class_name)}','${escapeHtml(s.semester||"")}')"><i class="fa-solid fa-pen"></i> Edit</button><button type="button" class="action-btn delete-btn" onclick="deleteSubject(${Number(s.class_id)},'${escapeHtml(s.class_code)}')"><i class="fa-solid fa-trash"></i> Delete</button></div></td>`;b.appendChild(row);const o=document.createElement("option");o.value=s.class_id;o.textContent=`${s.class_code} - ${s.class_name}`;studentSubject.appendChild(o)})}catch(e){console.error(e);subjectMessage.textContent="Failed to load subjects."}}
@@ -241,6 +295,9 @@ async function startFaceRegistration(id) {
     const msg = document.getElementById("faceRegistrationMessage");
 
     activeFaceStudentId = id;
+    lastFaceCaptureCount = 0;
+    lastFaceCaptureEvent = 0;
+    prepareCaptureAudio();
 
     msg.textContent = `Starting face registration for ${id}...`;
 
@@ -303,7 +360,7 @@ function pollFaceRegistration(id) {
         clearInterval(faceStatusTimer);
     }
 
-    faceStatusTimer = setInterval(async () => {
+    async function pollOnce() {
         try {
             const r = await fetch(
                 `${studentsUrl}/${encodeURIComponent(id)}/face-registration/status?t=${Date.now()}`,
@@ -322,6 +379,7 @@ function pollFaceRegistration(id) {
 
             const running = Boolean(s.running);
             const completed = Boolean(s.completed);
+            const cancelled = Boolean(s.cancelled);
             const error = s.error;
 
             const direction =
@@ -339,10 +397,46 @@ function pollFaceRegistration(id) {
             const total =
                 Number(s.total ?? s.required ?? 15);
 
+            const captureEvent =
+                Number(s.capture_event ?? 0);
+
+            if (
+                captureEvent > lastFaceCaptureEvent
+            ) {
+                const missedCaptures =
+                    captureEvent - lastFaceCaptureEvent;
+                for (let i = 0; i < missedCaptures; i++) {
+                    playCaptureDing();
+                }
+                lastFaceCaptureCount = captured;
+                lastFaceCaptureEvent = captureEvent;
+            } else if (
+                captureEvent === 0 &&
+                captured > lastFaceCaptureCount
+            ) {
+                const missedCaptures =
+                    captured - lastFaceCaptureCount;
+                for (let i = 0; i < missedCaptures; i++) {
+                    playCaptureDing();
+                }
+                lastFaceCaptureCount = captured;
+            } else {
+                lastFaceCaptureCount = Math.max(
+                    lastFaceCaptureCount,
+                    captured
+                );
+                lastFaceCaptureEvent = Math.max(
+                    lastFaceCaptureEvent,
+                    captureEvent
+                );
+            }
+
             let displayStatus = "Ready";
 
             if (error) {
                 displayStatus = "Error";
+            } else if (cancelled) {
+                displayStatus = "Cancelled";
             } else if (completed) {
                 displayStatus = "Completed";
             } else if (running) {
@@ -351,7 +445,7 @@ function pollFaceRegistration(id) {
 
             setFaceRegistrationUI(
                 displayStatus,
-                direction,
+                formatFaceDirection(direction),
                 instruction,
                 captured,
                 total
@@ -377,6 +471,20 @@ function pollFaceRegistration(id) {
                 return;
             }
 
+            if (cancelled && !running) {
+                document.getElementById(
+                    "faceRegistrationMessage"
+                ).textContent =
+                    "Face registration cancelled.";
+
+                clearInterval(faceStatusTimer);
+                faceStatusTimer = null;
+                activeFaceStudentId = null;
+
+                resetStudentForm();
+                return;
+            }
+
             if (completed) {
                 document.getElementById(
                     "faceRegistrationMessage"
@@ -388,11 +496,11 @@ function pollFaceRegistration(id) {
                 activeFaceStudentId = null;
 
                 setFaceRegistrationUI(
-                    "Ready",
+                    "Completed",
                     "-",
-                    "Waiting to start registration.",
-                    0,
-                    15
+                    "Face registration completed successfully.",
+                    captured,
+                    total
                 );
                 resetStudentForm();
                 await loadStudents();
@@ -404,7 +512,10 @@ function pollFaceRegistration(id) {
                 e
             );
         }
-    }, 500);
+    }
+
+    pollOnce();
+    faceStatusTimer = setInterval(pollOnce, 500);
 }
 
 async function cancelFaceRegistration() {

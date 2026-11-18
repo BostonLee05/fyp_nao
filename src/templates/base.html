@@ -124,6 +124,14 @@
 
 </div>
 
+<div id="processingOverlay" class="processing-overlay" aria-live="polite" aria-hidden="true">
+    <div class="processing-card">
+        <div class="processing-spinner"></div>
+        <strong id="processingTitle">Loading</strong>
+        <span id="processingMessage">Please wait while the page is processing...</span>
+    </div>
+</div>
+
 <div id="searchRecommendationToast" class="search-toast hidden" aria-live="polite">
     <div class="search-toast-header">
         <div>
@@ -137,12 +145,88 @@
     <div id="searchRecommendationList" class="search-toast-list"></div>
 </div>
 
+<div id="robotDisconnectPopup" class="robot-disconnect-popup hidden" role="alertdialog"
+     aria-modal="true" aria-labelledby="robotDisconnectTitle">
+    <div class="robot-disconnect-card">
+        <div class="robot-disconnect-icon">
+            <i class="fa-solid fa-plug-circle-xmark"></i>
+        </div>
+        <div>
+            <strong id="robotDisconnectTitle">NAO Robot Disconnected</strong>
+            <span id="robotDisconnectMessage">The NAO robot connection was lost. Reconnect it before continuing.</span>
+        </div>
+        <button id="robotDisconnectClose" type="button" aria-label="Close">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    </div>
+</div>
+
 <script>
 window.ROBOT_STATUS = {
     connected: {{ robot.connected | tojson }},
     ip: {{ (robot.robot_ip or "") | tojson }},
     remaining: {{ (robot.remaining or "") | tojson }},
     session_id: {{ (robot.session_id or "") | tojson }}
+};
+
+window.processingOverlay = {
+    show(title = "Loading", message = "Please wait while processing...") {
+        const overlay = document.getElementById("processingOverlay");
+        if (!overlay) return;
+        document.getElementById("processingTitle").textContent = title;
+        document.getElementById("processingMessage").textContent = message;
+        overlay.classList.add("visible");
+        overlay.setAttribute("aria-hidden", "false");
+    },
+    hide() {
+        const overlay = document.getElementById("processingOverlay");
+        if (!overlay) return;
+        overlay.classList.remove("visible");
+        overlay.setAttribute("aria-hidden", "true");
+    }
+};
+
+document.querySelectorAll("aside a").forEach(link => {
+    link.addEventListener("click", () => {
+        if (link.href && link.href !== window.location.href) {
+            window.processingOverlay.show(
+                "Opening Page",
+                "Loading the next page..."
+            );
+        }
+    });
+});
+
+window.addEventListener("load", () => {
+    window.processingOverlay.hide();
+});
+
+window.processingOverlay.show(
+    "Loading Page",
+    "Preparing the dashboard..."
+);
+
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async function (...args) {
+    const options = args[1] || {};
+    const method = String(options.method || "GET").toUpperCase();
+    let mutationOverlayShown = false;
+
+    if (method !== "GET" && method !== "HEAD") {
+        window.processingOverlay.show(
+            "Processing",
+            "Please wait while changes are being saved..."
+        );
+        mutationOverlayShown = true;
+    }
+
+    try {
+        return await nativeFetch(...args);
+    } finally {
+        if (mutationOverlayShown) {
+            setTimeout(() => window.processingOverlay.hide(), 300);
+        }
+    }
 };
 </script>
 

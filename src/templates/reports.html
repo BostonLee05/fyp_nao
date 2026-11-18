@@ -206,22 +206,29 @@ async function loadSubjects() {
 
 async function loadAttendanceReport() {
     hideMessage();
+    window.processingOverlay.show(
+        "Loading Report",
+        "Generating the selected attendance report..."
+    );
 
     const selectedDate = attendanceDate.value;
     const classId = subjectSelect.value;
 
     if (!selectedDate) {
         showMessage("Please select an attendance date.", true);
+        window.processingOverlay.hide();
         return;
     }
 
     if (!classId) {
         showMessage("Please select a subject/class.", true);
+        window.processingOverlay.hide();
         return;
     }
 
     if (selectedDate > attendanceDate.max) {
         showMessage("Future dates cannot be selected.", true);
+        window.processingOverlay.hide();
         return;
     }
 
@@ -309,6 +316,7 @@ async function loadAttendanceReport() {
         );
     } finally {
         loadReportBtn.disabled = false;
+        window.processingOverlay.hide();
     }
 }
 

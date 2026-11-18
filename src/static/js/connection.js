@@ -46,9 +46,14 @@ const voiceHistory = document.getElementById("voiceHistory");
 const searchRecommendationToast = document.getElementById("searchRecommendationToast");
 const searchRecommendationList = document.getElementById("searchRecommendationList");
 const searchToastClose = document.getElementById("searchToastClose");
+const robotDisconnectPopup = document.getElementById("robotDisconnectPopup");
+const robotDisconnectClose = document.getElementById("robotDisconnectClose");
 
 let lastRecommendationToken = 0;
 let voiceStatusRequestInFlight = false;
+let manualRobotDisconnectRequested = false;
+let lastRobotConnectedState =
+    Boolean(window.ROBOT_STATUS && window.ROBOT_STATUS.connected);
 
 
 // ======================================================
@@ -167,6 +172,25 @@ function setDisconnectedUI(reason = "Offline") {
 
 }
 
+function showRobotDisconnectedPopup(reason = "") {
+    if (!robotDisconnectPopup) return;
+
+    const message = document.getElementById("robotDisconnectMessage");
+    if (message) {
+        message.textContent = reason
+            ? `The NAO robot connection was lost: ${reason}`
+            : "The NAO robot connection was lost. Reconnect it before continuing.";
+    }
+
+    robotDisconnectPopup.classList.remove("hidden");
+}
+
+if (robotDisconnectClose && robotDisconnectPopup) {
+    robotDisconnectClose.addEventListener("click", () => {
+        robotDisconnectPopup.classList.add("hidden");
+    });
+}
+
 // ======================================================
 // Connect Robot
 // ======================================================
@@ -274,6 +298,7 @@ async function disconnectRobot() {
     disconnectBtn.disabled = true;
 
     disconnectBtn.innerHTML = "Disconnecting...";
+    manualRobotDisconnectRequested = true;
 
     try {
 
@@ -292,12 +317,14 @@ async function disconnectRobot() {
             addLog("Robot disconnected.");
 
             updateDashboard(result.status);
+            manualRobotDisconnectRequested = false;
 
         }
 
         else {
 
             addLog(result.message);
+            manualRobotDisconnectRequested = false;
 
         }
 
@@ -306,6 +333,7 @@ async function disconnectRobot() {
     catch (err) {
 
         console.error(err);
+        manualRobotDisconnectRequested = false;
 
         addLog("Unable to disconnect robot.");
 
@@ -380,6 +408,19 @@ if (robotIPInput) {
 function updateDashboard(data) {
 
     if (!data) return;
+
+    const connected = Boolean(data.connected);
+    if (
+        lastRobotConnectedState &&
+        !connected &&
+        !manualRobotDisconnectRequested
+    ) {
+        showRobotDisconnectedPopup(data.last_disconnect_reason || "");
+    }
+    if (connected && robotDisconnectPopup) {
+        robotDisconnectPopup.classList.add("hidden");
+    }
+    lastRobotConnectedState = connected;
 
     // -------------------------------
     // Robot Status

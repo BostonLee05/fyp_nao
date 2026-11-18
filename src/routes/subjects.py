@@ -367,9 +367,11 @@ def start_face_registration(student_id):
     )
 
     try:
+        from modules.robot_services import robot_services
+        speaker = robot_services.speaker
         started = registration.start(
             session=manager.get_session(),
-            speaker=None,
+            speaker=speaker,
             student_id=student_id,
             dataset_folder=dataset_folder,
             on_complete=lambda folder: (
