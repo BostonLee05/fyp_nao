@@ -2618,3 +2618,46 @@ select,
     padding-bottom:60px;
 
 }
+
+/* ==========================================================
+   VISION CONTROLS
+========================================================== */
+
+.vision-controls {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.vision-controls button {
+    width: auto;
+    margin: 0;
+    padding: 12px 18px;
+}
+
+.vision-start-btn {
+    background: var(--success) !important;
+    color: #fff !important;
+}
+
+.vision-stop-btn {
+    background: var(--danger) !important;
+    color: #fff !important;
+}
+
+.vision-stream-container {
+    width: 100%;
+    overflow: hidden;
+    background: #000;
+    border-radius: 10px;
+}
+
+.vision-stream-container img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 720px;
+    object-fit: contain;
+}

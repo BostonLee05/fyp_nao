@@ -11,12 +11,16 @@
 <template id="pageTemplate">
     <div class="panel">
         <h2><i class="fa-solid fa-camera"></i> Vision Monitoring</h2>
-        <div class="button-group">
-            <button id="startVisionBtn">Start Vision</button>
-            <button id="stopVisionBtn">Stop Vision</button>
+        <div class="vision-controls">
+            <button id="startVisionBtn" class="vision-start-btn" type="button">
+                <i class="fa-solid fa-play"></i> Start Vision
+            </button>
+            <button id="stopVisionBtn" class="vision-stop-btn" type="button">
+                <i class="fa-solid fa-stop"></i> Stop Vision
+            </button>
         </div>
-        <div style="margin-top:16px;overflow:hidden">
-            <img id="visionStream" alt="Live vision stream" style="width:100%;display:block;min-height:360px;object-fit:cover">
+        <div id="visionStreamContainer" class="vision-stream-container" hidden>
+            <img id="visionStream" alt="Live vision stream">
         </div>
     </div>
     <div class="panel">
@@ -46,6 +50,11 @@ async function refreshVision() {
         const vision = data.vision || {};
         document.getElementById("visionRunning").textContent =
             status.running ? "Running" : "Stopped";
+        const streamContainer = document.getElementById("visionStreamContainer");
+        if (!status.running) {
+            document.getElementById("visionStream").removeAttribute("src");
+            streamContainer.hidden = true;
+        }
         document.getElementById("visionFps").textContent =
             Number(vision.fps ?? status.fps ?? 0).toFixed(1);
         document.getElementById("visionPersons").textContent = vision.persons ?? 0;
@@ -63,8 +72,11 @@ async function refreshVision() {
 document.getElementById("startVisionBtn").addEventListener("click", async () => {
     try {
         await apiFetch("/api/vision/start", {method: "POST"});
-        document.getElementById("visionStream").src =
+        const streamContainer = document.getElementById("visionStreamContainer");
+        const stream = document.getElementById("visionStream");
+        stream.src =
             `${apiUrl("/video_feed")}?t=${Date.now()}`;
+        streamContainer.hidden = false;
         refreshVision();
     } catch (error) {
         alert(error.message);
@@ -75,6 +87,7 @@ document.getElementById("stopVisionBtn").addEventListener("click", async () => {
     try {
         await apiFetch("/api/vision/stop", {method: "POST"});
         document.getElementById("visionStream").removeAttribute("src");
+        document.getElementById("visionStreamContainer").hidden = true;
         refreshVision();
     } catch (error) {
         alert(error.message);
