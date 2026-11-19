@@ -1,8 +1,10 @@
 import os
 import re
+import sys
 import tempfile
 import threading
 import time
+import wave
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -15,13 +17,23 @@ from faster_whisper import WhisperModel
 
 from modules.gemini_service import GeminiService
 from modules.nao_audio_transfer import NAOAudioTransfer
-from database import execute_readonly_query, get_voice_commands, list_database_schema
+
+try:
+    from silero_vad import get_speech_timestamps, load_silero_vad
+    import torch
+except ImportError:
+    get_speech_timestamps = None
+    load_silero_vad = None
+    torch = None
 
 load_dotenv()
 
-class VoiceRecognitionService:
-    """Record speech, convert it to text, and handle voice commands."""
+class VoiceRecognition:
     SEARCH_RESULT_LIMIT = 3
+    RECORDING_CHUNK_DURATION = 0.25
+    SPEECH_END_SILENCE_DURATION = 0.75
+    SPEECH_START_TIMEOUT = 8.0
+    MAX_RECORDING_DURATION = 20.0
     DEFAULT_RECORDING_DURATION = 4.0
     """ Commands Structure """
     SEARCH_COMMAND_RE = re.compile(
@@ -56,26 +68,35 @@ class VoiceRecognitionService:
         self.state_manager = state_manager
         self.brave_search_api_key = os.getenv("BRAVE_SEARCH_API_KEY", "").strip()
         self.recording_lock = threading.Lock()
-        self.transcription_lock = threading.Lock()
-        self._processed_recording_ids = set()
-        self._processed_recording_ids_lock = threading.Lock()
-        self.last_transcription_metrics = {}
+        self._vad_load_lock = threading.Lock()
+        self._vad_load_attempted = False
+        self.vad_model = None
+        self.vad_enabled = all(
+            helper is not None
+            for helper in (get_speech_timestamps, load_silero_vad, torch)
+        )
+
         module_dir = Path(__file__).resolve().parent
 
         # Temp audio path for real NAO recording
         self.nao_audio_path = "/home/nao/nao_speech.wav"
         self.temp_audio_path = str(Path(tempfile.gettempdir()) / "nao_speech.wav")
 
-        # Initialize Whisper model once for this service.
+        if self.vad_enabled:
+            print("[VoiceRecognition] Silero VAD enabled; loading model during startup...")
+            self._ensure_vad_model()
+        else:
+            print(
+                "[VoiceRecognition] Silero VAD unavailable; Try install it with: python -m pip install silero-vad. "
+            )
+
+        # Initialize Whisper Model
         print("[VoiceRecognition] Initializing Whisper model...")
-        cpu_threads = max(1, min(4, (os.cpu_count() or 2) - 1))
-        self.model = WhisperModel(
-            "base",
-            device="cpu",
-            compute_type="int8",
-            cpu_threads=cpu_threads,
-            num_workers=1,
-        )
+        # CUDA may be unavailable even when faster-whisper itself imports
+        # successfully (for example, when cuBLAS DLLs are missing). CPU INT8
+        # is slower but reliable for short NAO utterances.
+        self.model = WhisperModel("base", device="cpu", compute_type="int8")
+
         # Initialize NAO Audio Recorder proxy if session exists
         self.audio_recorder = None
         self.file_manager = None
@@ -135,6 +156,39 @@ class VoiceRecognitionService:
     def _log_performance(stage, started_at):
         print(f"[Performance] {stage}: {time.perf_counter() - started_at:.3f}s")
 
+    def _ensure_vad_model(self):
+        """Load Silero once, while retaining a safe no-VAD fallback."""
+        if not self.vad_enabled or self.vad_model is not None:
+            return self.vad_model
+
+        with self._vad_load_lock:
+            if self.vad_model is not None or self._vad_load_attempted:
+                return self.vad_model
+
+            self._vad_load_attempted = True
+            started_at = time.perf_counter()
+            try:
+                # Silero's TorchScript model calls torch.jit.load(), which
+                # PyTorch does not support on Python 3.14+. Use the bundled
+                # ONNX model there instead; it has the same VAD interface and
+                # avoids the warning and the impending TorchScript failure.
+                use_onnx = sys.version_info >= (3, 14)
+                self.vad_model = load_silero_vad(onnx=use_onnx)
+                if self.vad_model is None:
+                    raise RuntimeError("load_silero_vad returned no model")
+                self._log_performance("Silero VAD initialization", started_at)
+                backend = "ONNX" if use_onnx else "TorchScript"
+                print(f"[VoiceRecognition] Silero VAD model loaded ({backend}).")
+            except Exception as e:
+                self.vad_enabled = False
+                self.vad_model = None
+                self._log_performance("Silero VAD initialization", started_at)
+                print(
+                    f"[VoiceRecognition Warning] Silero VAD could not be loaded; "
+                    f"using full audio without VAD: {e}"
+                )
+        return self.vad_model
+
     def listen_once_async(self, duration=None, on_complete=None):
         """Starts one recording/transcription pass in the background."""
         if self.recording_lock.locked():
@@ -165,7 +219,21 @@ class VoiceRecognitionService:
                 print("[VoiceRecognition] Using NAO ALAudioRecorder.")
                 recording_started_at = time.perf_counter()
                 try:
-                    audio_file = self._record_audio(duration)
+                    # ALAudioRecorder is file-based, so capture one complete
+                    # utterance instead of repeatedly restarting it for tiny
+                    # chunks.
+                    capture_duration = (
+                        duration
+                        if duration is not None
+                        else self.DEFAULT_RECORDING_DURATION
+                    )
+                    print(
+                        f"[VoiceRecognition] Recording fixed utterance "
+                        f"({capture_duration:.1f}s)."
+                    )
+                    audio_file = self.audio_transfer.record_from_nao(
+                        capture_duration
+                    )
                 finally:
                     self._log_performance("Audio acquisition", recording_started_at)
             else:
@@ -220,117 +288,191 @@ class VoiceRecognitionService:
             raise
 
         finally:
-            total_seconds = time.perf_counter() - interaction_started_at
             self._log_performance("Total interaction", interaction_started_at)
-            if self.state_manager:
-                metrics = dict(getattr(self.audio_transfer, "last_metrics", {}) or {})
-                metrics.update(
-                    dict(getattr(self, "last_transcription_metrics", {}) or {})
-                )
-                metrics.update({
-                    "total_interaction_seconds": total_seconds,
-                    "completed_wall": time.time(),
-                })
-                self.state_manager.record_performance(metrics)
             self.recording_lock.release()
 
-    def _record_audio(self, max_duration=None):
-        """Capture one fixed-duration utterance for predictable demos."""
-        capture_duration = max_duration or self.DEFAULT_RECORDING_DURATION
-        print(f"[VoiceRecognition] Recording fixed utterance ({capture_duration:.1f}s).")
-        return self.audio_transfer.record_from_nao(capture_duration)
+    def _speech_detected(self, audio_path):
+        """Return whether a short audio chunk contains speech."""
+        if not self.vad_enabled:
+            return False
+
+        if self._ensure_vad_model() is None:
+            return False
+
+        audio = self._read_audio_for_vad(audio_path)
+        timestamps = get_speech_timestamps(
+            audio,
+            self.vad_model,
+            sampling_rate=16000,
+            threshold=0.25,
+            min_speech_duration_ms=80,
+            min_silence_duration_ms=80,
+            speech_pad_ms=0,
+            return_seconds=False,
+        )
+        if timestamps:
+            return True
+
+        # NAO recordings can be quieter than Silero's usual input. Treat a
+        # modest non-zero signal as speech so quiet utterances are not lost.
+        rms = float(torch.sqrt(torch.mean(audio * audio))) if audio.numel() else 0.0
+        peak = float(torch.max(torch.abs(audio))) if audio.numel() else 0.0
+        return rms >= 0.008 or peak >= 0.08
 
     def _transcribe(self, audio_path):
-        """Converts audio file to text using faster-whisper VAD."""
+        """Converts audio file to text using faster-whisper."""
+        vad_started_at = time.perf_counter()
+        try:
+            speech_audio_path = self._extract_speech_audio(audio_path)
+        finally:
+            self._log_performance("VAD processing", vad_started_at)
+        if not speech_audio_path:
+            print("[VoiceRecognition] Silero VAD found no speech.")
+            return ""
+
         transcription_started_at = time.perf_counter()
         try:
-            validation = self.audio_transfer.validate_wav(audio_path)
-            if not validation["valid"]:
-                print(
-                    "[VoiceRecognition Warning] Invalid WAV skipped: %s"
-                    % validation["error"]
-                )
-                return ""
-
-            if not self.transcription_lock.acquire(blocking=False):
-                print("[VoiceRecognition] Transcription already in progress. Skipping.")
-                return ""
-
-            try:
-                segments, info = self.model.transcribe(
-                    audio_path,
-                    beam_size=1,
-                    best_of=1,
-                    temperature=0,
-                    task="transcribe",
-                    vad_filter=True,
-                    vad_parameters={
-                        "min_silence_duration_ms": 250,
-                        "speech_pad_ms": 250,
-                    },
-                )
-                text = "".join([segment.text for segment in segments]).strip()
-                if hasattr(info, "language"):
-                    print(
-                        "[VoiceRecognition] Whisper language=%s probability=%.2f"
-                        % (
-                            info.language,
-                            getattr(info, "language_probability", 0.0),
-                        )
-                    )
-                return text
-            finally:
-                self.transcription_lock.release()
+            # Pass decoded audio to faster-whisper instead of a filename.
+            # This avoids a PyAV compatibility issue where av.open() does not
+            # accept faster-whisper's metadata_errors argument.
+            audio = self._read_audio_for_whisper(speech_audio_path)
+            segments, _ = self.model.transcribe(
+                audio,
+                beam_size=5,
+                task="translate",
+            )
+            return "".join([segment.text for segment in segments]).strip()
         except Exception as e:
             print(f"[VoiceRecognition Error] Transcription failed: {e}")
             return ""
         finally:
-            transcription_seconds = time.perf_counter() - transcription_started_at
-            self.last_transcription_metrics = {
-                "vad_processing_seconds": 0.0,
-                "whisper_transcription_seconds": transcription_seconds,
-                "recording_to_transcription_seconds": transcription_seconds,
-                "transcription_completion_wall": time.time(),
-            }
             self._log_performance("Whisper transcription", transcription_started_at)
+            if speech_audio_path != audio_path:
+                try:
+                    os.remove(speech_audio_path)
+                except OSError:
+                    pass
 
-    def process_uploaded_audio_async(self, audio_path, recording_id=None):
-        """Processes an optional Flask upload in one de-duplicated background task."""
-        recording_id = recording_id or os.path.basename(audio_path)
-        with self._processed_recording_ids_lock:
-            if recording_id in self._processed_recording_ids:
-                print(
-                    "[VoiceRecognition] Duplicate upload ignored: %s" % recording_id
-                )
-                return False
-            self._processed_recording_ids.add(recording_id)
+    @staticmethod
+    def _read_audio_for_whisper(audio_path):
+        """Read a PCM WAV into the float32 format expected by Whisper."""
+        with wave.open(audio_path, "rb") as wav_file:
+            channels = wav_file.getnchannels()
+            sample_width = wav_file.getsampwidth()
+            sample_rate = wav_file.getframerate()
+            raw_audio = wav_file.readframes(wav_file.getnframes())
 
-        def _worker():
-            try:
-                text = self._transcribe(audio_path)
-                print(
-                    "[VoiceRecognition] Uploaded recording %s transcription: '%s'"
-                    % (recording_id, text)
-                )
-                if text:
-                    self._set_status("Processing command")
-                    result = self._on_speech_recognized(text)
-                    self._record_result(text, result)
-            except Exception as error:
-                print(
-                    "[VoiceRecognition Error] Upload processing failed for %s: %s"
-                    % (recording_id, error)
-                )
-                self._set_status("Error", str(error))
-            finally:
-                self._set_status("Ready/listening again")
+        if sample_width == 1:
+            audio = np.frombuffer(raw_audio, dtype=np.uint8).astype(np.float32)
+            audio = (audio - 128.0) / 128.0
+        elif sample_width == 2:
+            audio = np.frombuffer(raw_audio, dtype="<i2").astype(np.float32) / 32768.0
+        elif sample_width == 3:
+            raw = np.frombuffer(raw_audio, dtype=np.uint8).reshape(-1, 3)
+            values = (
+                raw[:, 0].astype(np.int32)
+                | (raw[:, 1].astype(np.int32) << 8)
+                | (raw[:, 2].astype(np.int32) << 16)
+            )
+            values[values & 0x800000 != 0] -= 1 << 24
+            audio = values.astype(np.float32) / 8388608.0
+        elif sample_width == 4:
+            audio = np.frombuffer(raw_audio, dtype="<i4").astype(np.float32) / 2147483648.0
+        else:
+            raise ValueError(f"Unsupported WAV sample width: {sample_width} bytes")
 
-        threading.Thread(
-            target=_worker,
-            name="voice-upload-" + str(recording_id),
-            daemon=True,
-        ).start()
-        return True
+        if channels > 1:
+            audio = audio.reshape(-1, channels).mean(axis=1)
+        if sample_rate != 16000:
+            raise ValueError(f"Expected 16 kHz WAV for Whisper, received {sample_rate} Hz")
+        return np.ascontiguousarray(audio, dtype=np.float32)
+
+    def _extract_speech_audio(self, audio_path):
+        """Trim silence from a recording with Silero VAD before Whisper runs."""
+        if not self.vad_enabled:
+            return audio_path
+
+        try:
+            if self._ensure_vad_model() is None:
+                return audio_path
+
+            audio = self._read_audio_for_vad(audio_path)
+            timestamps = get_speech_timestamps(
+                audio,
+                self.vad_model,
+                sampling_rate=16000,
+                threshold=0.25,
+                min_speech_duration_ms=120,
+                min_silence_duration_ms=120,
+                speech_pad_ms=250,
+                return_seconds=False,
+            )
+
+            if not timestamps:
+                # Let Whisper inspect the complete recording. This is safer
+                # than discarding a valid but quiet utterance.
+                return audio_path
+
+            speech_chunks = [
+                audio[int(timestamp["start"]):int(timestamp["end"])]
+                for timestamp in timestamps
+            ]
+            speech_audio = torch.cat(speech_chunks).detach().cpu().numpy()
+            speech_audio = np.clip(speech_audio, -1.0, 1.0)
+            pcm_audio = (speech_audio * 32767).astype(np.int16)
+
+            trimmed_path = str(
+                Path(tempfile.gettempdir())
+                / f"nao_speech_trimmed_{threading.get_ident()}.wav"
+            )
+            with wave.open(trimmed_path, "wb") as output:
+                output.setnchannels(1)
+                output.setsampwidth(2)
+                output.setframerate(16000)
+                output.writeframes(pcm_audio.tobytes())
+
+            print(
+                f"[VoiceRecognition] Silero VAD kept {len(pcm_audio) / 16000:.2f}s "
+                "of speech from the recording."
+            )
+            return trimmed_path
+        except Exception as e:
+            print(f"[VoiceRecognition Warning] Silero VAD failed; using full recording: {e}")
+            return audio_path
+
+    @staticmethod
+    def _read_audio_for_vad(audio_path):
+        """Decode NAO's PCM WAV without torchaudio or torchcodec."""
+        with wave.open(audio_path, "rb") as wav_file:
+            channels = wav_file.getnchannels()
+            sample_width = wav_file.getsampwidth()
+            sample_rate = wav_file.getframerate()
+            raw_audio = wav_file.readframes(wav_file.getnframes())
+
+        if sample_width == 1:
+            audio = np.frombuffer(raw_audio, dtype=np.uint8).astype(np.float32)
+            audio = (audio - 128.0) / 128.0
+        elif sample_width == 2:
+            audio = np.frombuffer(raw_audio, dtype="<i2").astype(np.float32) / 32768.0
+        elif sample_width == 3:
+            raw = np.frombuffer(raw_audio, dtype=np.uint8).reshape(-1, 3)
+            values = (
+                raw[:, 0].astype(np.int32)
+                | (raw[:, 1].astype(np.int32) << 8)
+                | (raw[:, 2].astype(np.int32) << 16)
+            )
+            values[values & 0x800000 != 0] -= 1 << 24
+            audio = values.astype(np.float32) / 8388608.0
+        elif sample_width == 4:
+            audio = np.frombuffer(raw_audio, dtype="<i4").astype(np.float32) / 2147483648.0
+        else:
+            raise ValueError(f"Unsupported WAV sample width: {sample_width} bytes")
+
+        if channels > 1:
+            audio = audio.reshape(-1, channels).mean(axis=1)
+        if sample_rate != 16000:
+            raise ValueError(f"Expected 16 kHz WAV for VAD, received {sample_rate} Hz")
+        return torch.from_numpy(np.ascontiguousarray(audio, dtype=np.float32))
 
     def _capture_camera_frame(self):
         if cv2 is None:
@@ -396,10 +538,6 @@ class VoiceRecognitionService:
         if keyword_result:
             return keyword_result
 
-        database_result = self._handle_database_question(text)
-        if database_result:
-            return database_result
-
         if self.gemini_service and self.use_gemini:
             image = self._capture_camera_frame()
 
@@ -436,7 +574,7 @@ class VoiceRecognitionService:
         }
 
     def _handle_keyword_command(self, text):
-        """Handles commands configured in voice_commands/voice_triggers."""
+        """Handles fixed voice commands with simple keyword matching."""
         normalized_text = text.lower()
         compact_text = normalized_text.replace(" ", "")
 
@@ -444,23 +582,87 @@ class VoiceRecognitionService:
         if search_result:
             return search_result
 
-        try:
-            commands = get_voice_commands()
-        except Exception as error:
-            print(f"[VoiceRecognition Warning] Could not load database commands: {error}")
-            commands = []
+        if not self.speaker:
+            return None
 
-        # Longest phrases win, preventing a generic trigger such as "rest"
-        # from stealing a more specific user-defined command.
-        matches = []
-        for command in commands:
-            for phrase in command.get("triggers", []) or []:
-                phrase = " ".join(str(phrase).lower().split())
-                if self._contains_command(normalized_text, compact_text, [phrase]):
-                    matches.append((len(phrase), command))
-                    break
-        if matches:
-            return self._execute_database_command(max(matches, key=lambda item: item[0])[1])
+        if self._contains_command(
+            normalized_text,
+            compact_text,
+            [
+                "attendance mode",
+                "start attendance",
+                "begin attendance",
+                "take attendance",
+                "mark attendance",
+                "record attendance",
+            ],
+        ):
+            response = "Attendance Mode Activating..."
+            self.speaker.speak(response)
+            return {
+                "action": "Attendance",
+                "response": response,
+                "status": "Completed",
+            }
+
+        if "hello" in normalized_text:
+            response = "Hello, this is from pre-built keyword..."
+            self.speaker.speak(response)
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
+
+        if self._contains_command(normalized_text, compact_text, ["stand up", "standup"]):
+            response = "Standing up."
+            self._go_to_posture("StandInit")
+            self.speaker.speak(response)
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
+
+        if self._contains_command(normalized_text, compact_text, ["sit down", "sitdown"]):
+            response = "Sitting down."
+            self.speaker.speak(response, animated=False)
+            self._go_to_posture("Sit")
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
+
+        if self._contains_command(normalized_text, compact_text, ["wake up", "wakeup"]):
+            response = "Waking up."
+            self._wake_up()
+            self.speaker.speak(response)
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
+
+        if "rest" in normalized_text:
+            response = "Going to rest mode."
+            self.speaker.speak(response, animated=False)
+            self._rest()
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
+
+        if "crouch" in normalized_text:
+            response = "Crouching."
+            self.speaker.speak(response, animated=False)
+            self._go_to_posture("Crouch")
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
 
         if (
             "camera" in normalized_text
@@ -471,48 +673,6 @@ class VoiceRecognitionService:
             return None
 
         return None
-
-    def _execute_database_command(self, command):
-        action = str(command.get("action", "robot")).lower()
-        response = command.get("response", "Done.")
-        if action == "stand_up":
-            self._go_to_posture("StandInit")
-        elif action == "sit_down":
-            self._go_to_posture("Sit")
-        elif action == "wake_up":
-            self._wake_up()
-        elif action == "rest":
-            self._rest()
-        elif action == "crouch":
-            self._go_to_posture("Crouch")
-        if self.speaker:
-            self.speaker.speak(response, animated=action not in {"sit_down", "rest"})
-        return {"action": action, "response": response, "status": "Completed"}
-
-    def _handle_database_question(self, text):
-        """Answer a data question using a Gemini-generated, read-only SELECT."""
-        if not (self.gemini_service and self.use_gemini):
-            return None
-        try:
-            schema = list_database_schema()
-            sql = self.gemini_service.generate_sql(text, schema)
-            if not sql:
-                return None
-            rows = execute_readonly_query(sql)
-            prompt = (
-                "Answer the user's classroom database question in one or two short sentences. "
-                "Use only the query results below; if there are no rows, say no matching records were found.\n"
-                f"Question: {text}\nQuery results: {rows}"
-            )
-            response = self.gemini_service.ask(prompt)
-            if not response:
-                return None
-            if self.speaker:
-                self.speaker.speak(response)
-            return {"action": "Database Query", "response": response, "status": "Completed"}
-        except Exception as error:
-            print(f"[VoiceRecognition] Database question skipped: {error}")
-            return None
 
     def _handle_search_command(self, text):
         search_request = self._parse_search_command(text)

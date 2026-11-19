@@ -1,31 +1,24 @@
 import threading
 import time
 
-from database import get_voice_wake_phrases
-
 class WakeAudio:
     """NAOqi wake-word listener using ALSpeechRecognition."""
 
-    DEFAULT_WAKE_PHRASES = ["hey nao", "hey now", "hi now", "hello now", "hello nao"]
+    WAKE_PHRASES = ["hey nao", "hey now", "hi now", "hello now", "hello nao"]
 
     def __init__(
         self,
         session,
         speaker,
-        voice_recognition_service,
+        voice_recognition,
         confidence_threshold=0.45,
         cooldown_seconds=3.0,
         state_manager=None,
     ):
         self.session = session
         self.speaker = speaker
-        self.voice_recognition_service = voice_recognition_service
+        self.voice_recognition = voice_recognition
         self.confidence_threshold = confidence_threshold
-        try:
-            self.wake_phrases = get_voice_wake_phrases() or list(self.DEFAULT_WAKE_PHRASES)
-        except Exception as error:
-            print(f"[WakeAudio Warning] Could not load wake phrases: {error}")
-            self.wake_phrases = list(self.DEFAULT_WAKE_PHRASES)
         self.cooldown_seconds = cooldown_seconds
         self.state_manager = state_manager
 
@@ -101,7 +94,7 @@ class WakeAudio:
                 self.speech_recognition.setLanguage("English")
             except Exception as e:
                 print(f"[WakeAudio Warning] Could not set language: {e}")
-            self.speech_recognition.setVocabulary(self.wake_phrases, False)
+            self.speech_recognition.setVocabulary(self.WAKE_PHRASES, False)
         finally:
             try:
                 self.speech_recognition.pause(False)
@@ -136,7 +129,7 @@ class WakeAudio:
         self._maybe_trigger_wake(phrase, 1.0)
 
     def _maybe_trigger_wake(self, phrase, confidence):
-        if phrase not in self.wake_phrases:
+        if phrase not in self.WAKE_PHRASES:
             return
 
         if confidence < self.confidence_threshold:
@@ -166,11 +159,10 @@ class WakeAudio:
             if self.speaker:
                 self.speaker.speak("Yes?")
 
-            # A short guard avoids capturing the acknowledgement; this is much
-            # shorter than the previous fixed one-second pause.
-            time.sleep(0.25)
+            # Give the short reply a moment so it is less likely to be recorded.
+            time.sleep(1.0)
 
-            started = self.voice_recognition_service.listen_once_async(
+            started = self.voice_recognition.listen_once_async(
                 on_complete=self._resume_wake_listening,
             )
             if not started:

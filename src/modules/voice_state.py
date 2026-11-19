@@ -17,7 +17,6 @@ class VoiceState:
         self._recommendations = []
         self._recommendation_token = 0
         self._history = deque(maxlen=max_history)
-        self._performance_history = deque(maxlen=max_history)
 
     def set_status(self, status, error=""):
         with self._lock:
@@ -62,10 +61,6 @@ class VoiceState:
             self._recommendations = list(recommendations or [])
             self._recommendation_token += 1
 
-    def record_performance(self, metrics):
-        with self._lock:
-            self._performance_history.appendleft(dict(metrics or {}))
-
     def snapshot(self):
         with self._lock:
             return {
@@ -78,7 +73,6 @@ class VoiceState:
                 "history": list(self._history),
                 "recommendations": list(self._recommendations),
                 "recommendation_token": self._recommendation_token,
-                "performance": list(self._performance_history),
             }
 
 

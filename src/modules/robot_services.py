@@ -3,7 +3,7 @@ from speaker import Speaker
 
 from modules.fall_recovery import FallRecovery
 from modules.gemini_service import GeminiService
-from modules.voice_recognition import VoiceRecognitionService
+from modules.voice_recognition import VoiceRecognition
 from modules.voice_state import voice_state
 from modules.wake_audio import WakeAudio
 
@@ -46,7 +46,7 @@ class RobotServices:
             print(f"[System Warning] Fall Recovery did not start: {e}")
 
         try:
-            self.voice_recognition_service = VoiceRecognitionService(
+            self.voice_recognition_service = VoiceRecognition(
                 session,
                 self.speaker,
                 gemini_service=self.gemini,

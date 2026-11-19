@@ -36,24 +36,6 @@ Voice Recognition
 
     </section>
 
-    <section class="panel voice-command-manager">
-        <h2><i class="fa-solid fa-list-check"></i> Predefined Commands</h2>
-        <form id="voiceCommandForm" class="voice-command-form">
-            <input id="voiceCommandKey" required placeholder="Command name, e.g. greet_class">
-            <input id="voiceCommandAction" required value="robot" placeholder="Action, e.g. robot">
-            <input id="voiceCommandResponse" required placeholder="Response NAO should speak">
-            <input id="voiceCommandPhrases" required placeholder="Trigger phrases, separated by commas">
-            <button class="primary-btn" type="submit">Add Command</button>
-            <span id="voiceCommandFormMessage" role="status"></span>
-        </form>
-        <div class="voice-command-search">
-            <input id="voiceCommandSearch" type="search" placeholder="Search commands or trigger phrases">
-        </div>
-        <div id="voiceCommandList" class="voice-command-list">
-            <div class="voice-history-empty">Loading commands...</div>
-        </div>
-    </section>
-
     <section class="panel voice-history-panel">
 
         <h2>
@@ -68,71 +50,5 @@ Voice Recognition
     </section>
 
 </div>
-
-<script>
-(() => {
-    const form = document.getElementById("voiceCommandForm");
-    const list = document.getElementById("voiceCommandList");
-    const search = document.getElementById("voiceCommandSearch");
-    const message = document.getElementById("voiceCommandFormMessage");
-    if (!form || !list) return;
-
-    const escapeHtml = value => String(value ?? "").replace(/[&<>\"']/g, c => ({
-        "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;"
-    }[c]));
-
-    async function loadCommands() {
-        const query = encodeURIComponent(search.value.trim());
-        const response = await fetch(`/api/voice/commands?search=${query}`);
-        const data = await response.json();
-        if (!data.success) throw new Error(data.error || "Could not load commands");
-        list.innerHTML = data.commands.length ? data.commands.map(command => `
-            <article class="voice-command-item">
-                <div>
-                    <strong>${escapeHtml(command.command_key)}</strong>
-                    <span class="voice-command-action">${escapeHtml(command.action)}</span>
-                    <p>${escapeHtml(command.response)}</p>
-                    <small>Triggers: ${escapeHtml((command.triggers || []).join(", "))}</small>
-                </div>
-                <button class="danger-btn voice-command-delete" data-id="${command.command_id}" type="button">Delete</button>
-            </article>`).join("") : '<div class="voice-history-empty">No matching commands.</div>';
-    }
-
-    form.addEventListener("submit", async event => {
-        event.preventDefault();
-        message.textContent = "Saving...";
-        try {
-            const response = await fetch("/api/voice/commands", {
-                method: "POST", headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({
-                    command_key: document.getElementById("voiceCommandKey").value,
-                    action: document.getElementById("voiceCommandAction").value,
-                    response: document.getElementById("voiceCommandResponse").value,
-                    phrases: document.getElementById("voiceCommandPhrases").value.split(",")
-                })
-            });
-            const data = await response.json();
-            if (!response.ok || !data.success) throw new Error(data.error || "Could not save command");
-            form.reset();
-            document.getElementById("voiceCommandAction").value = "robot";
-            message.textContent = "Saved.";
-            await loadCommands();
-        } catch (error) { message.textContent = error.message; }
-    });
-
-    list.addEventListener("click", async event => {
-        const button = event.target.closest(".voice-command-delete");
-        if (!button || !confirm("Delete this predefined command?")) return;
-        const response = await fetch(`/api/voice/commands/${button.dataset.id}`, {method: "DELETE"});
-        const data = await response.json();
-        if (!response.ok || !data.success) alert(data.error || "Could not delete command");
-        await loadCommands();
-    });
-
-    let timer;
-    search.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(loadCommands, 250); });
-    loadCommands().catch(error => { list.innerHTML = `<div class="voice-history-empty">${escapeHtml(error.message)}</div>`; });
-})();
-</script>
 
 {% endblock %}
