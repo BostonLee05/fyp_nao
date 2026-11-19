@@ -2010,6 +2010,103 @@ select,
 
 }
 
+.voice-command-manager{
+
+    grid-column:1 / -1;
+
+}
+
+.voice-command-form{
+
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:10px;
+    margin-bottom:16px;
+
+}
+
+.voice-command-form input,
+.voice-command-search input{
+
+    width:100%;
+    padding:11px 12px;
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-sizing:border-box;
+
+}
+
+.voice-command-form button{
+
+    width:max-content;
+
+}
+
+.voice-command-form span{
+
+    align-self:center;
+    color:var(--text-light);
+
+}
+
+.voice-command-search{
+
+    margin-bottom:12px;
+
+}
+
+.voice-command-list{
+
+    display:grid;
+    gap:8px;
+
+}
+
+.voice-command-item{
+
+    display:flex;
+    justify-content:space-between;
+    gap:16px;
+    align-items:center;
+    padding:13px 14px;
+    border:1px solid var(--border);
+    border-radius:12px;
+    background:#f8fafc;
+
+}
+
+.voice-command-item p{
+
+    margin:5px 0;
+
+}
+
+.voice-command-item small{
+
+    color:var(--text-light);
+
+}
+
+.voice-command-action{
+
+    margin-left:8px;
+    color:var(--text-light);
+    font-size:13px;
+
+}
+
+.voice-command-delete{
+
+    background:var(--danger);
+    color:white;
+
+}
+
+@media (max-width:700px){
+    .voice-command-form{grid-template-columns:1fr;}
+
+}
+
 .robot-disconnect-popup{
     position:fixed;
     inset:0;

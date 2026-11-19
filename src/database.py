@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime
 
 import psycopg2
@@ -51,6 +52,79 @@ def initialize_database():
         WHERE status = 'ACTIVE'
     """, (datetime.now().strftime("%H:%M:%S"),))
 
+    # Voice commands are data, not application code.  The seed uses stable
+    # command keys so it is safe to run on every application start.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS voice_commands (
+            command_id BIGSERIAL PRIMARY KEY,
+            command_key VARCHAR(80) NOT NULL UNIQUE,
+            action VARCHAR(80) NOT NULL,
+            response TEXT NOT NULL,
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS voice_triggers (
+            trigger_id BIGSERIAL PRIMARY KEY,
+            command_id BIGINT NOT NULL REFERENCES voice_commands(command_id)
+                ON DELETE CASCADE,
+            phrase VARCHAR(255) NOT NULL,
+            normalized_phrase VARCHAR(255) NOT NULL,
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            UNIQUE(command_id, normalized_phrase)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS voice_wake_phrases (
+            wake_phrase_id BIGSERIAL PRIMARY KEY,
+            phrase VARCHAR(255) NOT NULL UNIQUE,
+            enabled BOOLEAN NOT NULL DEFAULT TRUE
+        )
+    """)
+    for phrase in ["hey nao", "hey now", "hi now", "hello now", "hello nao"]:
+        cursor.execute("""
+            INSERT INTO voice_wake_phrases (phrase)
+            VALUES (%s) ON CONFLICT (phrase) DO NOTHING
+        """, (phrase,))
+
+    seed_commands = [
+        ("attendance", "attendance", "Attendance Mode Activating..."),
+        ("hello", "robot", "Hello, this is from the database command."),
+        ("stand_up", "stand_up", "Standing up."),
+        ("sit_down", "sit_down", "Sitting down."),
+        ("wake_up", "wake_up", "Waking up."),
+        ("rest", "rest", "Going to rest mode."),
+        ("crouch", "crouch", "Crouching."),
+    ]
+    for command_key, action, response in seed_commands:
+        cursor.execute("""
+            INSERT INTO voice_commands (command_key, action, response)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (command_key) DO NOTHING
+        """, (command_key, action, response))
+
+    seed_triggers = {
+        "attendance": ["attendance mode", "start attendance", "begin attendance",
+                       "take attendance", "mark attendance", "record attendance"],
+        "hello": ["hello"],
+        "stand_up": ["stand up", "standup"],
+        "sit_down": ["sit down", "sitdown"],
+        "wake_up": ["wake up", "wakeup"],
+        "rest": ["rest"],
+        "crouch": ["crouch"],
+    }
+    for command_key, phrases in seed_triggers.items():
+        for phrase in phrases:
+            normalized = " ".join(phrase.lower().split())
+            cursor.execute("""
+                INSERT INTO voice_triggers (command_id, phrase, normalized_phrase)
+                SELECT command_id, %s, %s FROM voice_commands
+                WHERE command_key = %s
+                ON CONFLICT (command_id, normalized_phrase) DO NOTHING
+            """, (phrase, normalized, command_key))
+
     connection.commit()
 
     connection.close()
@@ -58,6 +132,168 @@ def initialize_database():
     print(
         "Database initialized successfully."
     )
+
+
+def get_voice_commands(search=None):
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        query = """
+            SELECT c.command_id, c.command_key, c.action, c.response,
+                   c.enabled, COALESCE(array_agg(t.phrase ORDER BY t.phrase)
+                   FILTER (WHERE t.trigger_id IS NOT NULL), ARRAY[]::text[]) AS triggers
+            FROM voice_commands c
+            LEFT JOIN voice_triggers t ON t.command_id = c.command_id AND t.enabled
+            WHERE c.enabled
+            {search_clause}
+            GROUP BY c.command_id
+            ORDER BY c.command_id
+        """.format(
+            search_clause=(
+                "AND (c.command_key ILIKE %s OR c.action ILIKE %s "
+                "OR c.response ILIKE %s OR EXISTS (SELECT 1 FROM voice_triggers st "
+                "WHERE st.command_id = c.command_id AND st.phrase ILIKE %s))"
+                if search else ""
+            )
+        )
+        params = ([f"%{search}%"] * 4) if search else []
+        cursor.execute(query, params)
+        return cursor.fetchall()
+    finally:
+        connection.close()
+
+
+def get_voice_wake_phrases():
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute("""
+            SELECT phrase FROM voice_wake_phrases
+            WHERE enabled ORDER BY wake_phrase_id
+        """)
+        return [row["phrase"] for row in cursor.fetchall()]
+    finally:
+        connection.close()
+
+
+def add_voice_wake_phrase(phrase):
+    normalized = " ".join(str(phrase).lower().split())
+    if not normalized:
+        raise ValueError("A wake phrase is required")
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute("""
+            INSERT INTO voice_wake_phrases (phrase)
+            VALUES (%s)
+            ON CONFLICT (phrase) DO UPDATE SET enabled = TRUE
+            RETURNING wake_phrase_id
+        """, (normalized,))
+        wake_phrase_id = cursor.fetchone()["wake_phrase_id"]
+        connection.commit()
+        return wake_phrase_id
+    finally:
+        connection.close()
+
+
+def add_voice_command(command_key, action, response, phrases):
+    normalized_key = "_".join(str(command_key).lower().strip().split())
+    phrase_pairs = [
+        (str(phrase).strip(), " ".join(str(phrase).lower().split()))
+        for phrase in (phrases or []) if str(phrase).strip()
+    ]
+    if not normalized_key or not action or not response or not phrase_pairs:
+        raise ValueError("command_key, action, response, and at least one phrase are required")
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute("""
+            INSERT INTO voice_commands (command_key, action, response)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (command_key) DO UPDATE
+            SET action = EXCLUDED.action, response = EXCLUDED.response,
+                enabled = TRUE, updated_at = NOW()
+            RETURNING command_id
+        """, (normalized_key, action, response))
+        command_id = cursor.fetchone()["command_id"]
+        for phrase, normalized in phrase_pairs:
+            cursor.execute("""
+                INSERT INTO voice_triggers (command_id, phrase, normalized_phrase)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (command_id, normalized_phrase) DO UPDATE SET enabled = TRUE
+            """, (command_id, str(phrase).strip(), normalized))
+        connection.commit()
+        return command_id
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def delete_voice_command(command_id):
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute("DELETE FROM voice_commands WHERE command_id = %s", (command_id,))
+        deleted = cursor.rowcount > 0
+        connection.commit()
+        return deleted
+    finally:
+        connection.close()
+
+
+def list_database_schema():
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute("""
+            SELECT table_name, column_name, data_type
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+            ORDER BY table_name, ordinal_position
+        """)
+        return cursor.fetchall()
+    finally:
+        connection.close()
+
+
+def execute_readonly_query(sql, params=None):
+    """Execute one validated SELECT statement and return JSON-friendly rows."""
+    statement = str(sql).strip().rstrip(";").strip()
+    if not statement or not statement.lower().startswith(("select", "with")):
+        raise ValueError("Only SELECT or WITH queries are allowed")
+    if ";" in statement or "--" in statement or "/*" in statement:
+        raise ValueError("Only one simple read-only statement is allowed")
+    if re.search(
+        r"\b(insert|update|delete|drop|alter|create|grant|revoke|truncate|copy|call|do)\b",
+        statement,
+        flags=re.IGNORECASE,
+    ):
+        raise ValueError("Write or administrative SQL is not allowed")
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute("SET TRANSACTION READ ONLY")
+        cursor.execute("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public'
+        """)
+        allowed_tables = {row["table_name"] for row in cursor.fetchall()}
+        referenced_tables = re.findall(
+            r"\b(?:from|join)\s+([a-zA-Z_][a-zA-Z0-9_\.]*)(?:\s|$|,|\))",
+            statement,
+            flags=re.IGNORECASE,
+        )
+        for table in referenced_tables:
+            table_name = table.split(".")[-1].strip('"')
+            if table_name.lower() not in allowed_tables:
+                raise ValueError(f"Table is not available for voice queries: {table_name}")
+        cursor.execute(statement, params or ())
+        return [dict(row) for row in cursor.fetchmany(50)]
+    finally:
+        connection.rollback()
+        connection.close()
 
 
 # =========================================================

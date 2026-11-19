@@ -15,6 +15,7 @@ from faster_whisper import WhisperModel
 
 from modules.gemini_service import GeminiService
 from modules.nao_audio_transfer import NAOAudioTransfer
+from database import execute_readonly_query, get_voice_commands, list_database_schema
 
 load_dotenv()
 
@@ -395,6 +396,10 @@ class VoiceRecognitionService:
         if keyword_result:
             return keyword_result
 
+        database_result = self._handle_database_question(text)
+        if database_result:
+            return database_result
+
         if self.gemini_service and self.use_gemini:
             image = self._capture_camera_frame()
 
@@ -431,7 +436,7 @@ class VoiceRecognitionService:
         }
 
     def _handle_keyword_command(self, text):
-        """Handles fixed voice commands with simple keyword matching."""
+        """Handles commands configured in voice_commands/voice_triggers."""
         normalized_text = text.lower()
         compact_text = normalized_text.replace(" ", "")
 
@@ -439,87 +444,23 @@ class VoiceRecognitionService:
         if search_result:
             return search_result
 
-        if not self.speaker:
-            return None
+        try:
+            commands = get_voice_commands()
+        except Exception as error:
+            print(f"[VoiceRecognition Warning] Could not load database commands: {error}")
+            commands = []
 
-        if self._contains_command(
-            normalized_text,
-            compact_text,
-            [
-                "attendance mode",
-                "start attendance",
-                "begin attendance",
-                "take attendance",
-                "mark attendance",
-                "record attendance",
-            ],
-        ):
-            response = "Attendance Mode Activating..."
-            self.speaker.speak(response)
-            return {
-                "action": "Attendance",
-                "response": response,
-                "status": "Completed",
-            }
-
-        if "hello" in normalized_text:
-            response = "Hello, this is from pre-built keyword..."
-            self.speaker.speak(response)
-            return {
-                "action": "Robot",
-                "response": response,
-                "status": "Completed",
-            }
-
-        if self._contains_command(normalized_text, compact_text, ["stand up", "standup"]):
-            response = "Standing up."
-            self._go_to_posture("StandInit")
-            self.speaker.speak(response)
-            return {
-                "action": "Robot",
-                "response": response,
-                "status": "Completed",
-            }
-
-        if self._contains_command(normalized_text, compact_text, ["sit down", "sitdown"]):
-            response = "Sitting down."
-            self.speaker.speak(response, animated=False)
-            self._go_to_posture("Sit")
-            return {
-                "action": "Robot",
-                "response": response,
-                "status": "Completed",
-            }
-
-        if self._contains_command(normalized_text, compact_text, ["wake up", "wakeup"]):
-            response = "Waking up."
-            self._wake_up()
-            self.speaker.speak(response)
-            return {
-                "action": "Robot",
-                "response": response,
-                "status": "Completed",
-            }
-
-        if "rest" in normalized_text:
-            response = "Going to rest mode."
-            self.speaker.speak(response, animated=False)
-            self._rest()
-            return {
-                "action": "Robot",
-                "response": response,
-                "status": "Completed",
-            }
-
-        if "crouch" in normalized_text:
-            response = "Crouching."
-            self.speaker.speak(response, animated=False)
-            self._go_to_posture("Crouch")
-            return {
-                "action": "Robot",
-                "response": response,
-                "status": "Completed",
-            }
+        # Longest phrases win, preventing a generic trigger such as "rest"
+        # from stealing a more specific user-defined command.
+        matches = []
+        for command in commands:
+            for phrase in command.get("triggers", []) or []:
+                phrase = " ".join(str(phrase).lower().split())
+                if self._contains_command(normalized_text, compact_text, [phrase]):
+                    matches.append((len(phrase), command))
+                    break
+        if matches:
+            return self._execute_database_command(max(matches, key=lambda item: item[0])[1])
 
         if (
             "camera" in normalized_text
@@ -530,6 +471,48 @@ class VoiceRecognitionService:
             return None
 
         return None
+
+    def _execute_database_command(self, command):
+        action = str(command.get("action", "robot")).lower()
+        response = command.get("response", "Done.")
+        if action == "stand_up":
+            self._go_to_posture("StandInit")
+        elif action == "sit_down":
+            self._go_to_posture("Sit")
+        elif action == "wake_up":
+            self._wake_up()
+        elif action == "rest":
+            self._rest()
+        elif action == "crouch":
+            self._go_to_posture("Crouch")
+        if self.speaker:
+            self.speaker.speak(response, animated=action not in {"sit_down", "rest"})
+        return {"action": action, "response": response, "status": "Completed"}
+
+    def _handle_database_question(self, text):
+        """Answer a data question using a Gemini-generated, read-only SELECT."""
+        if not (self.gemini_service and self.use_gemini):
+            return None
+        try:
+            schema = list_database_schema()
+            sql = self.gemini_service.generate_sql(text, schema)
+            if not sql:
+                return None
+            rows = execute_readonly_query(sql)
+            prompt = (
+                "Answer the user's classroom database question in one or two short sentences. "
+                "Use only the query results below; if there are no rows, say no matching records were found.\n"
+                f"Question: {text}\nQuery results: {rows}"
+            )
+            response = self.gemini_service.ask(prompt)
+            if not response:
+                return None
+            if self.speaker:
+                self.speaker.speak(response)
+            return {"action": "Database Query", "response": response, "status": "Completed"}
+        except Exception as error:
+            print(f"[VoiceRecognition] Database question skipped: {error}")
+            return None
 
     def _handle_search_command(self, text):
         search_request = self._parse_search_command(text)

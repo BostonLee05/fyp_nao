@@ -1,4 +1,5 @@
 import os
+import re
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -48,6 +49,37 @@ class GeminiService(object):
         except Exception as e:
             print(f"[Gemini Error] {e}")
             return "Sorry, I ran into an error trying to process that."
+
+    def generate_sql(self, question, schema):
+        """Generate one read-only query for the supplied public schema."""
+        if not self.client:
+            return None
+        schema_lines = "\n".join(
+            f"- {row['table_name']}: {row['column_name']} ({row['data_type']})"
+            for row in schema
+        )
+        prompt = (
+            "Convert the classroom question into exactly one PostgreSQL SELECT query.\n"
+            "Use only tables and columns in this schema. Never use INSERT, UPDATE, DELETE, "
+            "DROP, ALTER, CREATE, functions with side effects, comments, or multiple statements.\n"
+            "Return SQL only, with no markdown fences. If the question is not answerable from "
+            "the schema, return NOT_A_DATABASE_QUESTION.\n\n"
+            f"Schema:\n{schema_lines}\n\nQuestion: {question}"
+        )
+        try:
+            response = self.client.models.generate_content(
+                model="gemini-3.1-flash-lite",
+                contents=prompt,
+                config=types.GenerateContentConfig(temperature=0, max_output_tokens=300),
+            )
+            sql = (response.text or "").strip()
+            sql = re.sub(r"^```(?:sql)?\s*|\s*```$", "", sql, flags=re.IGNORECASE).strip()
+            if sql.upper() == "NOT_A_DATABASE_QUESTION":
+                return None
+            return sql
+        except Exception as e:
+            print(f"[Gemini SQL Error] {e}")
+            return None
 
     def text_to_speech(self, text, voice_name="Puck"):
         """Generates audio bytes for input text using Gemini API audio modal output."""
