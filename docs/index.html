@@ -30,6 +30,13 @@
                 <tr><td>Remaining</td><td id="remainingTime">-</td></tr>
                 <tr><td>Last Reason</td><td id="disconnectReason">-</td></tr>
             </table>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
+                <label for="robotIpInput">NAO IP Address</label>
+                <input id="robotIpInput" type="text" placeholder="192.168.200.137">
+                <button id="robotConnectBtn" type="button">Connect Robot</button>
+                <button id="robotDisconnectBtn" type="button" style="background:#fee2e2;color:#b91c1c">Disconnect Robot</button>
+                <p id="robotConnectMessage" style="min-height:24px;font-weight:600"></p>
+            </div>
         </section>
     </div>
 </template>
@@ -37,6 +44,8 @@
 <script>
 renderNav("index.html");
 document.getElementById("staticPageTitle").textContent = "Dashboard";
+document.getElementById("robotIpInput").value =
+    localStorage.getItem("nao_robot_ip") || "192.168.200.137";
 
 async function refreshDashboard() {
     if (!getApiBase()) return;
@@ -47,7 +56,7 @@ async function refreshDashboard() {
             apiFetch("/api/students"),
             apiFetch("/api/vision/status")
         ]);
-        const rs = robot.status || {};
+        const rs = robot.status || robot || {};
         document.getElementById("robotCard").textContent =
             rs.connected ? "Connected" : "Offline";
         document.getElementById("sessionStatus").textContent =
@@ -72,6 +81,48 @@ async function refreshDashboard() {
 
 refreshDashboard();
 setInterval(refreshDashboard, 3000);
+
+async function connectRobot() {
+    const ip = document.getElementById("robotIpInput").value.trim();
+    const message = document.getElementById("robotConnectMessage");
+    if (!ip) {
+        message.textContent = "Enter the NAO IP address.";
+        message.style.color = "#b91c1c";
+        return;
+    }
+    localStorage.setItem("nao_robot_ip", ip);
+    message.textContent = "Connecting...";
+    message.style.color = "#475569";
+    try {
+        const result = await apiFetch("/api/connect", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ip: ip, port: 9559, duration: null})
+        });
+        message.textContent = result.message || "Robot connected.";
+        message.style.color = "#15803d";
+        await refreshDashboard();
+    } catch (error) {
+        message.textContent = error.message;
+        message.style.color = "#b91c1c";
+    }
+}
+
+async function disconnectRobot() {
+    const message = document.getElementById("robotConnectMessage");
+    try {
+        await apiFetch("/api/disconnect", {method: "POST"});
+        message.textContent = "Robot disconnected.";
+        message.style.color = "#b91c1c";
+        await refreshDashboard();
+    } catch (error) {
+        message.textContent = error.message;
+        message.style.color = "#b91c1c";
+    }
+}
+
+document.getElementById("robotConnectBtn").addEventListener("click", connectRobot);
+document.getElementById("robotDisconnectBtn").addEventListener("click", disconnectRobot);
 </script>
 </body>
 </html>

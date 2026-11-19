@@ -108,9 +108,11 @@ def session():
 
 @robot_bp.route("/ping")
 def ping():
-    connected = _refresh_robot_status()["connected"]
+    status = _refresh_robot_status()
+    connected = status["connected"]
 
     return jsonify({
         "success": True,
-        "connected": connected
+        "connected": connected,
+        "status": status
     })
