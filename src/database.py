@@ -1,13 +1,20 @@
-import sqlite3
+import os
 from datetime import datetime
-from pathlib import Path
+
+import psycopg2
+from psycopg2 import Error as PostgreSQLError
+from psycopg2.extras import RealDictCursor
+from dotenv import load_dotenv
+
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 
 # =========================================================
 # CONFIGURATION
 # =========================================================
 
-DATABASE_FILE = Path(__file__).resolve().parent / "classroom.db"
+DATABASE_URL = os.getenv("SUPABASE_DATABASE_URL")
 
 
 # =========================================================
@@ -15,19 +22,16 @@ DATABASE_FILE = Path(__file__).resolve().parent / "classroom.db"
 # =========================================================
 
 def get_connection():
+    if not DATABASE_URL:
+        raise RuntimeError(
+            "SUPABASE_DATABASE_URL is not set in the .env file."
+        )
 
-    connection = sqlite3.connect(
-        DATABASE_FILE
+    return psycopg2.connect(
+        DATABASE_URL,
+        cursor_factory=RealDictCursor,
+        connect_timeout=10
     )
-
-    connection.row_factory = sqlite3.Row
-
-    # Enable foreign-key enforcement in SQLite.
-    connection.execute(
-        "PRAGMA foreign_keys = ON"
-    )
-
-    return connection
 
 
 # =========================================================
@@ -35,202 +39,15 @@ def get_connection():
 # =========================================================
 
 def initialize_database():
-
     connection = get_connection()
-
     cursor = connection.cursor()
-
-    # -----------------------------------------------------
-    # STUDENTS
-    # -----------------------------------------------------
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS students (
-
-            student_id TEXT PRIMARY KEY,
-
-            student_name TEXT NOT NULL,
-
-            face_registered INTEGER
-                NOT NULL
-                DEFAULT 0,
-
-            face_folder TEXT,
-
-            created_at TIMESTAMP
-                DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    # -----------------------------------------------------
-    # MIGRATE EXISTING STUDENTS TABLE
-    # -----------------------------------------------------
-    try:
-        cursor.execute("""
-            ALTER TABLE students
-            ADD COLUMN programme TEXT
-        """)
-    except sqlite3.OperationalError as e:
-        if "duplicate column name" not in str(e).lower():
-            raise
-
-    # -----------------------------------------------------
-    # CLASSES
-    # -----------------------------------------------------
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS classes (
-
-            class_id INTEGER
-                PRIMARY KEY AUTOINCREMENT,
-
-            class_code TEXT
-                NOT NULL
-                UNIQUE,
-
-            class_name TEXT
-                NOT NULL,
-
-            semester TEXT,
-
-            created_at TIMESTAMP
-                DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    try:
-        cursor.execute("""
-            ALTER TABLE classes
-            ADD COLUMN semester TEXT
-        """)
-    except sqlite3.OperationalError:
-        pass
-
-    # -----------------------------------------------------
-    # CLASS ENROLLMENTS
-    # -----------------------------------------------------
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS class_enrollments (
-
-            enrollment_id INTEGER
-                PRIMARY KEY AUTOINCREMENT,
-
-            class_id INTEGER
-                NOT NULL,
-
-            student_id TEXT
-                NOT NULL,
-
-            enrolled_at TIMESTAMP
-                DEFAULT CURRENT_TIMESTAMP,
-
-            FOREIGN KEY (class_id)
-                REFERENCES classes(class_id)
-                ON DELETE CASCADE,
-
-            FOREIGN KEY (student_id)
-                REFERENCES students(student_id)
-                ON DELETE CASCADE,
-
-            UNIQUE (
-                class_id,
-                student_id
-            )
-        )
-    """)
-
-    # -----------------------------------------------------
-    # ATTENDANCE SESSIONS
-    # -----------------------------------------------------
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS attendance_sessions (
-
-            session_id INTEGER
-                PRIMARY KEY AUTOINCREMENT,
-
-            class_id INTEGER
-                NOT NULL,
-
-            session_name TEXT,
-
-            session_date TEXT
-                NOT NULL,
-
-            start_time TEXT
-                NOT NULL,
-
-            end_time TEXT,
-
-            status TEXT
-                NOT NULL
-                DEFAULT 'ACTIVE',
-
-            created_at TIMESTAMP
-                DEFAULT CURRENT_TIMESTAMP,
-
-            FOREIGN KEY (class_id)
-                REFERENCES classes(class_id)
-                ON DELETE CASCADE
-        )
-    """)
-
-    # -----------------------------------------------------
-    # ATTENDANCE RECORDS
-    # -----------------------------------------------------
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS attendance (
-
-            attendance_id INTEGER
-                PRIMARY KEY AUTOINCREMENT,
-
-            session_id INTEGER
-                NOT NULL,
-
-            student_id TEXT
-                NOT NULL,
-
-            attendance_date TEXT
-                NOT NULL,
-
-            attendance_time TEXT
-                NOT NULL,
-
-            status TEXT
-                NOT NULL
-                DEFAULT 'Present',
-
-            recognition_similarity REAL,
-
-            track_id INTEGER,
-
-            created_at TIMESTAMP
-                DEFAULT CURRENT_TIMESTAMP,
-
-            FOREIGN KEY (session_id)
-                REFERENCES attendance_sessions(session_id)
-                ON DELETE CASCADE,
-
-            FOREIGN KEY (student_id)
-                REFERENCES students(student_id)
-                ON DELETE CASCADE,
-
-            UNIQUE (
-                session_id,
-                student_id
-            )
-        )
-    """)
-
     # An ACTIVE row cannot survive an application restart as a live
     # attendance session. Require the user to explicitly start it again.
     cursor.execute("""
         UPDATE attendance_sessions
         SET
             status = 'ENDED',
-            end_time = COALESCE(end_time, ?)
+            end_time = COALESCE(end_time, %s)
         WHERE status = 'ACTIVE'
     """, (datetime.now().strftime("%H:%M:%S"),))
 
@@ -244,9 +61,58 @@ def initialize_database():
 
 
 # =========================================================
+# PROGRAMMES
+# =========================================================
+
+def get_all_programmes():
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT programme_id, programme_name, created_at
+        FROM programmes
+        ORDER BY programme_name
+    """)
+    programmes = cursor.fetchall()
+    connection.close()
+    return programmes
+
+
+def add_programme(programme_name):
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO programmes (programme_name)
+            VALUES (%s)
+            RETURNING programme_id
+        """, (programme_name,))
+        programme_id = cursor.fetchone()["programme_id"]
+        connection.commit()
+        return programme_id
+    except psycopg2.IntegrityError:
+        connection.rollback()
+        return None
+    finally:
+        connection.close()
+
+
+def delete_programme(programme_id):
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute("""
+        DELETE FROM programmes
+        WHERE programme_id = %s
+    """, (programme_id,))
+    connection.commit()
+    deleted = cursor.rowcount > 0
+    connection.close()
+    return deleted
+
+
+# =========================================================
 # ADD STUDENT
 # =========================================================
-def add_student(student_id, student_name, programme=None):
+def add_student(student_id, student_name, programme_id=None):
     connection = get_connection()
     cursor = connection.cursor()
 
@@ -255,19 +121,19 @@ def add_student(student_id, student_name, programme=None):
             INSERT INTO students (
                 student_id,
                 student_name,
-                programme
+                programme_id
             )
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
         """, (
             student_id,
             student_name,
-            programme
+            programme_id
         ))
 
         connection.commit()
         return True
 
-    except sqlite3.IntegrityError:
+    except psycopg2.IntegrityError:
         return False
 
     finally:
@@ -276,7 +142,7 @@ def add_student(student_id, student_name, programme=None):
 def update_student_profile(
     student_id,
     student_name,
-    programme=None
+    programme_id=None
 ):
     connection = get_connection()
     cursor = connection.cursor()
@@ -285,12 +151,12 @@ def update_student_profile(
         cursor.execute("""
             UPDATE students
             SET
-                student_name = ?,
-                programme = ?
-            WHERE student_id = ?
+                student_name = %s,
+                programme_id = %s
+            WHERE student_id = %s
         """, (
             student_name,
-            programme,
+            programme_id,
             student_id
         ))
 
@@ -315,7 +181,7 @@ def get_student(student_id):
     cursor.execute("""
         SELECT *
         FROM students
-        WHERE student_id = ?
+        WHERE student_id = %s
     """, (
         student_id,
     ))
@@ -364,12 +230,14 @@ def get_all_students_with_classes():
             students.student_name,
             students.face_registered,
             students.face_folder,
+            programmes.programme_id,
+            programmes.programme_name,
 
-            GROUP_CONCAT(
+            STRING_AGG(
                 classes.class_code || ' - ' || classes.class_name,
                 ', '
             ) AS classes,
-            GROUP_CONCAT(class_enrollments.class_id) AS class_ids
+            STRING_AGG(class_enrollments.class_id::TEXT, ',') AS class_ids
 
         FROM students
 
@@ -381,11 +249,16 @@ def get_all_students_with_classes():
             ON class_enrollments.class_id
             = classes.class_id
 
+        LEFT JOIN programmes
+            ON students.programme_id = programmes.programme_id
+
         GROUP BY
             students.student_id,
             students.student_name,
             students.face_registered,
-            students.face_folder
+            students.face_folder,
+            programmes.programme_id,
+            programmes.programme_name
 
         ORDER BY
             students.student_id
@@ -427,9 +300,9 @@ def update_face_registration(
 
         SET
             face_registered = 1,
-            face_folder = ?
+            face_folder = %s
 
-        WHERE student_id = ?
+        WHERE student_id = %s
     """, (
         face_folder,
         student_id
@@ -453,7 +326,11 @@ def update_face_registration(
 def add_class(
     class_code,
     class_name,
-    semester=None
+    semester=None,
+    description=None,
+    schedule_start=None,
+    schedule_end=None,
+    schedule_days=None
 ):
     connection = get_connection()
     cursor = connection.cursor()
@@ -463,20 +340,31 @@ def add_class(
             INSERT INTO classes (
                 class_code,
                 class_name,
-                semester
+                semester,
+                description,
+                schedule_start,
+                schedule_end,
+                schedule_days
             )
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             class_code,
             class_name,
-            semester
+            semester,
+            description,
+            schedule_start,
+            schedule_end,
+            schedule_days
         ))
 
         connection.commit()
 
-        return cursor.lastrowid
+        cursor.execute(
+            "SELECT currval(pg_get_serial_sequence('classes', 'class_id')) AS class_id"
+        )
+        return cursor.fetchone()["class_id"]
 
-    except sqlite3.IntegrityError:
+    except psycopg2.IntegrityError:
         return None
 
     finally:
@@ -495,7 +383,7 @@ def get_class_by_code(class_code):
     cursor.execute("""
         SELECT *
         FROM classes
-        WHERE class_code = ?
+        WHERE class_code = %s
     """, (
         class_code,
     ))
@@ -520,7 +408,7 @@ def get_class_by_id(class_id):
     cursor.execute("""
         SELECT *
         FROM classes
-        WHERE class_id = ?
+        WHERE class_id = %s
     """, (
         class_id,
     ))
@@ -554,7 +442,16 @@ def get_all_classes():
 
     return classes
 
-def update_class(class_id, class_code, class_name, semester=None):
+def update_class(
+    class_id,
+    class_code,
+    class_name,
+    semester=None,
+    description=None,
+    schedule_start=None,
+    schedule_end=None,
+    schedule_days=None
+):
     connection = get_connection()
     cursor = connection.cursor()
 
@@ -562,14 +459,22 @@ def update_class(class_id, class_code, class_name, semester=None):
         cursor.execute("""
             UPDATE classes
             SET
-                class_code = ?,
-                class_name = ?,
-                semester = ?
-            WHERE class_id = ?
+                class_code = %s,
+                class_name = %s,
+                semester = %s,
+                description = %s,
+                schedule_start = %s,
+                schedule_end = %s,
+                schedule_days = %s
+            WHERE class_id = %s
         """, (
             class_code,
             class_name,
             semester,
+            description,
+            schedule_start,
+            schedule_end,
+            schedule_days,
             class_id
         ))
 
@@ -577,7 +482,7 @@ def update_class(class_id, class_code, class_name, semester=None):
 
         return cursor.rowcount > 0
 
-    except sqlite3.IntegrityError:
+    except psycopg2.IntegrityError:
         return False
 
     finally:
@@ -590,7 +495,7 @@ def delete_class(class_id):
     try:
         cursor.execute("""
             DELETE FROM classes
-            WHERE class_id = ?
+            WHERE class_id = %s
         """, (class_id,))
 
         connection.commit()
@@ -607,7 +512,7 @@ def delete_student(student_id):
     try:
         cursor.execute("""
             DELETE FROM students
-            WHERE student_id = ?
+            WHERE student_id = %s
         """, (student_id,))
 
         connection.commit()
@@ -636,7 +541,7 @@ def enroll_student(
                 class_id,
                 student_id
             )
-            VALUES (?, ?)
+            VALUES (%s, %s)
         """, (
             class_id,
             student_id
@@ -646,7 +551,7 @@ def enroll_student(
 
         return True
 
-    except sqlite3.IntegrityError:
+    except psycopg2.IntegrityError:
 
         return False
 
@@ -662,17 +567,17 @@ def set_student_enrollments(student_id, class_ids):
     try:
         normalized_ids = sorted(set(int(class_id) for class_id in class_ids))
         cursor.execute(
-            "DELETE FROM class_enrollments WHERE student_id = ?",
+            "DELETE FROM class_enrollments WHERE student_id = %s",
             (student_id,)
         )
         for class_id in normalized_ids:
             cursor.execute("""
                 INSERT INTO class_enrollments (class_id, student_id)
-                VALUES (?, ?)
+                VALUES (%s, %s)
             """, (class_id, student_id))
         connection.commit()
         return True
-    except (ValueError, sqlite3.IntegrityError):
+    except (ValueError, psycopg2.IntegrityError):
         connection.rollback()
         return False
     finally:
@@ -697,8 +602,8 @@ def is_student_enrolled(
 
         FROM class_enrollments
 
-        WHERE class_id = ?
-        AND student_id = ?
+        WHERE class_id = %s
+        AND student_id = %s
     """, (
         class_id,
         student_id
@@ -736,7 +641,7 @@ def get_enrolled_students(class_id):
             ON class_enrollments.student_id
             = students.student_id
 
-        WHERE class_enrollments.class_id = ?
+        WHERE class_enrollments.class_id = %s
 
         ORDER BY students.student_id
     """, (
@@ -792,7 +697,7 @@ def create_attendance_session(
             start_time,
             status
         )
-        VALUES (?, ?, ?, ?, 'ACTIVE')
+        VALUES (%s, %s, %s, %s, 'ACTIVE')
     """, (
         class_id,
         session_name,
@@ -802,7 +707,10 @@ def create_attendance_session(
 
     connection.commit()
 
-    session_id = cursor.lastrowid
+    cursor.execute(
+        "SELECT currval(pg_get_serial_sequence('attendance_sessions', 'session_id')) AS session_id"
+    )
+    session_id = cursor.fetchone()["session_id"]
 
     connection.close()
 
@@ -866,9 +774,9 @@ def end_attendance_session(
 
         SET
             status = 'ENDED',
-            end_time = ?
+            end_time = %s
 
-        WHERE session_id = ?
+        WHERE session_id = %s
         AND status = 'ACTIVE'
     """, (
         end_time,
@@ -904,8 +812,8 @@ def attendance_exists(
 
         FROM attendance
 
-        WHERE session_id = ?
-        AND student_id = ?
+        WHERE session_id = %s
+        AND student_id = %s
     """, (
         session_id,
         student_id
@@ -950,13 +858,13 @@ def record_attendance(
                 track_id
             )
             VALUES (
-                ?,
-                ?,
-                ?,
-                ?,
+                %s,
+                %s,
+                %s,
+                %s,
                 'Present',
-                ?,
-                ?
+                %s,
+                %s
             )
         """, (
             session_id,
@@ -971,7 +879,7 @@ def record_attendance(
 
         return True
 
-    except sqlite3.IntegrityError:
+    except psycopg2.IntegrityError:
 
         return False
 
@@ -1012,7 +920,7 @@ def get_session_attendance(
             ON attendance.student_id
             = students.student_id
 
-        WHERE attendance.session_id = ?
+        WHERE attendance.session_id = %s
 
         ORDER BY
             attendance.attendance_time
@@ -1062,7 +970,7 @@ def get_live_attendance(session_id):
             ON attendance.session_id = attendance_sessions.session_id
             AND attendance.student_id = students.student_id
 
-        WHERE attendance_sessions.session_id = ?
+        WHERE attendance_sessions.session_id = %s
 
         ORDER BY students.student_id
     """, (session_id,))

@@ -15,14 +15,35 @@
             <label>Subject Code</label><input id="subjectCode" type="text" placeholder="BMIT2073">
             <label>Subject Name</label><input id="subjectName" type="text" placeholder="Testing Class">
             <label>Semester</label><input id="semester" type="text" placeholder="2026 Semester 2">
+            <label>Subject Description</label>
+            <textarea id="subjectDescription" rows="4" placeholder="Describe the subject topics for voice assistance."></textarea>
+            <label>Weekly Start Time</label><input id="scheduleStart" type="time">
+            <label>Weekly End Time</label><input id="scheduleEnd" type="time">
+            <label>Weekly Class Days</label>
+            <div id="scheduleDays">
+                <label><input type="checkbox" value="Monday"> Monday</label>
+                <label><input type="checkbox" value="Tuesday"> Tuesday</label>
+                <label><input type="checkbox" value="Wednesday"> Wednesday</label>
+                <label><input type="checkbox" value="Thursday"> Thursday</label>
+                <label><input type="checkbox" value="Friday"> Friday</label>
+                <label><input type="checkbox" value="Saturday"> Saturday</label>
+                <label><input type="checkbox" value="Sunday"> Sunday</label>
+            </div>
             <button id="addSubjectBtn">Create Subject</button><p id="subjectMessage"></p>
         </section>
         <section class="panel">
             <h2><i class="fa-solid fa-user-graduate"></i> Register Student</h2>
             <label>Student ID</label><input id="studentId" type="text" placeholder="S001">
             <label>Student Name</label><input id="studentName" type="text" placeholder="Student Name">
-            <label>Programme</label><input id="programme" type="text" placeholder="Bachelor of Information Technology">
-            <label>Subject</label><select id="studentSubject"><option value="">No subject</option></select>
+            <label>Programme</label>
+            <select id="programme"><option value="">No programme / Select later</option></select>
+            <label>Create New Programme</label>
+            <input id="newProgrammeName" type="text" placeholder="Bachelor of Information Technology">
+            <button id="createProgrammeBtn" type="button">Create Programme</button>
+            <p id="programmeMessage"></p>
+            <label>Subjects</label>
+            <select id="studentSubject" multiple size="6"><option value="">No subject</option></select>
+            <small>Hold Ctrl or Command to select multiple non-clashing subjects.</small>
             <button id="registerStudentBtn">Register Student</button><p id="studentMessage"></p>
         </section>
     </div>
@@ -43,6 +64,9 @@ async function loadSubjects() {
     const data = await apiFetch("/api/subjects");
     const select = document.getElementById("studentSubject");
     select.innerHTML = '<option value="">No subject</option>';
+    const selectedIds = new Set(
+        Array.from(select.selectedOptions).map(option => Number(option.value)).filter(Boolean)
+    );
     (data.subjects || []).forEach(subject => {
         select.insertAdjacentHTML("beforeend",
             `<option value="${subject.class_id}">${escapeHtml(subject.class_code)} - ${escapeHtml(subject.class_name)}</option>`);
@@ -55,6 +79,16 @@ async function loadStudents() {
     if (!data.students || !data.students.length) {
         body.innerHTML = '<tr><td colspan="6" style="text-align:center">No students registered.</td></tr>';
         return;
+    }
+
+    async function loadProgrammes() {
+        const data = await apiFetch("/api/programmes");
+        const select = document.getElementById("programme");
+        select.innerHTML = '<option value="">No programme / Select later</option>';
+        (data.programmes || []).forEach(programme => {
+            select.insertAdjacentHTML("beforeend",
+                `<option value="${programme.programme_id}">${escapeHtml(programme.programme_name)}</option>`);
+        });
     }
     body.innerHTML = data.students.map(student => {
         const registered = Number(student.face_registered) === 1;
@@ -73,7 +107,13 @@ document.getElementById("addSubjectBtn").addEventListener("click", async () => {
             body: JSON.stringify({
                 class_code: document.getElementById("subjectCode").value.trim(),
                 class_name: document.getElementById("subjectName").value.trim(),
-                semester: document.getElementById("semester").value.trim()
+                semester: document.getElementById("semester").value.trim(),
+                description: document.getElementById("subjectDescription").value.trim(),
+                schedule_start: document.getElementById("scheduleStart").value,
+                schedule_end: document.getElementById("scheduleEnd").value,
+                schedule_days: Array.from(
+                    document.querySelectorAll("#scheduleDays input:checked")
+                ).map(input => input.value)
             })
         });
         document.getElementById("subjectMessage").textContent = "Subject created successfully.";
@@ -91,8 +131,10 @@ document.getElementById("registerStudentBtn").addEventListener("click", async ()
             body: JSON.stringify({
                 student_id: document.getElementById("studentId").value.trim(),
                 student_name: document.getElementById("studentName").value.trim(),
-                programme: document.getElementById("programme").value.trim(),
-                class_id: document.getElementById("studentSubject").value
+                programme_id: document.getElementById("programme").value || null,
+                class_ids: Array.from(
+                    document.getElementById("studentSubject").selectedOptions
+                ).map(option => Number(option.value)).filter(Boolean)
             })
         });
         document.getElementById("studentMessage").textContent = "Student registered successfully.";
@@ -120,7 +162,31 @@ async function startFaceRegistration(studentId) {
     }
 }
 
-Promise.resolve(loadSubjects()).then(loadStudents).catch(error => alert(error.message));
+document.getElementById("createProgrammeBtn").addEventListener("click", async () => {
+    const name = document.getElementById("newProgrammeName").value.trim();
+    if (!name) {
+        document.getElementById("programmeMessage").textContent = "Programme name is required.";
+        return;
+    }
+    try {
+        await apiFetch("/api/programmes", {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({programme_name: name})
+        });
+        document.getElementById("newProgrammeName").value = "";
+        document.getElementById("programmeMessage").textContent =
+            "Programme created successfully.";
+        await loadProgrammes();
+    } catch (error) {
+        document.getElementById("programmeMessage").textContent = error.message;
+    }
+});
+
+Promise.resolve(loadSubjects())
+    .then(loadStudents)
+    .then(loadProgrammes)
+    .catch(error => alert(error.message));
 </script>
 </body>
 </html>

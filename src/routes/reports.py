@@ -145,7 +145,7 @@ def attendance_report():
                 class_code,
                 class_name
             FROM classes
-            WHERE class_id = ?
+            WHERE class_id = %s
         """, (
             class_id,
         ))
@@ -166,8 +166,8 @@ def attendance_report():
             SELECT
                 session_id
             FROM attendance_sessions
-            WHERE class_id = ?
-            AND session_date = ?
+            WHERE class_id = %s
+            AND session_date = %s
             ORDER BY session_id DESC
             LIMIT 1
         """, (
@@ -209,9 +209,9 @@ def attendance_report():
                 LEFT JOIN attendance
                     ON attendance.student_id
                     = students.student_id
-                    AND attendance.session_id = ?
+                    AND attendance.session_id = %s
 
-                WHERE class_enrollments.class_id = ?
+                WHERE class_enrollments.class_id = %s
 
                 ORDER BY students.student_id
             """, (
@@ -238,7 +238,7 @@ def attendance_report():
                     ON class_enrollments.student_id
                     = students.student_id
 
-                WHERE class_enrollments.class_id = ?
+                WHERE class_enrollments.class_id = %s
 
                 ORDER BY students.student_id
             """, (
