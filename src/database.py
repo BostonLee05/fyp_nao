@@ -92,11 +92,6 @@ def initialize_database():
     seed_commands = [
         ("attendance", "attendance", "Attendance Mode Activating..."),
         ("hello", "robot", "Hello, this is from the database command."),
-        ("stand_up", "stand_up", "Standing up."),
-        ("sit_down", "sit_down", "Sitting down."),
-        ("wake_up", "wake_up", "Waking up."),
-        ("rest", "rest", "Going to rest mode."),
-        ("crouch", "crouch", "Crouching."),
     ]
     for command_key, action, response in seed_commands:
         cursor.execute("""
@@ -109,11 +104,6 @@ def initialize_database():
         "attendance": ["attendance mode", "start attendance", "begin attendance",
                        "take attendance", "mark attendance", "record attendance"],
         "hello": ["hello"],
-        "stand_up": ["stand up", "standup"],
-        "sit_down": ["sit down", "sitdown"],
-        "wake_up": ["wake up", "wakeup"],
-        "rest": ["rest"],
-        "crouch": ["crouch"],
     }
     for command_key, phrases in seed_triggers.items():
         for phrase in phrases:

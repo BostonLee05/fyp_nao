@@ -586,6 +586,13 @@ class VoiceRecognition:
         if not self.speaker:
             return None
 
+        local_result = self._handle_local_command(
+            normalized_text,
+            compact_text,
+        )
+        if local_result:
+            return local_result
+
         command = self._find_database_command(normalized_text, compact_text)
         if command:
             return self._execute_database_command(command)
@@ -600,6 +607,60 @@ class VoiceRecognition:
 
         return None
 
+    def _handle_local_command(self, normalized_text, compact_text):
+        """Handle robot movement commands locally, independent of Supabase."""
+        if self._contains_command(normalized_text, compact_text, ["stand up", "standup"]):
+            response = "Standing up."
+            self._go_to_posture("StandInit")
+            self.speaker.speak(response)
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
+
+        if self._contains_command(normalized_text, compact_text, ["sit down", "sitdown"]):
+            response = "Sitting down."
+            self.speaker.speak(response, animated=False)
+            self._go_to_posture("Sit")
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
+
+        if self._contains_command(normalized_text, compact_text, ["wake up", "wakeup"]):
+            response = "Waking up."
+            self._wake_up()
+            self.speaker.speak(response)
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
+
+        if "rest" in normalized_text:
+            response = "Going to rest mode."
+            self.speaker.speak(response, animated=False)
+            self._rest()
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
+
+        if "crouch" in normalized_text:
+            response = "Crouching."
+            self.speaker.speak(response, animated=False)
+            self._go_to_posture("Crouch")
+            return {
+                "action": "Robot",
+                "response": response,
+                "status": "Completed",
+            }
+
+        return None
+
     @staticmethod
     def _find_database_command(normalized_text, compact_text):
         """Return the first enabled Supabase command matching the transcript."""
@@ -610,6 +671,8 @@ class VoiceRecognition:
             return None
 
         for command in commands:
+            if command.get("command_key") not in {"attendance", "hello"}:
+                continue
             for phrase in command.get("triggers", []) or []:
                 normalized_phrase = " ".join(str(phrase).lower().split())
                 compact_phrase = normalized_phrase.replace(" ", "")
@@ -618,25 +681,10 @@ class VoiceRecognition:
         return None
 
     def _execute_database_command(self, command):
-        """Execute a Supabase command while keeping robot actions in Python."""
+        """Execute response-only commands loaded from Supabase."""
         command_key = command.get("command_key")
         response = command.get("response") or "Command completed."
-
-        if command_key == "stand_up":
-            self._go_to_posture("StandInit")
-        elif command_key == "sit_down":
-            self._go_to_posture("Sit")
-        elif command_key == "wake_up":
-            self._wake_up()
-        elif command_key == "rest":
-            self._rest()
-        elif command_key == "crouch":
-            self._go_to_posture("Crouch")
-
-        self.speaker.speak(
-            response,
-            animated=False if command_key in {"sit_down", "rest", "crouch"} else True,
-        )
+        self.speaker.speak(response)
         return {
             "action": "Attendance" if command_key == "attendance" else "Robot",
             "response": response,
