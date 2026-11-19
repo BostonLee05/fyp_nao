@@ -13,6 +13,18 @@
         .dashboard-grid + .panel { margin-top:28px; }
         .dashboard-grid { gap:28px; }
         .dashboard-grid .panel { min-height:0; }
+        .dashboard-grid + .panel {
+            margin-top:28px;
+        }
+        .programme-create {
+            display:flex;
+            flex-direction:column;
+            gap:10px;
+            margin:8px 0 14px;
+        }
+        .programme-create button {
+            align-self:flex-start;
+        }
         .day-picker {
             border:0;
             padding:0;
@@ -58,10 +70,36 @@
             display:flex;
             flex-direction:column;
             gap:8px;
-            min-width:112px;
+            min-width:180px;
         }
         .student-action-stack button {
             width:100%;
+        }
+        .student-action-primary {
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:8px;
+        }
+        .student-action-primary button,
+        .student-action-face {
+            min-height:38px;
+            border:0;
+            border-radius:8px;
+            font-weight:700;
+            cursor:pointer;
+        }
+        .student-action-edit {
+            background:#dbeafe;
+            color:#1d4ed8;
+        }
+        .student-action-delete {
+            background:#fee2e2;
+            color:#b91c1c;
+        }
+        .student-action-face {
+            width:100%;
+            background:#dcfce7;
+            color:#15803d;
         }
         #studentSubject option:disabled {
             color:#94a3b8;
@@ -101,10 +139,12 @@
             <label>Student Name</label><input id="studentName" type="text" placeholder="Student Name">
             <label>Programme</label>
             <select id="programme"><option value="">No programme / Select later</option></select>
-            <label>Create New Programme</label>
-            <input id="newProgrammeName" type="text" placeholder="Bachelor of Information Technology">
-            <button id="createProgrammeBtn" type="button">Create Programme</button>
-            <p id="programmeMessage"></p>
+            <div class="programme-create">
+                <label>Create New Programme</label>
+                <input id="newProgrammeName" type="text" placeholder="Bachelor of Information Technology">
+                <button id="createProgrammeBtn" type="button">Create Programme</button>
+                <p id="programmeMessage"></p>
+            </div>
             <label>Subjects</label>
             <select id="studentSubject" multiple size="6"><option value="">No subject</option></select>
             <small>Hold Ctrl or Command to select multiple non-clashing subjects.</small>
@@ -191,9 +231,11 @@ async function loadStudents() {
             <td>${escapeHtml(student.programme_name || "-")}</td><td>${escapeHtml(student.classes || "Not enrolled")}</td>
             <td>${registered ? "Registered" : "Not registered"}</td>
             <td><div class="student-action-stack">
-                <button type="button" onclick="editStudent('${escapeHtml(student.student_id)}','${escapeHtml(student.student_name)}','${escapeHtml(student.programme_id || "")}',[${classIds}])">Edit</button>
-                <button type="button" class="delete-btn" onclick="deleteStudent('${escapeHtml(student.student_id)}')">Delete</button>
-                ${registered ? "" : `<button type="button" onclick="startFaceRegistration('${escapeHtml(student.student_id)}')">Register Face</button>`}
+                <div class="student-action-primary">
+                    <button type="button" class="student-action-edit" onclick="editStudent('${escapeHtml(student.student_id)}','${escapeHtml(student.student_name)}','${escapeHtml(student.programme_id || "")}',[${classIds}])">Edit</button>
+                    <button type="button" class="student-action-delete" onclick="deleteStudent('${escapeHtml(student.student_id)}')">Delete</button>
+                </div>
+                ${registered ? "" : `<button type="button" class="student-action-face" onclick="startFaceRegistration('${escapeHtml(student.student_id)}')">Register Face</button>`}
             </div></td></tr>`;
     }).join("");
 }

@@ -155,10 +155,33 @@
     display:flex;
     flex-direction:column;
     gap:8px;
-    min-width:112px;
+    min-width:180px;
 }
 .student-action-stack .action-btn {
     width:100%;
+}
+.student-action-primary {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+}
+.student-action-primary .action-btn {
+    min-height:38px;
+    font-weight:700;
+}
+.student-action-primary .edit-btn {
+    background:#dbeafe;
+    color:#1d4ed8;
+}
+.student-action-primary .delete-btn {
+    background:#fee2e2;
+    color:#b91c1c;
+}
+.student-action-stack .face-btn {
+    min-height:38px;
+    background:#dcfce7;
+    color:#15803d;
+    font-weight:700;
 }
 .subjects-page .dashboard-grid {
     margin-bottom:28px;
@@ -529,7 +552,7 @@ function resetStudentForm(){editingStudentId=null;studentForm.reset();studentId.
 cancelStudentEditBtn.addEventListener("click",()=>{resetStudentForm();studentMessage.textContent=""});
 async function deleteStudent(id){if(!confirm(`Delete student "${id}"?\n\nThis will also remove the student's subject enrollments and related attendance records.`))return;try{const r=await fetch(`${studentsUrl}/${encodeURIComponent(id)}`,{method:"DELETE"}),d=await r.json();if(!r.ok||!d.success){showFormMessage(studentMessage,d.message||"Unable to delete student.","error",0);return}if(String(editingStudentId)===String(id))resetStudentForm();showFormMessage(studentMessage,"Student deleted successfully.","success",3);await loadStudents()}catch(e){console.error(e);showFormMessage(studentMessage,"Unable to connect to the server.","error",0)}}
 
-async function loadStudents(){try{const r=await fetch(studentsUrl+"?t="+Date.now(),{cache:"no-store"}),d=await r.json();if(!r.ok||!d.success)throw Error(d.message||"Unable to load students.");const b=document.getElementById("studentsBody");b.innerHTML="";if(!d.students.length){b.innerHTML='<tr><td colspan="7" class="table-empty">No students registered yet.</td></tr>';return}d.students.forEach(s=>{const registered=Number(s.face_registered)===1;const studentId=escapeHtml(s.student_id);const studentName=escapeHtml(s.student_name);const programmeName=escapeHtml(s.programme_name||"");const programmeId=Number(s.programme_id||0);const classIds=String(s.class_ids||"").split(",").filter(Boolean).map(Number).join(",");const row=document.createElement("tr");row.innerHTML=`<td>👤</td><td>${studentId}</td><td>${studentName}</td><td>${programmeName||"-"}</td><td class="student-subjects">${formatSubjects(s.classes||s.subjects)}</td><td class="face-status">${registered?"🟢 Registered":"🔴 Not registered"}</td><td><div class="student-action-stack"><button type="button" class="action-btn edit-btn" onclick="editStudent('${studentId}','${studentName}','${programmeId||""}',[${classIds}])"><i class="fa-solid fa-pen"></i> Edit</button><button type="button" class="action-btn delete-btn" onclick="deleteStudent('${studentId}')"><i class="fa-solid fa-trash"></i> Delete</button>${registered?"":`<button type="button" class="action-btn face-btn" onclick="startFaceRegistration('${studentId}')"><i class="fa-solid fa-camera"></i> Register Face</button>`}</div></td>`;b.appendChild(row)})}catch(e){console.error(e);document.getElementById("studentsBody").innerHTML='<tr><td colspan="7" class="table-empty">Failed to load students.</td></tr>'}}
+async function loadStudents(){try{const r=await fetch(studentsUrl+"?t="+Date.now(),{cache:"no-store"}),d=await r.json();if(!r.ok||!d.success)throw Error(d.message||"Unable to load students.");const b=document.getElementById("studentsBody");b.innerHTML="";if(!d.students.length){b.innerHTML='<tr><td colspan="7" class="table-empty">No students registered yet.</td></tr>';return}d.students.forEach(s=>{const registered=Number(s.face_registered)===1;const studentId=escapeHtml(s.student_id);const studentName=escapeHtml(s.student_name);const programmeName=escapeHtml(s.programme_name||"");const programmeId=Number(s.programme_id||0);const classIds=String(s.class_ids||"").split(",").filter(Boolean).map(Number).join(",");const row=document.createElement("tr");row.innerHTML=`<td>👤</td><td>${studentId}</td><td>${studentName}</td><td>${programmeName||"-"}</td><td class="student-subjects">${formatSubjects(s.classes||s.subjects)}</td><td class="face-status">${registered?"🟢 Registered":"🔴 Not registered"}</td><td><div class="student-action-stack"><div class="student-action-primary"><button type="button" class="action-btn edit-btn" onclick="editStudent('${studentId}','${studentName}','${programmeId||""}',[${classIds}])"><i class="fa-solid fa-pen"></i> Edit</button><button type="button" class="action-btn delete-btn" onclick="deleteStudent('${studentId}')"><i class="fa-solid fa-trash"></i> Delete</button></div>${registered?"":`<button type="button" class="action-btn face-btn" onclick="startFaceRegistration('${studentId}')"><i class="fa-solid fa-camera"></i> Register Face</button>`}</div></td>`;b.appendChild(row)})}catch(e){console.error(e);document.getElementById("studentsBody").innerHTML='<tr><td colspan="7" class="table-empty">Failed to load students.</td></tr>'}}
 
 function formatSubjects(value){if(!value)return "Not enrolled";return value.split(",").map(subject=>escapeHtml(subject.trim())).join("<br>")}
 
