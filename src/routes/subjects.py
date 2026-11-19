@@ -25,6 +25,7 @@ from database import (
     get_all_programmes,
     add_programme,
     delete_programme,
+    update_programme,
 )
 
 from nao_api import get_nao_manager
@@ -316,6 +317,26 @@ def remove_programme(programme_id):
     return jsonify({
         "success": True,
         "message": "Programme deleted successfully."
+    })
+
+
+@subjects_bp.route("/api/programmes/<int:programme_id>", methods=["PUT"])
+def edit_programme(programme_id):
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("programme_name", "")).strip()
+    if not name:
+        return jsonify({
+            "success": False,
+            "message": "Programme name is required."
+        }), 400
+    if not update_programme(programme_id, name):
+        return jsonify({
+            "success": False,
+            "message": "Programme not found or name already exists."
+        }), 409
+    return jsonify({
+        "success": True,
+        "message": "Programme updated successfully."
     })
 
 

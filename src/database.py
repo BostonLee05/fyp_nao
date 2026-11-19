@@ -109,6 +109,24 @@ def delete_programme(programme_id):
     return deleted
 
 
+def update_programme(programme_id, programme_name):
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute("""
+            UPDATE programmes
+            SET programme_name = %s
+            WHERE programme_id = %s
+        """, (programme_name, programme_id))
+        connection.commit()
+        return cursor.rowcount > 0
+    except psycopg2.IntegrityError:
+        connection.rollback()
+        return False
+    finally:
+        connection.close()
+
+
 # =========================================================
 # ADD STUDENT
 # =========================================================

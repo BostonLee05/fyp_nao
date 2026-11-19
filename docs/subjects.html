@@ -10,365 +10,358 @@
 <body>
 <template id="pageTemplate">
     <style>
-        .dashboard-grid + .panel { margin-top:28px; }
-        .dashboard-grid { gap:28px; }
-        .dashboard-grid .panel { min-height:0; }
-        .dashboard-grid + .panel {
-            margin-top:28px;
-        }
-        .programme-create {
-            display:flex;
-            flex-direction:column;
-            gap:10px;
-            margin:8px 0 14px;
-        }
-        .programme-create button {
-            align-self:flex-start;
-        }
-        .day-picker {
-            border:0;
-            padding:0;
-            margin:4px 0 14px;
-        }
-        .day-picker legend {
-            width:100%;
-            margin-bottom:10px;
-            font-weight:700;
-        }
-        .day-options {
-            display:grid;
-            grid-template-columns:repeat(7,minmax(64px,1fr));
-            gap:8px;
-        }
-        .day-options label {
-            display:grid;
-            grid-template-rows:auto 32px;
-            justify-items:center;
-            align-items:center;
-            gap:6px;
-            min-width:0;
-            padding:10px 4px 6px;
-            border:1px solid #e2e8f0;
-            border-radius:10px;
-            background:#f8fafc;
-            font-size:12px;
-            font-weight:600;
-            cursor:pointer;
-        }
-        .day-options label:has(input:checked) {
-            border-color:#2563eb;
-            background:#eff6ff;
-            color:#1d4ed8;
-        }
-        .day-options input {
-            width:18px;
-            height:18px;
-            accent-color:#2563eb;
-            cursor:pointer;
-        }
-        .student-action-stack {
-            display:flex;
-            flex-direction:column;
-            gap:8px;
-            min-width:180px;
-        }
-        .student-action-stack button {
-            width:100%;
-        }
-        .student-action-primary {
-            display:grid;
-            grid-template-columns:1fr 1fr;
-            gap:8px;
-        }
-        .student-action-primary button,
-        .student-action-face {
-            min-height:38px;
-            border:0;
-            border-radius:8px;
-            font-weight:700;
-            cursor:pointer;
-        }
-        .student-action-edit {
-            background:#dbeafe;
-            color:#1d4ed8;
-        }
-        .student-action-delete {
-            background:#fee2e2;
-            color:#b91c1c;
-        }
-        .student-action-face {
-            width:100%;
-            background:#dcfce7;
-            color:#15803d;
-        }
-        #studentSubject option:disabled {
-            color:#94a3b8;
-            background:#f1f5f9;
-        }
-        @media (max-width:700px) {
-            .day-options { grid-template-columns:repeat(4,minmax(64px,1fr)); }
-        }
+        .management-tabs{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap}
+        .management-tab{border:1px solid #dbe4f0;background:#fff;color:#475569;padding:10px 16px;border-radius:10px;cursor:pointer;font-weight:700}
+        .management-tab.active{background:#2563eb;color:#fff;border-color:#2563eb}
+        .management-view{display:none}
+        .management-view.active{display:block}
+        .management-grid{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:24px;align-items:start}
+        .management-grid .panel{margin:0;min-height:0}
+        .management-grid form,.programme-form{display:flex;flex-direction:column;gap:10px}
+        .management-grid textarea{min-height:90px;resize:vertical}
+        .records-section{margin-top:24px}
+        .records-container{width:100%;overflow-x:auto}
+        .records-container table{width:100%;min-width:680px}
+        .records-container th,.records-container td{vertical-align:middle;padding:12px 10px}
+        .action-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;min-width:150px}
+        .action-row button,.face-row button{width:100%;min-height:38px;border:0;border-radius:8px;font-weight:700;cursor:pointer}
+        .edit-btn{background:#dbeafe;color:#1d4ed8}
+        .delete-btn{background:#fee2e2;color:#b91c1c}
+        .face-btn{background:#dcfce7;color:#15803d}
+        .face-row{margin-top:8px;min-width:150px}
+        .day-options{display:grid;grid-template-columns:repeat(7,minmax(64px,1fr));gap:8px}
+        .day-picker{border:0;padding:0;margin:4px 0 14px}
+        .day-picker legend{width:100%;margin-bottom:10px;font-weight:700}
+        .day-options label{display:grid;grid-template-rows:auto 32px;justify-items:center;align-items:center;padding:10px 4px 6px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;font-size:12px;font-weight:600;cursor:pointer}
+        .day-options label:has(input:checked){border-color:#2563eb;background:#eff6ff;color:#1d4ed8}
+        .day-options input{width:18px;height:18px;accent-color:#2563eb;cursor:pointer}
+        #studentSubject option:disabled{color:#94a3b8;background:#f1f5f9}
+        .form-message{min-height:24px;font-weight:600}
+        .form-message.success{color:#15803d}
+        .form-message.error{color:#b91c1c}
+        @media(max-width:900px){.management-grid{grid-template-columns:1fr}.day-options{grid-template-columns:repeat(4,minmax(64px,1fr))}}
     </style>
-    <div class="dashboard-grid">
-        <section class="panel">
-            <h2><i class="fa-solid fa-book"></i> Create Subject</h2>
-            <label>Subject Code</label><input id="subjectCode" type="text" placeholder="BMIT2073">
-            <label>Subject Name</label><input id="subjectName" type="text" placeholder="Testing Class">
-            <label>Semester</label><input id="semester" type="text" placeholder="2026 Semester 2">
-            <label>Subject Description</label>
-            <textarea id="subjectDescription" rows="4" placeholder="Describe the subject topics for voice assistance."></textarea>
-            <label>Weekly Start Time</label><input id="scheduleStart" type="time">
-            <label>Weekly End Time</label><input id="scheduleEnd" type="time">
-            <fieldset class="day-picker">
-                <legend>Weekly Class Days</legend>
-                <div id="scheduleDays" class="day-options">
-                    <label><span>Monday</span><input type="checkbox" value="Monday"></label>
-                    <label><span>Tuesday</span><input type="checkbox" value="Tuesday"></label>
-                    <label><span>Wednesday</span><input type="checkbox" value="Wednesday"></label>
-                    <label><span>Thursday</span><input type="checkbox" value="Thursday"></label>
-                    <label><span>Friday</span><input type="checkbox" value="Friday"></label>
-                    <label><span>Saturday</span><input type="checkbox" value="Saturday"></label>
-                    <label><span>Sunday</span><input type="checkbox" value="Sunday"></label>
+
+    <div class="management-tabs">
+        <button class="management-tab active" type="button" data-view="programmeView"><i class="fa-solid fa-building"></i> Programmes</button>
+        <button class="management-tab" type="button" data-view="subjectView"><i class="fa-solid fa-book"></i> Subjects</button>
+        <button class="management-tab" type="button" data-view="studentView"><i class="fa-solid fa-user-graduate"></i> Students</button>
+    </div>
+
+    <section id="programmeView" class="management-view active">
+        <div class="management-grid">
+            <section class="panel">
+                <h2 id="programmeFormTitle">Create Programme</h2>
+                <form id="programmeForm" class="programme-form">
+                    <input id="programmeId" type="hidden">
+                    <label for="programmeName">Programme Name</label>
+                    <input id="programmeName" type="text" placeholder="Bachelor of Information Technology">
+                    <button id="saveProgrammeBtn" type="submit">Create Programme</button>
+                    <button id="cancelProgrammeEditBtn" type="button" style="display:none">Cancel Edit</button>
+                    <p id="programmeMessage" class="form-message"></p>
+                </form>
+            </section>
+            <section class="panel">
+                <h2>Registered Programmes</h2>
+                <div class="records-container">
+                    <table class="attendance-table">
+                        <thead><tr><th>Name</th><th>Actions</th></tr></thead>
+                        <tbody id="programmesBody"><tr><td colspan="2" style="text-align:center">Loading programmes...</td></tr></tbody>
+                    </table>
                 </div>
-            </fieldset>
-            <button id="addSubjectBtn">Create Subject</button><p id="subjectMessage"></p>
-        </section>
-        <section class="panel">
-            <h2><i class="fa-solid fa-user-graduate"></i> Register Student</h2>
-            <label>Student ID</label><input id="studentId" type="text" placeholder="S001">
-            <label>Student Name</label><input id="studentName" type="text" placeholder="Student Name">
-            <label>Programme</label>
-            <select id="programme"><option value="">No programme / Select later</option></select>
-            <div class="programme-create">
-                <label>Create New Programme</label>
-                <input id="newProgrammeName" type="text" placeholder="Bachelor of Information Technology">
-                <button id="createProgrammeBtn" type="button">Create Programme</button>
-                <p id="programmeMessage"></p>
-            </div>
-            <label>Subjects</label>
-            <select id="studentSubject" multiple size="6"><option value="">No subject</option></select>
-            <small>Hold Ctrl or Command to select multiple non-clashing subjects.</small>
-            <button id="registerStudentBtn">Register Student</button><p id="studentMessage"></p>
-        </section>
-    </div>
-    <div class="panel">
-        <h2>Registered Students</h2>
-        <table class="attendance-table">
-            <thead><tr><th>Student ID</th><th>Name</th><th>Programme</th><th>Subject</th><th>Face</th><th>Actions</th></tr></thead>
-            <tbody id="studentsBody"><tr><td colspan="6" style="text-align:center">Loading students...</td></tr></tbody>
-        </table>
-    </div>
+            </section>
+        </div>
+    </section>
+
+    <section id="subjectView" class="management-view">
+        <div class="management-grid">
+            <section class="panel">
+                <h2 id="subjectFormTitle">Create Subject</h2>
+                <form id="subjectForm" class="programme-form">
+                    <input id="subjectId" type="hidden">
+                    <label for="subjectCode">Subject Code</label><input id="subjectCode" type="text" placeholder="BMIT2073">
+                    <label for="subjectName">Subject Name</label><input id="subjectName" type="text" placeholder="Testing Class">
+                    <label for="semester">Semester</label><input id="semester" type="text" placeholder="2026 Semester 2">
+                    <label for="subjectDescription">Subject Description</label><textarea id="subjectDescription" rows="4" placeholder="Describe the subject topics for voice assistance."></textarea>
+                    <label for="scheduleStart">Weekly Start Time</label><input id="scheduleStart" type="time">
+                    <label for="scheduleEnd">Weekly End Time</label><input id="scheduleEnd" type="time">
+                    <fieldset class="day-picker">
+                        <legend>Weekly Class Days</legend>
+                        <div id="scheduleDays" class="day-options">
+                            <label><span>Monday</span><input type="checkbox" value="Monday"></label>
+                            <label><span>Tuesday</span><input type="checkbox" value="Tuesday"></label>
+                            <label><span>Wednesday</span><input type="checkbox" value="Wednesday"></label>
+                            <label><span>Thursday</span><input type="checkbox" value="Thursday"></label>
+                            <label><span>Friday</span><input type="checkbox" value="Friday"></label>
+                            <label><span>Saturday</span><input type="checkbox" value="Saturday"></label>
+                            <label><span>Sunday</span><input type="checkbox" value="Sunday"></label>
+                        </div>
+                    </fieldset>
+                    <button id="saveSubjectBtn" type="submit">Create Subject</button>
+                    <button id="cancelSubjectEditBtn" type="button" style="display:none">Cancel Edit</button>
+                    <p id="subjectMessage" class="form-message"></p>
+                </form>
+            </section>
+            <section class="panel">
+                <h2>Registered Subjects</h2>
+                <div class="records-container">
+                    <table class="attendance-table">
+                        <thead><tr><th>Code</th><th>Name</th><th>Semester</th><th>Schedule</th><th>Actions</th></tr></thead>
+                        <tbody id="subjectsBody"><tr><td colspan="5" style="text-align:center">Loading subjects...</td></tr></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </section>
+
+    <section id="studentView" class="management-view">
+        <div class="management-grid">
+            <section class="panel">
+                <h2 id="studentFormTitle">Register Student</h2>
+                <form id="studentForm" class="programme-form">
+                    <label for="studentId">Student ID</label><input id="studentId" type="text" placeholder="S001">
+                    <label for="studentName">Student Name</label><input id="studentName" type="text" placeholder="Student Name">
+                    <label for="studentProgramme">Programme</label>
+                    <select id="studentProgramme"><option value="">No programme / Select later</option></select>
+                    <label for="studentSubject">Subjects</label>
+                    <select id="studentSubject" multiple size="6"><option value="">No subject</option></select>
+                    <small>Hold Ctrl or Command to select multiple non-clashing subjects.</small>
+                    <button id="saveStudentBtn" type="submit">Register Student</button>
+                    <button id="cancelStudentEditBtn" type="button" style="display:none">Cancel Edit</button>
+                    <p id="studentMessage" class="form-message"></p>
+                </form>
+            </section>
+            <section class="panel">
+                <h2>Registered Students</h2>
+                <div class="records-container">
+                    <table class="attendance-table">
+                        <thead><tr><th>Student ID</th><th>Name</th><th>Programme</th><th>Subjects</th><th>Face</th><th>Actions</th></tr></thead>
+                        <tbody id="studentsBody"><tr><td colspan="6" style="text-align:center">Loading students...</td></tr></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </section>
 </template>
 <script src="js/api.js"></script>
 <script>
 renderNav("subjects.html");
-document.getElementById("staticPageTitle").textContent = "Subjects & Students";
+document.getElementById("staticPageTitle").textContent="Subjects, Programmes & Students";
 
-async function loadSubjects() {
-    const data = await apiFetch("/api/subjects");
-    const select = document.getElementById("studentSubject");
-    select.innerHTML = '<option value="">No subject</option>';
-    window.availableSubjects = data.subjects || [];
-    (data.subjects || []).forEach(subject => {
-        select.insertAdjacentHTML("beforeend",
-            `<option value="${subject.class_id}">${escapeHtml(subject.class_code)} - ${escapeHtml(subject.class_name)}</option>`);
+document.querySelectorAll(".management-tab").forEach(tab=>{
+    tab.addEventListener("click",()=>{
+        document.querySelectorAll(".management-tab").forEach(item=>item.classList.remove("active"));
+        document.querySelectorAll(".management-view").forEach(view=>view.classList.remove("active"));
+        tab.classList.add("active");
+        document.getElementById(tab.dataset.view).classList.add("active");
     });
-    updateClashingSubjectOptions();
-}
-
-function updateClashingSubjectOptions() {
-    const select = document.getElementById("studentSubject");
-    const selectedIds = new Set(
-        Array.from(select.selectedOptions)
-            .map(option => Number(option.value))
-            .filter(Boolean)
-    );
-    const subjects = window.availableSubjects || [];
-
-    Array.from(select.options).forEach(option => {
-        if (!option.value) return;
-        const subjectId = Number(option.value);
-        const clashes = subjects.some(subject => {
-            if (Number(subject.class_id) === subjectId) return false;
-            if (!selectedIds.has(Number(subject.class_id))) return false;
-            if (!subject.schedule_start || !subject.schedule_end) return false;
-            const selected = subjects.find(item =>
-                Number(item.class_id) === subjectId
-            );
-            if (!selected || !selected.schedule_start || !selected.schedule_end) return false;
-            const commonDay = (selected.schedule_days || [])
-                .some(day => (subject.schedule_days || []).includes(day));
-            return commonDay
-                && selected.schedule_start < subject.schedule_end
-                && subject.schedule_start < selected.schedule_end;
-        });
-        option.disabled = clashes && !selectedIds.has(subjectId);
-        option.className = option.disabled ? "clashing-subject" : "";
-    });
-}
-
-document.addEventListener("change", event => {
-    if (event.target && event.target.id === "studentSubject") {
-        updateClashingSubjectOptions();
-    }
 });
 
-async function loadStudents() {
-    const data = await apiFetch("/api/students");
-    const body = document.getElementById("studentsBody");
-    if (!data.students || !data.students.length) {
-        body.innerHTML = '<tr><td colspan="6" style="text-align:center">No students registered.</td></tr>';
-        return;
-    }
-
-    body.innerHTML = data.students.map(student => {
-        const registered = Number(student.face_registered) === 1;
-        const classIds = String(student.class_ids || "")
-            .split(",")
-            .filter(Boolean)
-            .join(",");
-        return `<tr><td>${escapeHtml(student.student_id)}</td><td>${escapeHtml(student.student_name)}</td>
-            <td>${escapeHtml(student.programme_name || "-")}</td><td>${escapeHtml(student.classes || "Not enrolled")}</td>
-            <td>${registered ? "Registered" : "Not registered"}</td>
-            <td><div class="student-action-stack">
-                <div class="student-action-primary">
-                    <button type="button" class="student-action-edit" onclick="editStudent('${escapeHtml(student.student_id)}','${escapeHtml(student.student_name)}','${escapeHtml(student.programme_id || "")}',[${classIds}])">Edit</button>
-                    <button type="button" class="student-action-delete" onclick="deleteStudent('${escapeHtml(student.student_id)}')">Delete</button>
-                </div>
-                ${registered ? "" : `<button type="button" class="student-action-face" onclick="startFaceRegistration('${escapeHtml(student.student_id)}')">Register Face</button>`}
-            </div></td></tr>`;
-    }).join("");
+function setMessage(element,message,type="success"){
+    element.textContent=message;
+    element.className=`form-message ${type}`;
 }
 
-document.getElementById("addSubjectBtn").addEventListener("click", async () => {
-    try {
-        await apiFetch("/api/subjects", {
-            method: "POST",
-            headers: {"Content-Type":"application/json"},
-            body: JSON.stringify({
-                class_code: document.getElementById("subjectCode").value.trim(),
-                class_name: document.getElementById("subjectName").value.trim(),
-                semester: document.getElementById("semester").value.trim(),
-                description: document.getElementById("subjectDescription").value.trim(),
-                schedule_start: document.getElementById("scheduleStart").value,
-                schedule_end: document.getElementById("scheduleEnd").value,
-                schedule_days: Array.from(
-                    document.querySelectorAll("#scheduleDays input:checked")
-                ).map(input => input.value)
-            })
-        });
-        document.getElementById("subjectMessage").textContent = "Subject created successfully.";
-        await loadSubjects();
-    } catch (error) {
-        document.getElementById("subjectMessage").textContent = error.message;
-    }
-});
-
-document.getElementById("registerStudentBtn").addEventListener("click", async () => {
-    try {
-        await apiFetch("/api/students", {
-            method: "POST",
-            headers: {"Content-Type":"application/json"},
-            body: JSON.stringify({
-                student_id: document.getElementById("studentId").value.trim(),
-                student_name: document.getElementById("studentName").value.trim(),
-                programme_id: document.getElementById("programme").value || null,
-                class_ids: Array.from(
-                    document.getElementById("studentSubject").selectedOptions
-                ).map(option => Number(option.value)).filter(Boolean)
-            })
-        });
-        document.getElementById("studentMessage").textContent = "Student registered successfully.";
-        await loadStudents();
-    } catch (error) {
-        document.getElementById("studentMessage").textContent = error.message;
-    }
-});
-
-async function startFaceRegistration(studentId) {
-    try {
-        await apiFetch(`/api/students/${encodeURIComponent(studentId)}/face-registration/start`, {method:"POST"});
-        alert("Face registration started.");
-        setInterval(async () => {
-            const status = await apiFetch(`/api/students/${encodeURIComponent(studentId)}/face-registration/status`);
-            if (status.completed) {
-                alert("Face registration completed.");
-                await loadStudents();
-            } else if (status.error) {
-                alert(status.error);
-            }
-        }, 1000);
-    } catch (error) {
-        alert(error.message);
-    }
-}
-
-async function loadProgrammes() {
-    const data = await apiFetch("/api/programmes");
-    const select = document.getElementById("programme");
-    select.innerHTML = '<option value="">No programme / Select later</option>';
-    (data.programmes || []).forEach(programme => {
-        select.insertAdjacentHTML("beforeend",
-            `<option value="${programme.programme_id}">${escapeHtml(programme.programme_name)}</option>`);
+async function loadProgrammes(){
+    const data=await apiFetch("/api/programmes");
+    const programmes=data.programmes||[];
+    const select=document.getElementById("studentProgramme");
+    select.innerHTML='<option value="">No programme / Select later</option>';
+    programmes.forEach(programme=>{
+        select.insertAdjacentHTML("beforeend",`<option value="${programme.programme_id}">${escapeHtml(programme.programme_name)}</option>`);
     });
+    document.getElementById("programmesBody").innerHTML=programmes.length?programmes.map(programme=>`
+        <tr><td>${escapeHtml(programme.programme_name)}</td><td><div class="action-row">
+            <button type="button" class="edit-btn" onclick="editProgramme(${programme.programme_id},'${escapeHtml(programme.programme_name)}')"><i class="fa-solid fa-pen"></i> Edit</button>
+            <button type="button" class="delete-btn" onclick="deleteProgramme(${programme.programme_id})"><i class="fa-solid fa-trash"></i> Delete</button>
+        </div></td></tr>`).join(""):'<tr><td colspan="2" style="text-align:center">No programmes registered.</td></tr>';
 }
 
-async function editStudent(studentId, studentName, programmeId, classIds = []) {
-    const name = prompt("Student name:", studentName);
-    if (name === null) return;
-    try {
-        await apiFetch(`/api/students/${encodeURIComponent(studentId)}`, {
-            method: "PUT",
-            headers: {"Content-Type":"application/json"},
-            body: JSON.stringify({
-                student_name: name.trim(),
-                programme_id: programmeId || null,
-                class_ids: classIds
-            })
-        });
-        await loadStudents();
-    } catch (error) {
-        alert(error.message);
-    }
-}
-
-async function deleteStudent(studentId) {
-    if (!confirm(`Delete student "${studentId}"?`)) return;
-    try {
-        await apiFetch(`/api/students/${encodeURIComponent(studentId)}`, {
-            method: "DELETE"
-        });
-        await loadStudents();
-    } catch (error) {
-        alert(error.message);
-    }
-}
-
-document.getElementById("createProgrammeBtn").addEventListener("click", async () => {
-    const name = document.getElementById("newProgrammeName").value.trim();
-    if (!name) {
-        document.getElementById("programmeMessage").textContent = "Programme name is required.";
-        return;
-    }
-    try {
-        await apiFetch("/api/programmes", {
-            method: "POST",
-            headers: {"Content-Type":"application/json"},
-            body: JSON.stringify({programme_name: name})
-        });
-        document.getElementById("newProgrammeName").value = "";
-        document.getElementById("programmeMessage").textContent =
-            "Programme created successfully.";
+document.getElementById("programmeForm").addEventListener("submit",async event=>{
+    event.preventDefault();
+    const id=document.getElementById("programmeId").value;
+    const name=document.getElementById("programmeName").value.trim();
+    if(!name){setMessage(document.getElementById("programmeMessage"),"Programme name is required.","error");return}
+    try{
+        await apiFetch(id?`/api/programmes/${id}`:"/api/programmes",{method:id?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({programme_name:name})});
+        resetProgrammeForm();
+        setMessage(document.getElementById("programmeMessage"),id?"Programme updated successfully.":"Programme created successfully.");
         await loadProgrammes();
-    } catch (error) {
-        document.getElementById("programmeMessage").textContent = error.message;
-    }
+    }catch(error){setMessage(document.getElementById("programmeMessage"),error.message,"error")}
 });
 
-Promise.resolve(loadSubjects())
+function editProgramme(id,name){
+    document.getElementById("programmeId").value=id;
+    document.getElementById("programmeName").value=name;
+    document.getElementById("programmeFormTitle").textContent="Edit Programme";
+    document.getElementById("saveProgrammeBtn").textContent="Update Programme";
+    document.getElementById("cancelProgrammeEditBtn").style.display="inline-block";
+}
+function resetProgrammeForm(){
+    document.getElementById("programmeId").value="";
+    document.getElementById("programmeName").value="";
+    document.getElementById("programmeFormTitle").textContent="Create Programme";
+    document.getElementById("saveProgrammeBtn").textContent="Create Programme";
+    document.getElementById("cancelProgrammeEditBtn").style.display="none";
+}
+document.getElementById("cancelProgrammeEditBtn").addEventListener("click",resetProgrammeForm);
+async function deleteProgramme(id){
+    if(!confirm("Delete this programme?"))return;
+    try{await apiFetch(`/api/programmes/${id}`,{method:"DELETE"});await loadProgrammes();await loadStudents()}
+    catch(error){alert(error.message)}
+}
+
+window.availableSubjects=[];
+async function loadSubjects(){
+    const data=await apiFetch("/api/subjects");
+    window.availableSubjects=data.subjects||[];
+    const select=document.getElementById("studentSubject");
+    select.innerHTML='<option value="">No subject</option>';
+    window.availableSubjects.forEach(subject=>select.insertAdjacentHTML("beforeend",`<option value="${subject.class_id}">${escapeHtml(subject.class_code)} - ${escapeHtml(subject.class_name)}</option>`));
+    updateClashingSubjects();
+    document.getElementById("subjectsBody").innerHTML=window.availableSubjects.length?window.availableSubjects.map(subject=>{
+        const schedule=subject.schedule_start&&subject.schedule_end?`${escapeHtml((subject.schedule_days||[]).join(", "))}: ${escapeHtml(subject.schedule_start)}-${escapeHtml(subject.schedule_end)}`:"No schedule";
+        return `<tr><td>${escapeHtml(subject.class_code)}</td><td>${escapeHtml(subject.class_name)}</td><td>${escapeHtml(subject.semester||"-")}</td><td>${schedule}</td><td><div class="action-row">
+            <button type="button" class="edit-btn" onclick='editSubject(${JSON.stringify(subject).replaceAll("'","&#39;")})'><i class="fa-solid fa-pen"></i> Edit</button>
+            <button type="button" class="delete-btn" onclick="deleteSubject(${subject.class_id})"><i class="fa-solid fa-trash"></i> Delete</button>
+        </div></td></tr>`;
+    }).join(""):'<tr><td colspan="5" style="text-align:center">No subjects registered.</td></tr>';
+}
+
+function updateClashingSubjects(){
+    const select=document.getElementById("studentSubject");
+    const selectedIds=new Set(Array.from(select.selectedOptions).map(option=>Number(option.value)).filter(Boolean));
+    Array.from(select.options).forEach(option=>{
+        if(!option.value)return;
+        const candidate=window.availableSubjects.find(subject=>Number(subject.class_id)==Number(option.value));
+        let clash=false;
+        window.availableSubjects.forEach(selected=>{
+            if(!selectedIds.has(Number(selected.class_id))||Number(selected.class_id)==Number(option.value))return;
+            if(!candidate?.schedule_start||!candidate.schedule_end||!selected.schedule_start||!selected.schedule_end)return;
+            const common=(candidate.schedule_days||[]).some(day=>(selected.schedule_days||[]).includes(day));
+            if(common&&candidate.schedule_start<selected.schedule_end&&selected.schedule_start<candidate.schedule_end)clash=true;
+        });
+        option.disabled=clash&&!selectedIds.has(Number(option.value));
+    });
+}
+document.getElementById("studentSubject").addEventListener("change",updateClashingSubjects);
+
+document.getElementById("subjectForm").addEventListener("submit",async event=>{
+    event.preventDefault();
+    const id=document.getElementById("subjectId").value;
+    const body={
+        class_code:document.getElementById("subjectCode").value.trim(),
+        class_name:document.getElementById("subjectName").value.trim(),
+        semester:document.getElementById("semester").value.trim(),
+        description:document.getElementById("subjectDescription").value.trim(),
+        schedule_start:document.getElementById("scheduleStart").value,
+        schedule_end:document.getElementById("scheduleEnd").value,
+        schedule_days:Array.from(document.querySelectorAll("#scheduleDays input:checked")).map(input=>input.value)
+    };
+    if(!body.class_code||!body.class_name){
+        setMessage(document.getElementById("subjectMessage"),"Subject code and name are required.","error");
+        return;
+    }
+    try{
+        await apiFetch(id?`/api/subjects/${id}`:"/api/subjects",{method:id?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+        resetSubjectForm();
+        setMessage(document.getElementById("subjectMessage"),id?"Subject updated successfully.":"Subject created successfully.");
+        await loadSubjects();
+    }catch(error){setMessage(document.getElementById("subjectMessage"),error.message,"error")}
+});
+
+function editSubject(subject){
+    document.getElementById("subjectId").value=subject.class_id;
+    document.getElementById("subjectCode").value=subject.class_code||"";
+    document.getElementById("subjectName").value=subject.class_name||"";
+    document.getElementById("semester").value=subject.semester||"";
+    document.getElementById("subjectDescription").value=subject.description||"";
+    document.getElementById("scheduleStart").value=subject.schedule_start||"";
+    document.getElementById("scheduleEnd").value=subject.schedule_end||"";
+    document.querySelectorAll("#scheduleDays input").forEach(input=>{
+        input.checked=(subject.schedule_days||[]).includes(input.value);
+    });
+    document.getElementById("subjectFormTitle").textContent="Edit Subject";
+    document.getElementById("saveSubjectBtn").textContent="Update Subject";
+    document.getElementById("cancelSubjectEditBtn").style.display="inline-block";
+}
+function resetSubjectForm(){
+    document.getElementById("subjectId").value="";
+    document.getElementById("subjectForm").reset();
+    document.getElementById("subjectFormTitle").textContent="Create Subject";
+    document.getElementById("saveSubjectBtn").textContent="Create Subject";
+    document.getElementById("cancelSubjectEditBtn").style.display="none";
+}
+document.getElementById("cancelSubjectEditBtn").addEventListener("click",resetSubjectForm);
+async function deleteSubject(id){
+    if(!confirm("Delete this subject and its enrollments?"))return;
+    try{await apiFetch(`/api/subjects/${id}`,{method:"DELETE"});await loadSubjects();await loadStudents()}
+    catch(error){alert(error.message)}
+}
+
+async function loadStudents(){
+    const data=await apiFetch("/api/students");
+    const students=data.students||[];
+    document.getElementById("studentsBody").innerHTML=students.length?students.map(student=>{
+        const registered=Number(student.face_registered)==1;
+        const classIds=String(student.class_ids||"").split(",").filter(Boolean).join(",");
+        return `<tr><td>${escapeHtml(student.student_id)}</td><td>${escapeHtml(student.student_name)}</td>
+            <td>${escapeHtml(student.programme_name||"-")}</td><td>${escapeHtml(student.classes||"Not enrolled")}</td>
+            <td>${registered?"Registered":"Not registered"}</td><td>
+            <div><div class="action-row">
+                <button type="button" class="edit-btn" onclick="editStudent('${escapeHtml(student.student_id)}','${escapeHtml(student.student_name)}','${escapeHtml(student.programme_id||"")}',[${classIds}])"><i class="fa-solid fa-pen"></i> Edit</button>
+                <button type="button" class="delete-btn" onclick="deleteStudent('${escapeHtml(student.student_id)}')"><i class="fa-solid fa-trash"></i> Delete</button>
+            </div>${registered?"":`<div class="face-row"><button type="button" class="face-btn" onclick="startFaceRegistration('${escapeHtml(student.student_id)}')"><i class="fa-solid fa-camera"></i> Register Face</button></div>`}</div></td></tr>`;
+    }).join(""):'<tr><td colspan="6" style="text-align:center">No students registered.</td></tr>';
+}
+
+function editStudent(id,name,programmeId,classIds=[]){
+    document.getElementById("studentId").value=id;
+    document.getElementById("studentName").value=name;
+    document.getElementById("studentProgramme").value=programmeId||"";
+    document.getElementById("studentId").disabled=true;
+    document.getElementById("studentFormTitle").textContent="Edit Student";
+    document.getElementById("saveStudentBtn").textContent="Update Student";
+    document.getElementById("cancelStudentEditBtn").style.display="inline-block";
+    Array.from(document.getElementById("studentSubject").options).forEach(option=>{
+        option.selected=classIds.includes(Number(option.value));
+    });
+    updateClashingSubjects();
+}
+function resetStudentForm(){
+    document.getElementById("studentForm").reset();
+    document.getElementById("studentId").disabled=false;
+    document.getElementById("studentFormTitle").textContent="Register Student";
+    document.getElementById("saveStudentBtn").textContent="Register Student";
+    document.getElementById("cancelStudentEditBtn").style.display="none";
+    updateClashingSubjects();
+}
+document.getElementById("cancelStudentEditBtn").addEventListener("click",resetStudentForm);
+document.getElementById("studentForm").addEventListener("submit",async event=>{
+    event.preventDefault();
+    const id=document.getElementById("studentId").value.trim();
+    const name=document.getElementById("studentName").value.trim();
+    if(!id||!name){setMessage(document.getElementById("studentMessage"),"Student ID and name are required.","error");return}
+    const editing=document.getElementById("studentId").disabled;
+    const classIds=Array.from(document.getElementById("studentSubject").selectedOptions).map(option=>Number(option.value)).filter(Boolean);
+    try{
+        await apiFetch(editing?`/api/students/${encodeURIComponent(id)}`:"/api/students",{method:editing?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({student_id:id,student_name:name,programme_id:document.getElementById("studentProgramme").value||null,class_ids:classIds})});
+        resetStudentForm();
+        setMessage(document.getElementById("studentMessage"),editing?"Student updated successfully.":"Student registered successfully.");
+        await loadStudents();
+    }catch(error){setMessage(document.getElementById("studentMessage"),error.message,"error")}
+});
+async function deleteStudent(id){
+    if(!confirm(`Delete student "${id}"?`))return;
+    try{await apiFetch(`/api/students/${encodeURIComponent(id)}`,{method:"DELETE"});await loadStudents()}
+    catch(error){alert(error.message)}
+}
+async function startFaceRegistration(id){
+    try{await apiFetch(`/api/students/${encodeURIComponent(id)}/face-registration/start`,{method:"POST"});alert("Face registration started.");await loadStudents()}
+    catch(error){alert(error.message)}
+}
+
+Promise.resolve(loadProgrammes())
+    .then(loadSubjects)
     .then(loadStudents)
-    .then(loadProgrammes)
-    .catch(error => alert(error.message));
-</script>
-</body>
-</html>
+    .catch(error=>alert(error.message));
