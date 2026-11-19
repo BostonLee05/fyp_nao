@@ -673,10 +673,20 @@ def get_all_classes():
     """)
 
     classes = cursor.fetchall()
-
     connection.close()
 
-    return classes
+    serialized = []
+    for row in classes:
+        item = dict(row)
+        for key in ("created_at",):
+            if hasattr(item.get(key), "isoformat"):
+                item[key] = item[key].isoformat()
+        for key in ("schedule_start", "schedule_end"):
+            if hasattr(item.get(key), "isoformat"):
+                item[key] = item[key].isoformat(timespec="minutes")
+        serialized.append(item)
+
+    return serialized
 
 def update_class(
     class_id,

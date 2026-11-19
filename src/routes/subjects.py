@@ -109,7 +109,7 @@ def subjects():
 def list_subjects():
     return jsonify({
         "success": True,
-        "subjects": [dict(row) for row in get_all_classes()]
+        "subjects": get_all_classes()
     })
 
 
