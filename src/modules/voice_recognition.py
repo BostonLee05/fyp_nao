@@ -13,10 +13,11 @@ import cv2
 import numpy as np
 import requests
 from dotenv import load_dotenv
+from datetime import datetime
 
 from faster_whisper import WhisperModel
 
-from database import get_voice_commands
+from database import get_all_classes, get_voice_commands
 from modules.gemini_service import GeminiService
 from modules.nao_audio_transfer import NAOAudioTransfer
 
@@ -46,6 +47,22 @@ class VoiceRecognition:
     SIMPLE_SEARCH_COMMAND_RE = re.compile(
         r"\b(?:find me|find|search for|search|look up|google)\s+"
         r"(?P<query>.+)",
+        re.IGNORECASE,
+    )
+    CLASS_QUESTION_RE = re.compile(
+        r"\b(class|classes|subject|subjects|course|courses|timetable|schedule|"
+        r"semester|description|lesson|lessons)\b|\bwhat\s+(?:am\s+i|do\s+i)\s+"
+        r"(?:have|taking)\b",
+        re.IGNORECASE,
+    )
+    CURRENT_CLASS_RE = re.compile(
+        r"\b(right now|currently|at the moment|what class|which class|"
+        r"class am i in|lesson now)\b",
+        re.IGNORECASE,
+    )
+    TIMETABLE_RE = re.compile(
+        r"\b(timetable|schedule|all classes|my classes|classes do i have|"
+        r"subjects do i have)\b",
         re.IGNORECASE,
     )
 
@@ -503,15 +520,24 @@ class VoiceRecognition:
         if keyword_result:
             return keyword_result
 
+        class_context = self._build_class_context(text)
+
         if self.gemini_service and self.use_gemini:
             image = self._capture_camera_frame()
 
             prompt = text
+            if class_context:
+                prompt = class_context
             if image is not None:
-                prompt = (
+                camera_prompt = (
                     "Use the attached NAO camera image if it helps answer the question. "
                     "Reply in English only. "
                     f"User said: {text}"
+                )
+                prompt = (
+                    f"{class_context} {camera_prompt}"
+                    if class_context
+                    else camera_prompt
                 )
 
             gemini_started_at = time.perf_counter()
@@ -537,6 +563,87 @@ class VoiceRecognition:
             "response": response,
             "status": "Completed",
         }
+
+    def _build_class_context(self, text: str) -> Optional[str]:
+        """Build a Gemini prompt only for questions about registered subjects."""
+        try:
+            classes = get_all_classes()
+        except Exception as error:
+            print(f"[VoiceRecognition Warning] Could not load classes: {error}")
+            return None
+
+        normalized = text.casefold()
+        named_subject = any(
+            token and token in normalized
+            for item in classes
+            for token in (
+                str(item.get("class_code") or "").casefold(),
+                str(item.get("class_name") or "").casefold(),
+            )
+        )
+        if not self.CLASS_QUESTION_RE.search(text) and not named_subject:
+            return None
+
+        selected = self._select_class_context(text, classes)
+        if not selected:
+            selected = classes
+        if not selected:
+            subject_context = "There are no registered subjects in the database."
+        else:
+            subject_context = " ".join(self._format_class_context(item) for item in selected)
+
+        return (
+            "Registered subject context: "
+            f"{subject_context} "
+            f"Original voice question: {text} "
+            "Answer the original question using this context. Reply in concise English "
+            "and do not invent subject details that are not provided."
+        )
+
+    @classmethod
+    def _select_class_context(
+        cls, text: str, classes: List[Dict[str, Any]], now: Optional[datetime] = None
+    ) -> List[Dict[str, Any]]:
+        """Select current, named, or timetable-wide subjects for a class question."""
+        normalized = text.casefold()
+        if cls.CURRENT_CLASS_RE.search(text):
+            current_time = now or datetime.now()
+            day = current_time.strftime("%A")
+            time_value = current_time.strftime("%H:%M")
+            current = [
+                item for item in classes
+                if day in (item.get("schedule_days") or [])
+                and item.get("schedule_start")
+                and item.get("schedule_end")
+                and item["schedule_start"] <= time_value < item["schedule_end"]
+            ]
+            if current:
+                return current
+
+        if cls.TIMETABLE_RE.search(text):
+            return classes
+
+        named = []
+        for item in classes:
+            code = str(item.get("class_code") or "").casefold()
+            name = str(item.get("class_name") or "").casefold()
+            if (code and code in normalized) or (name and name in normalized):
+                named.append(item)
+        return named
+
+    @staticmethod
+    def _format_class_context(subject: Dict[str, Any]) -> str:
+        days = subject.get("schedule_days") or []
+        days_text = ", ".join(str(day) for day in days) or "not specified"
+        return (
+            f"Subject code: {subject.get('class_code') or 'not specified'}; "
+            f"subject name: {subject.get('class_name') or 'not specified'}; "
+            f"semester: {subject.get('semester') or 'not specified'}; "
+            f"description: {subject.get('description') or 'not specified'}; "
+            f"weekly start time: {subject.get('schedule_start') or 'not specified'}; "
+            f"end time: {subject.get('schedule_end') or 'not specified'}; "
+            f"class days: {days_text}."
+        )
 
     def _handle_keyword_command(self, text: str) -> Optional[Dict[str, Any]]:
         """Handles configured voice commands stored in Supabase."""

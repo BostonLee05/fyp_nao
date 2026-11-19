@@ -78,32 +78,6 @@ def initialize_database():
             UNIQUE(command_id, normalized_phrase)
         )
     """)
-    seed_commands = [
-        ("attendance", "Attendance Mode Activating..."),
-        ("hello", "Hello, this is from the database command."),
-    ]
-    for command_key, response in seed_commands:
-        cursor.execute("""
-            INSERT INTO voice_commands (command_key, response)
-            VALUES (%s, %s)
-            ON CONFLICT (command_key) DO NOTHING
-        """, (command_key, response))
-
-    seed_triggers = {
-        "attendance": ["attendance mode", "start attendance", "begin attendance",
-                       "take attendance", "mark attendance", "record attendance"],
-        "hello": ["hello"],
-    }
-    for command_key, phrases in seed_triggers.items():
-        for phrase in phrases:
-            normalized = " ".join(phrase.lower().split())
-            cursor.execute("""
-                INSERT INTO voice_triggers (command_id, phrase, normalized_phrase)
-                SELECT command_id, %s, %s FROM voice_commands
-                WHERE command_key = %s
-                ON CONFLICT (command_id, normalized_phrase) DO NOTHING
-            """, (phrase, normalized, command_key))
-
     connection.commit()
 
     connection.close()
