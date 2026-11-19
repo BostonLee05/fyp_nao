@@ -2,26 +2,34 @@ import os
 import posixpath
 import time
 import wave
+import threading
 from pathlib import Path
+from typing import Any, Callable, List, Optional, Tuple
 
 class NAOAudioTransfer:
     """Handles NAO audio capture, download, and local test-audio fallback."""
 
     def __init__(
         self,
-        audio_recorder=None,
-        file_manager=None,
-        remote_path="/home/nao/nao_speech.wav",
-        local_path=None,
-    ):
+        audio_recorder: Optional[Any] = None,
+        file_manager: Optional[Any] = None,
+        remote_path: str = "/home/nao/nao_speech.wav",
+        local_path: Optional[str] = None,
+    ) -> None:
         self.audio_recorder = audio_recorder
         self.file_manager = file_manager
         self.remote_path = remote_path
         self.local_path = local_path
+        self.stop_event = threading.Event()
 
-    def record_from_nao(self, duration, log_performance=True):
+    def stop(self) -> None:
+        """Cancel an active capture and stop the NAO recorder best-effort."""
+        self.stop_event.set()
+        self._stop_recording_if_active()
+
+    def record_from_nao(self, duration: float, log_performance: bool = True) -> Optional[str]:
         """Records audio on NAO and downloads it to the local machine."""
-        if not self.audio_recorder:
+        if self.stop_event.is_set() or not self.audio_recorder:
             print("[NAOAudioTransfer Warning] No ALAudioRecorder available.")
             return None
 
@@ -55,7 +63,15 @@ class NAOAudioTransfer:
             recording_active = True
 
             print(f"[NAOAudioTransfer] Recording for {duration} seconds...")
-            time.sleep(duration)
+            deadline = time.monotonic() + max(0.0, float(duration))
+            while not self.stop_event.is_set():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                self.stop_event.wait(min(0.1, remaining))
+
+            if self.stop_event.is_set():
+                return None
 
             self.audio_recorder.stopMicrophonesRecording()
             recording_active = False
@@ -74,7 +90,7 @@ class NAOAudioTransfer:
                     f"{time.perf_counter() - recording_started_at:.3f}s"
                 )
 
-    def _stop_recording_if_active(self):
+    def _stop_recording_if_active(self) -> None:
         """Best-effort cleanup for a recorder left active by another service."""
         try:
             self.audio_recorder.stopMicrophonesRecording()
@@ -85,12 +101,12 @@ class NAOAudioTransfer:
 
     def record_until_silence(
         self,
-        speech_detector,
-        chunk_duration=0.25,
-        start_timeout=8,
-        silence_duration=0.75,
-        max_duration=20,
-    ):
+        speech_detector: Callable[[str], bool],
+        chunk_duration: float = 0.25,
+        start_timeout: float = 8,
+        silence_duration: float = 0.75,
+        max_duration: float = 20,
+    ) -> Optional[str]:
         """Capture short NAO chunks until speech ends or the safety limit hits."""
         if not self.audio_recorder:
             print("[NAOAudioTransfer Warning] No ALAudioRecorder available.")
@@ -152,7 +168,7 @@ class NAOAudioTransfer:
         return self.local_path
 
     @staticmethod
-    def _read_wav_chunk(path):
+    def _read_wav_chunk(path: str) -> Optional[Tuple[Any, bytes]]:
         try:
             with wave.open(path, "rb") as wav_file:
                 params = wav_file.getparams()
@@ -162,7 +178,7 @@ class NAOAudioTransfer:
             print(f"[NAOAudioTransfer Warning] Could not read audio chunk: {e}")
             return None
 
-    def _write_wav_chunks(self, chunks):
+    def _write_wav_chunks(self, chunks: List[Tuple[Any, bytes]]) -> None:
         params = chunks[0][0]
         with wave.open(self.local_path, "wb") as wav_file:
             wav_file.setnchannels(params.nchannels)
@@ -170,7 +186,7 @@ class NAOAudioTransfer:
             wav_file.setframerate(params.framerate)
             wav_file.writeframes(b"".join(frames for _, frames in chunks))
 
-    def download(self, log_performance=True):
+    def download(self, log_performance: bool = True) -> Optional[str]:
         transfer_started_at = time.perf_counter()
         if not self.file_manager:
             print("[NAOAudioTransfer Warning] No ALFileManager available.")
@@ -209,7 +225,7 @@ class NAOAudioTransfer:
                     f"{time.perf_counter() - transfer_started_at:.3f}s"
                 )
 
-    def _download_with_file_manager(self):
+    def _download_with_file_manager(self) -> None:
         """
         Downloads the remote file using the dynamic qi ALFileManager proxy.
 
@@ -247,13 +263,13 @@ class NAOAudioTransfer:
             + " | ".join(errors)
         )
 
-    def _get_recording_remote_path(self):
+    def _get_recording_remote_path(self) -> str:
         shared_folder = self._get_user_shared_folder_path()
         if shared_folder:
             return posixpath.join(shared_folder, self._remote_file_name())
         return self.remote_path
 
-    def _get_user_shared_folder_path(self):
+    def _get_user_shared_folder_path(self) -> Optional[str]:
         if not self.file_manager:
             return None
 
@@ -266,10 +282,10 @@ class NAOAudioTransfer:
 
         return None
 
-    def _remote_file_name(self):
+    def _remote_file_name(self) -> str:
         return posixpath.basename(self.remote_path)
 
-    def _write_result_if_needed(self, result):
+    def _write_result_if_needed(self, result: Any) -> bool:
         if result is None:
             return False
 
@@ -298,7 +314,7 @@ class NAOAudioTransfer:
 
         return False
 
-    def cleanup_remote_audio(self):
+    def cleanup_remote_audio(self) -> None:
         """Removes the remote WAV from NAO after a successful download."""
         if not self.file_manager:
             return
@@ -314,7 +330,7 @@ class NAOAudioTransfer:
         except Exception as e:
             print(f"[NAOAudioTransfer Warning] Could not remove remote audio: {e}")
 
-    def list_file_manager_methods(self):
+    def list_file_manager_methods(self) -> List[str]:
         """Best-effort method listing for diagnostics across qi versions."""
         if not self.file_manager:
             return []

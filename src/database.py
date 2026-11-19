@@ -58,13 +58,15 @@ def initialize_database():
         CREATE TABLE IF NOT EXISTS voice_commands (
             command_id BIGSERIAL PRIMARY KEY,
             command_key VARCHAR(80) NOT NULL UNIQUE,
-            action VARCHAR(80) NOT NULL,
             response TEXT NOT NULL,
             enabled BOOLEAN NOT NULL DEFAULT TRUE,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     """)
+    # The old Action field was descriptive metadata only. Remove it from
+    # existing databases as well as from the current schema.
+    cursor.execute("ALTER TABLE voice_commands DROP COLUMN IF EXISTS action")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS voice_triggers (
             trigger_id BIGSERIAL PRIMARY KEY,
@@ -76,29 +78,16 @@ def initialize_database():
             UNIQUE(command_id, normalized_phrase)
         )
     """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS voice_wake_phrases (
-            wake_phrase_id BIGSERIAL PRIMARY KEY,
-            phrase VARCHAR(255) NOT NULL UNIQUE,
-            enabled BOOLEAN NOT NULL DEFAULT TRUE
-        )
-    """)
-    for phrase in ["hey nao", "hey now", "hi now", "hello now", "hello nao"]:
-        cursor.execute("""
-            INSERT INTO voice_wake_phrases (phrase)
-            VALUES (%s) ON CONFLICT (phrase) DO NOTHING
-        """, (phrase,))
-
     seed_commands = [
-        ("attendance", "attendance", "Attendance Mode Activating..."),
-        ("hello", "robot", "Hello, this is from the database command."),
+        ("attendance", "Attendance Mode Activating..."),
+        ("hello", "Hello, this is from the database command."),
     ]
-    for command_key, action, response in seed_commands:
+    for command_key, response in seed_commands:
         cursor.execute("""
-            INSERT INTO voice_commands (command_key, action, response)
-            VALUES (%s, %s, %s)
+            INSERT INTO voice_commands (command_key, response)
+            VALUES (%s, %s)
             ON CONFLICT (command_key) DO NOTHING
-        """, (command_key, action, response))
+        """, (command_key, response))
 
     seed_triggers = {
         "attendance": ["attendance mode", "start attendance", "begin attendance",
@@ -129,7 +118,7 @@ def get_voice_commands(search=None):
     try:
         cursor = connection.cursor()
         query = """
-            SELECT c.command_id, c.command_key, c.action, c.response,
+            SELECT c.command_id, c.command_key, c.response,
                    c.enabled, COALESCE(array_agg(t.phrase ORDER BY t.phrase)
                    FILTER (WHERE t.trigger_id IS NOT NULL), ARRAY[]::text[]) AS triggers
             FROM voice_commands c
@@ -140,71 +129,39 @@ def get_voice_commands(search=None):
             ORDER BY c.command_id
         """.format(
             search_clause=(
-                "AND (c.command_key ILIKE %s OR c.action ILIKE %s "
-                "OR c.response ILIKE %s OR EXISTS (SELECT 1 FROM voice_triggers st "
+                "AND (c.command_key ILIKE %s OR c.response ILIKE %s "
+                "OR EXISTS (SELECT 1 FROM voice_triggers st "
                 "WHERE st.command_id = c.command_id AND st.phrase ILIKE %s))"
                 if search else ""
             )
         )
-        params = ([f"%{search}%"] * 4) if search else []
+        params = ([f"%{search}%"] * 3) if search else []
         cursor.execute(query, params)
         return cursor.fetchall()
     finally:
         connection.close()
 
-
-def get_voice_wake_phrases():
-    connection = get_connection()
-    try:
-        cursor = connection.cursor()
-        cursor.execute("""
-            SELECT phrase FROM voice_wake_phrases
-            WHERE enabled ORDER BY wake_phrase_id
-        """)
-        return [row["phrase"] for row in cursor.fetchall()]
-    finally:
-        connection.close()
-
-
-def add_voice_wake_phrase(phrase):
-    normalized = " ".join(str(phrase).lower().split())
-    if not normalized:
-        raise ValueError("A wake phrase is required")
-    connection = get_connection()
-    try:
-        cursor = connection.cursor()
-        cursor.execute("""
-            INSERT INTO voice_wake_phrases (phrase)
-            VALUES (%s)
-            ON CONFLICT (phrase) DO UPDATE SET enabled = TRUE
-            RETURNING wake_phrase_id
-        """, (normalized,))
-        wake_phrase_id = cursor.fetchone()["wake_phrase_id"]
-        connection.commit()
-        return wake_phrase_id
-    finally:
-        connection.close()
-
-
-def add_voice_command(command_key, action, response, phrases):
+def add_voice_command(command_key, response, phrases):
     normalized_key = "_".join(str(command_key).lower().strip().split())
+    normalized_response = str(response or "").strip()
+    raw_phrases = [phrases] if isinstance(phrases, str) else (phrases or [])
     phrase_pairs = [
         (str(phrase).strip(), " ".join(str(phrase).lower().split()))
-        for phrase in (phrases or []) if str(phrase).strip()
+        for phrase in raw_phrases if str(phrase).strip()
     ]
-    if not normalized_key or not action or not response or not phrase_pairs:
-        raise ValueError("command_key, action, response, and at least one phrase are required")
+    if not normalized_key or not normalized_response or not phrase_pairs:
+        raise ValueError("command_key, response, and at least one phrase are required")
     connection = get_connection()
     try:
         cursor = connection.cursor()
         cursor.execute("""
-            INSERT INTO voice_commands (command_key, action, response)
-            VALUES (%s, %s, %s)
+            INSERT INTO voice_commands (command_key, response)
+            VALUES (%s, %s)
             ON CONFLICT (command_key) DO UPDATE
-            SET action = EXCLUDED.action, response = EXCLUDED.response,
+            SET response = EXCLUDED.response,
                 enabled = TRUE, updated_at = NOW()
             RETURNING command_id
-        """, (normalized_key, action, response))
+        """, (normalized_key, normalized_response))
         command_id = cursor.fetchone()["command_id"]
         for phrase, normalized in phrase_pairs:
             cursor.execute("""

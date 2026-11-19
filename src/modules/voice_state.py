@@ -1,11 +1,12 @@
 from collections import deque
 from datetime import datetime
 from threading import RLock
+from typing import Any, Deque, Dict, List, Optional
 
 class VoiceState:
     """Thread-safe state shared by wake audio, voice recognition, and Flask."""
 
-    def __init__(self, max_history=30):
+    def __init__(self, max_history: int = 30) -> None:
         self._lock = RLock()
         self._max_history = max_history
         self._status = "Ready/listening again"
@@ -16,25 +17,25 @@ class VoiceState:
         self._speaking = False
         self._recommendations = []
         self._recommendation_token = 0
-        self._history = deque(maxlen=max_history)
+        self._history: Deque[Dict[str, Any]] = deque(maxlen=max_history)
 
-    def set_status(self, status, error=""):
+    def set_status(self, status: str, error: str = "") -> None:
         with self._lock:
             self._status = status
             self._latest_error = error or ""
 
-    def set_speaking(self, speaking):
+    def set_speaking(self, speaking: bool) -> None:
         with self._lock:
             self._speaking = bool(speaking)
 
     def record_command(
         self,
-        command,
-        action,
-        result,
-        status="Completed",
-        recommendations=None,
-    ):
+        command: str,
+        action: str,
+        result: str,
+        status: str = "Completed",
+        recommendations: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
         with self._lock:
             timestamp = datetime.now()
             self._latest_command = command or ""
@@ -56,12 +57,12 @@ class VoiceState:
                 self._recommendations = list(recommendations)
                 self._recommendation_token += 1
 
-    def set_recommendations(self, recommendations):
+    def set_recommendations(self, recommendations: Optional[List[Dict[str, Any]]]) -> None:
         with self._lock:
             self._recommendations = list(recommendations or [])
             self._recommendation_token += 1
 
-    def snapshot(self):
+    def snapshot(self) -> Dict[str, Any]:
         with self._lock:
             return {
                 "status": self._status,

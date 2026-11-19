@@ -7,6 +7,7 @@ import time
 import wave
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -31,10 +32,6 @@ load_dotenv()
 
 class VoiceRecognition:
     SEARCH_RESULT_LIMIT = 3
-    RECORDING_CHUNK_DURATION = 0.25
-    SPEECH_END_SILENCE_DURATION = 0.75
-    SPEECH_START_TIMEOUT = 8.0
-    MAX_RECORDING_DURATION = 20.0
     DEFAULT_RECORDING_DURATION = 4.0
     """ Commands Structure """
     SEARCH_COMMAND_RE = re.compile(
@@ -54,13 +51,13 @@ class VoiceRecognition:
 
     def __init__(
         self,
-        session=None,
-        speaker=None,
-        gemini_service=None,
-        use_gemini=True,
-        frame_provider=None,
-        state_manager=None,
-    ):
+        session: Optional[Any] = None,
+        speaker: Optional[Any] = None,
+        gemini_service: Optional[GeminiService] = None,
+        use_gemini: bool = True,
+        frame_provider: Optional[Any] = None,
+        state_manager: Optional[Any] = None,
+    ) -> None:
         self.session = session
         self.speaker = speaker
         self.use_gemini = use_gemini
@@ -76,8 +73,6 @@ class VoiceRecognition:
             helper is not None
             for helper in (get_speech_timestamps, load_silero_vad, torch)
         )
-
-        module_dir = Path(__file__).resolve().parent
 
         # Temp audio path for real NAO recording
         self.nao_audio_path = "/home/nao/nao_speech.wav"
@@ -99,45 +94,7 @@ class VoiceRecognition:
         self.model = WhisperModel("base", device="cpu", compute_type="int8")
 
         # Initialize NAO Audio Recorder proxy if session exists
-        self.audio_recorder = None
-        self.file_manager = None
-        if self.session and self.session.isConnected():
-            try:
-                self.audio_recorder = self.session.service("ALAudioRecorder")
-                self.file_manager = self.session.service("ALFileManager")
-
-                print("[VoiceRecognition] ALAudioRecorder connected.")
-                print("[VoiceRecognition] ALFileManager connected.")
-
-                try:
-                    meta_object = self.file_manager.metaObject()
-                    if hasattr(meta_object, "methodNames"):
-                        methods = list(meta_object.methodNames())
-                    elif isinstance(meta_object, dict):
-                        raw_methods = (
-                            meta_object.get("methods") or meta_object.get("method") or []
-                        )
-                        if isinstance(raw_methods, dict):
-                            methods = list(raw_methods.keys())
-                        else:
-                            methods = [
-                                method.get("name")
-                                if isinstance(method, dict) and "name" in method
-                                else str(method)
-                                for method in raw_methods
-                            ]
-                    else:
-                        methods = []
-
-                    if methods:
-                        print("[VoiceRecognition] ALFileManager methods:", methods)
-                except Exception as e:
-                    print(
-                        f"[VoiceRecognition Warning] "
-                        f"Could not inspect ALFileManager: {e}"
-                    )
-            except Exception as e:
-                print(f"[VoiceRecognition Warning] Could not initialize NAO audio/file services: {e}")
+        self.audio_recorder, self.file_manager = self._get_robot_audio_services()
 
         if self.use_gemini and self.gemini_service is None:
             try:
@@ -152,12 +109,30 @@ class VoiceRecognition:
             remote_path=self.nao_audio_path,
             local_path=self.temp_audio_path,
         )
+        self.stop_event = threading.Event()
+
+    def _get_robot_audio_services(self) -> Tuple[Optional[Any], Optional[Any]]:
+        if not self.session or not self.session.isConnected():
+            return None, None
+
+        try:
+            audio_recorder = self.session.service("ALAudioRecorder")
+            file_manager = self.session.service("ALFileManager")
+            print("[VoiceRecognition] ALAudioRecorder connected.")
+            print("[VoiceRecognition] ALFileManager connected.")
+            return audio_recorder, file_manager
+        except Exception as error:
+            print(
+                "[VoiceRecognition Warning] Could not initialize "
+                f"NAO audio/file services: {error}"
+            )
+            return None, None
 
     @staticmethod
-    def _log_performance(stage, started_at):
+    def _log_performance(stage: str, started_at: float) -> None:
         print(f"[Performance] {stage}: {time.perf_counter() - started_at:.3f}s")
 
-    def _ensure_vad_model(self):
+    def _ensure_vad_model(self) -> Optional[Any]:
         """Load Silero once, while retaining a safe no-VAD fallback."""
         if not self.vad_enabled or self.vad_model is not None:
             return self.vad_model
@@ -190,9 +165,13 @@ class VoiceRecognition:
                 )
         return self.vad_model
 
-    def listen_once_async(self, duration=None, on_complete=None):
+    def listen_once_async(
+        self,
+        duration: Optional[float] = None,
+        on_complete: Optional[Callable[[], None]] = None,
+    ) -> bool:
         """Starts one recording/transcription pass in the background."""
-        if self.recording_lock.locked():
+        if self.stop_event.is_set() or self.recording_lock.locked():
             print("[VoiceRecognition] Recording already in progress. Ignoring trigger.")
             return False
 
@@ -206,8 +185,8 @@ class VoiceRecognition:
         threading.Thread(target=_worker, daemon=True).start()
         return True
 
-    def listen_once(self, duration=None):
-        if not self.recording_lock.acquire(blocking=False):
+    def listen_once(self, duration: Optional[float] = None) -> str:
+        if self.stop_event.is_set() or not self.recording_lock.acquire(blocking=False):
             print("[VoiceRecognition] Recording already in progress. Skipping.")
             return ""
 
@@ -216,74 +195,20 @@ class VoiceRecognition:
             print("[VoiceRecognition] Waiting for speech to start...")
             self._set_status("Recording")
 
-            if self.audio_recorder:
-                print("[VoiceRecognition] Using NAO ALAudioRecorder.")
-                recording_started_at = time.perf_counter()
-                try:
-                    # ALAudioRecorder is file-based, so capture one complete
-                    # utterance instead of repeatedly restarting it for tiny
-                    # chunks.
-                    capture_duration = (
-                        duration
-                        if duration is not None
-                        else self.DEFAULT_RECORDING_DURATION
-                    )
-                    print(
-                        f"[VoiceRecognition] Recording fixed utterance "
-                        f"({capture_duration:.1f}s)."
-                    )
-                    audio_file = self.audio_transfer.record_from_nao(
-                        capture_duration
-                    )
-                finally:
-                    self._log_performance("Audio acquisition", recording_started_at)
-            else:
-                print(
-                    "[VoiceRecognition Warning] ALAudioRecorder unavailable; "
-                    "real NAO recording cannot start."
-                )
-                audio_file = None
+            if self.stop_event.is_set():
+                return ""
+
+            audio_file = self._capture_audio(duration)
+
+            if self.stop_event.is_set():
+                return ""
 
             print(f"[VoiceRecognition] Audio file: {audio_file}")
 
-            if audio_file and os.path.exists(audio_file):
-                print("[VoiceRecognition] Starting transcription...")
-                self._set_status("Transcribing")
+            if not audio_file or not os.path.exists(audio_file):
+                return self._handle_missing_audio()
 
-                text = self._transcribe(audio_file)
-
-                print(f"[VoiceRecognition] Transcription: '{text}'")
-
-                if text:
-                    self._set_status("Processing command")
-                    if self.speaker:
-                        self.speaker.speak("I'm thinking.", animated=False)
-                    routing_started_at = time.perf_counter()
-                    try:
-                        result = self._on_speech_recognized(text)
-                    finally:
-                        self._log_performance(
-                            "Command parsing and routing", routing_started_at
-                        )
-                    self._record_result(text, result)
-                    self._set_status("Command completed")
-                    self._set_status("Ready/listening again")
-                else:
-                    self._record_result(
-                        "",
-                        {
-                            "action": "Unknown",
-                            "response": "No speech was recognized.",
-                            "status": "Error",
-                        },
-                    )
-                    self._set_status("Ready/listening again")
-
-                return text
-
-            print("[VoiceRecognition] No audio file available.")
-            self._set_status("Error", "No audio file available.")
-            return ""
+            return self._process_audio_file(audio_file)
         except Exception as e:
             self._set_status("Error", str(e))
             raise
@@ -292,35 +217,74 @@ class VoiceRecognition:
             self._log_performance("Total interaction", interaction_started_at)
             self.recording_lock.release()
 
-    def _speech_detected(self, audio_path):
-        """Return whether a short audio chunk contains speech."""
-        if not self.vad_enabled:
-            return False
+    def stop(self) -> None:
+        """Cancel future and active voice-recognition work."""
+        self.stop_event.set()
+        self.audio_transfer.stop()
 
-        if self._ensure_vad_model() is None:
-            return False
+    def _capture_audio(self, duration: Optional[float]) -> Optional[str]:
+        if not self.audio_recorder:
+            print(
+                "[VoiceRecognition Warning] ALAudioRecorder unavailable; "
+                "real NAO recording cannot start."
+            )
+            return None
 
-        audio = self._read_audio_for_vad(audio_path)
-        timestamps = get_speech_timestamps(
-            audio,
-            self.vad_model,
-            sampling_rate=16000,
-            threshold=0.25,
-            min_speech_duration_ms=80,
-            min_silence_duration_ms=80,
-            speech_pad_ms=0,
-            return_seconds=False,
+        capture_duration = (
+            duration if duration is not None else self.DEFAULT_RECORDING_DURATION
         )
-        if timestamps:
-            return True
+        print("[VoiceRecognition] Using NAO ALAudioRecorder.")
+        print(
+            f"[VoiceRecognition] Recording fixed utterance "
+            f"({capture_duration:.1f}s)."
+        )
+        started_at = time.perf_counter()
+        try:
+            return self.audio_transfer.record_from_nao(capture_duration)
+        finally:
+            self._log_performance("Audio acquisition", started_at)
 
-        # NAO recordings can be quieter than Silero's usual input. Treat a
-        # modest non-zero signal as speech so quiet utterances are not lost.
-        rms = float(torch.sqrt(torch.mean(audio * audio))) if audio.numel() else 0.0
-        peak = float(torch.max(torch.abs(audio))) if audio.numel() else 0.0
-        return rms >= 0.008 or peak >= 0.08
+    def _handle_missing_audio(self) -> str:
+        print("[VoiceRecognition] No audio file available.")
+        self._set_status("Error", "No audio file available.")
+        return ""
 
-    def _transcribe(self, audio_path):
+    def _process_audio_file(self, audio_file: str) -> str:
+        print("[VoiceRecognition] Starting transcription...")
+        self._set_status("Transcribing")
+        text = self._transcribe(audio_file)
+        print(f"[VoiceRecognition] Transcription: '{text}'")
+
+        if text:
+            self._process_transcript(text)
+        else:
+            self._record_result(
+                "",
+                {
+                    "action": "Unknown",
+                    "response": "No speech was recognized.",
+                    "status": "Error",
+                },
+            )
+            self._set_status("Ready/listening again")
+        return text
+
+    def _process_transcript(self, text: str) -> None:
+        self._set_status("Processing command")
+        if self.speaker:
+            self.speaker.speak("I'm thinking.", animated=False)
+
+        started_at = time.perf_counter()
+        try:
+            result = self._on_speech_recognized(text)
+        finally:
+            self._log_performance("Command parsing and routing", started_at)
+
+        self._record_result(text, result)
+        self._set_status("Command completed")
+        self._set_status("Ready/listening again")
+
+    def _transcribe(self, audio_path: str) -> str:
         """Converts audio file to text using faster-whisper."""
         vad_started_at = time.perf_counter()
         try:
@@ -355,7 +319,7 @@ class VoiceRecognition:
                     pass
 
     @staticmethod
-    def _read_audio_for_whisper(audio_path):
+    def _read_audio_for_whisper(audio_path: str) -> np.ndarray:
         """Read a PCM WAV into the float32 format expected by Whisper."""
         with wave.open(audio_path, "rb") as wav_file:
             channels = wav_file.getnchannels()
@@ -388,7 +352,7 @@ class VoiceRecognition:
             raise ValueError(f"Expected 16 kHz WAV for Whisper, received {sample_rate} Hz")
         return np.ascontiguousarray(audio, dtype=np.float32)
 
-    def _extract_speech_audio(self, audio_path):
+    def _extract_speech_audio(self, audio_path: str) -> str:
         """Trim silence from a recording with Silero VAD before Whisper runs."""
         if not self.vad_enabled:
             return audio_path
@@ -442,7 +406,7 @@ class VoiceRecognition:
             return audio_path
 
     @staticmethod
-    def _read_audio_for_vad(audio_path):
+    def _read_audio_for_vad(audio_path: str) -> Any:
         """Decode NAO's PCM WAV without torchaudio or torchcodec."""
         with wave.open(audio_path, "rb") as wav_file:
             channels = wav_file.getnchannels()
@@ -475,7 +439,7 @@ class VoiceRecognition:
             raise ValueError(f"Expected 16 kHz WAV for VAD, received {sample_rate} Hz")
         return torch.from_numpy(np.ascontiguousarray(audio, dtype=np.float32))
 
-    def _capture_camera_frame(self):
+    def _capture_camera_frame(self) -> Optional[bytes]:
         if cv2 is None:
             return None
 
@@ -522,7 +486,7 @@ class VoiceRecognition:
             return None
 
     """ COMMAND HANDLING"""
-    def _on_speech_recognized(self, text):
+    def _on_speech_recognized(self, text: str) -> Dict[str, Any]:
         """Triggers actions when speech is detected."""
         print(f"\n[VoiceRecognition] Heard: \"{text}\"")
 
@@ -574,7 +538,7 @@ class VoiceRecognition:
             "status": "Completed",
         }
 
-    def _handle_keyword_command(self, text):
+    def _handle_keyword_command(self, text: str) -> Optional[Dict[str, Any]]:
         """Handles configured voice commands stored in Supabase."""
         normalized_text = text.lower()
         compact_text = normalized_text.replace(" ", "")
@@ -597,17 +561,11 @@ class VoiceRecognition:
         if command:
             return self._execute_database_command(command)
 
-        if (
-            "camera" in normalized_text
-            or "vision" in normalized_text
-            or "classroom" in normalized_text
-            or "what do you see" in normalized_text
-        ):
-            return None
-
         return None
 
-    def _handle_local_command(self, normalized_text, compact_text):
+    def _handle_local_command(
+        self, normalized_text: str, compact_text: str
+    ) -> Optional[Dict[str, Any]]:
         """Handle robot movement commands locally, independent of Supabase."""
         if self._contains_command(normalized_text, compact_text, ["stand up", "standup"]):
             response = "Standing up."
@@ -662,7 +620,9 @@ class VoiceRecognition:
         return None
 
     @staticmethod
-    def _find_database_command(normalized_text, compact_text):
+    def _find_database_command(
+        normalized_text: str, compact_text: str
+    ) -> Optional[Dict[str, Any]]:
         """Return the first enabled Supabase command matching the transcript."""
         try:
             commands = get_voice_commands()
@@ -671,8 +631,6 @@ class VoiceRecognition:
             return None
 
         for command in commands:
-            if command.get("command_key") not in {"attendance", "hello"}:
-                continue
             for phrase in command.get("triggers", []) or []:
                 normalized_phrase = " ".join(str(phrase).lower().split())
                 compact_phrase = normalized_phrase.replace(" ", "")
@@ -680,18 +638,18 @@ class VoiceRecognition:
                     return command
         return None
 
-    def _execute_database_command(self, command):
+    def _execute_database_command(self, command: Dict[str, Any]) -> Dict[str, Any]:
         """Execute response-only commands loaded from Supabase."""
         command_key = command.get("command_key")
         response = command.get("response") or "Command completed."
         self.speaker.speak(response)
         return {
-            "action": "Attendance" if command_key == "attendance" else "Robot",
+            "action": command.get("action") or command_key or "Voice command",
             "response": response,
             "status": "Completed",
         }
 
-    def _handle_search_command(self, text):
+    def _handle_search_command(self, text: str) -> Optional[Dict[str, Any]]:
         search_request = self._parse_search_command(text)
         if not search_request:
             return False
@@ -740,7 +698,7 @@ class VoiceRecognition:
         }
 
     """Identifies the requested search category"""
-    def _parse_search_command(self, text):
+    def _parse_search_command(self, text: str) -> Optional[Tuple[str, str]]:
         text = " ".join(text.strip().split())
 
         match = self.SEARCH_COMMAND_RE.search(text)
@@ -787,7 +745,9 @@ class VoiceRecognition:
         return "websites", query
 
     """Search Brave's web or video endpoint."""
-    def _brave_search(self, kind, query, limit=3):
+    def _brave_search(
+        self, kind: str, query: str, limit: int = 3
+    ) -> List[Dict[str, Any]]:
 
         if not self.brave_search_api_key:
             message = (
@@ -836,66 +796,71 @@ class VoiceRecognition:
 
             results = []
             for item in raw_results:
-                title = item.get("title")
-                url = item.get("url")
-                parsed_url = urlparse(str(url))
-                hostname = parsed_url.netloc.lower().split(":", 1)[0].rstrip(".")
-
-                """Validates results format, if not matches then skip result"""
-                if (
-                    not title #must have title
-                    or parsed_url.scheme not in {"http", "https"} #URL is http/https
-                    or not parsed_url.netloc #Valid Hostname
-                ):
-                    continue
-                if kind == "videos" and not (
-                    hostname == "youtu.be"
-                    or hostname == "youtube.com"
-                    or hostname.endswith(".youtube.com")
-                ):
-                    continue
-
-                thumbnail = item.get("thumbnail")
-                if isinstance(thumbnail, dict):
-                    thumbnail = thumbnail.get("src") or thumbnail.get("original")
-
-                """Thumbnail backups"""
-                thumbnail_url = urlparse(str(thumbnail)) if thumbnail else None # Check valid URL
-                if not thumbnail_url or thumbnail_url.scheme not in {"http", "https"} or not thumbnail_url.netloc: #Generates a replacement\
-
-                    video_id = ""
-                    if hostname.endswith("youtube.com"):
-                        video_id = parse_qs(parsed_url.query).get("v", [""])[0]
-                    elif hostname == "youtu.be":
-                        video_id = parsed_url.path.strip("/").split("/")[0]
-
-                    if video_id:
-                        thumbnail = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg" #Generates a general website thumbnail png
-                    else:
-                        thumbnail = (
-                            "https://www.google.com/s2/favicons?"
-                            f"domain={parsed_url.netloc}&sz=128"
-                        )
-
-                """Store the final results"""
-                results.append(
-                    {
-                        "title": title,
-                        "url": url,
-                        "thumbnail": thumbnail,
-                    }
-                )
+                result = self._normalize_search_result(item, kind)
+                if result:
+                    results.append(result)
 
             return results[:limit]
         except (requests.RequestException, ValueError) as error:
             print(f"[VoiceRecognition Error] Brave search failed: {error}")
             return []
 
-    def _set_status(self, status, error=""):
+    @staticmethod
+    def _normalize_search_result(
+        item: Dict[str, Any], kind: str
+    ) -> Optional[Dict[str, Any]]:
+        title = item.get("title")
+        url = item.get("url")
+        parsed_url = urlparse(str(url))
+        hostname = parsed_url.netloc.lower().split(":", 1)[0].rstrip(".")
+
+        if (
+            not title
+            or parsed_url.scheme not in {"http", "https"}
+            or not parsed_url.netloc
+        ):
+            return None
+        if kind == "videos" and not (
+            hostname == "youtu.be"
+            or hostname == "youtube.com"
+            or hostname.endswith(".youtube.com")
+        ):
+            return None
+
+        return {
+            "title": title,
+            "url": url,
+            "thumbnail": VoiceRecognition._resolve_thumbnail(
+                item.get("thumbnail"), parsed_url, hostname
+            ),
+        }
+
+    @staticmethod
+    def _resolve_thumbnail(
+        thumbnail: Any, parsed_url: Any, hostname: str
+    ) -> str:
+        if isinstance(thumbnail, dict):
+            thumbnail = thumbnail.get("src") or thumbnail.get("original")
+
+        thumbnail_url = urlparse(str(thumbnail)) if thumbnail else None
+        if thumbnail_url and thumbnail_url.scheme in {"http", "https"} and thumbnail_url.netloc:
+            return str(thumbnail)
+
+        video_id = ""
+        if hostname.endswith("youtube.com"):
+            video_id = parse_qs(parsed_url.query).get("v", [""])[0]
+        elif hostname == "youtu.be":
+            video_id = parsed_url.path.strip("/").split("/")[0]
+
+        if video_id:
+            return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+        return f"https://www.google.com/s2/favicons?domain={parsed_url.netloc}&sz=128"
+
+    def _set_status(self, status: str, error: str = "") -> None:
         if self.state_manager:
             self.state_manager.set_status(status, error=error)
 
-    def _record_result(self, text, result):
+    def _record_result(self, text: str, result: Optional[Dict[str, Any]]) -> None:
         if not self.state_manager:
             return
 
@@ -908,7 +873,9 @@ class VoiceRecognition:
             recommendations=result.get("recommendations"),
         )
 
-    def _contains_command(self, normalized_text, compact_text, phrases):
+    def _contains_command(
+        self, normalized_text: str, compact_text: str, phrases: List[str]
+    ) -> bool:
         for phrase in phrases:
             if " " in phrase:
                 if phrase in normalized_text:
@@ -917,7 +884,7 @@ class VoiceRecognition:
                 return True
         return False
 
-    def _get_nao_service(self, name):
+    def _get_nao_service(self, name: str) -> Optional[Any]:
         try:
             if self.session and self.session.isConnected():
                 return self.session.service(name)
@@ -925,7 +892,7 @@ class VoiceRecognition:
             print(f"[VoiceRecognition Warning] Could not get {name}: {e}")
         return None
 
-    def _wake_up(self):
+    def _wake_up(self) -> None:
         motion = self._get_nao_service("ALMotion")
         if not motion:
             print("[VoiceRecognition] ALMotion unavailable; wake up skipped.")
@@ -939,7 +906,7 @@ class VoiceRecognition:
         finally:
             self._log_performance("Robot action (wake up)", action_started_at)
 
-    def _rest(self):
+    def _rest(self) -> None:
         motion = self._get_nao_service("ALMotion")
         if not motion:
             print("[VoiceRecognition] ALMotion unavailable; rest skipped.")
@@ -953,7 +920,7 @@ class VoiceRecognition:
         finally:
             self._log_performance("Robot action (rest)", action_started_at)
 
-    def _go_to_posture(self, posture_name, speed=0.6):
+    def _go_to_posture(self, posture_name: str, speed: float = 0.6) -> None:
         posture = self._get_nao_service("ALRobotPosture")
         if not posture:
             print(
