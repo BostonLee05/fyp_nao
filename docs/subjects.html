@@ -9,6 +9,68 @@
 </head>
 <body>
 <template id="pageTemplate">
+    <style>
+        .dashboard-grid + .panel { margin-top:28px; }
+        .dashboard-grid { gap:28px; }
+        .dashboard-grid .panel { min-height:0; }
+        .day-picker {
+            border:0;
+            padding:0;
+            margin:4px 0 14px;
+        }
+        .day-picker legend {
+            width:100%;
+            margin-bottom:10px;
+            font-weight:700;
+        }
+        .day-options {
+            display:grid;
+            grid-template-columns:repeat(7,minmax(64px,1fr));
+            gap:8px;
+        }
+        .day-options label {
+            display:grid;
+            grid-template-rows:auto 32px;
+            justify-items:center;
+            align-items:center;
+            gap:6px;
+            min-width:0;
+            padding:10px 4px 6px;
+            border:1px solid #e2e8f0;
+            border-radius:10px;
+            background:#f8fafc;
+            font-size:12px;
+            font-weight:600;
+            cursor:pointer;
+        }
+        .day-options label:has(input:checked) {
+            border-color:#2563eb;
+            background:#eff6ff;
+            color:#1d4ed8;
+        }
+        .day-options input {
+            width:18px;
+            height:18px;
+            accent-color:#2563eb;
+            cursor:pointer;
+        }
+        .student-action-stack {
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+            min-width:112px;
+        }
+        .student-action-stack button {
+            width:100%;
+        }
+        #studentSubject option:disabled {
+            color:#94a3b8;
+            background:#f1f5f9;
+        }
+        @media (max-width:700px) {
+            .day-options { grid-template-columns:repeat(4,minmax(64px,1fr)); }
+        }
+    </style>
     <div class="dashboard-grid">
         <section class="panel">
             <h2><i class="fa-solid fa-book"></i> Create Subject</h2>
@@ -19,16 +81,18 @@
             <textarea id="subjectDescription" rows="4" placeholder="Describe the subject topics for voice assistance."></textarea>
             <label>Weekly Start Time</label><input id="scheduleStart" type="time">
             <label>Weekly End Time</label><input id="scheduleEnd" type="time">
-            <label>Weekly Class Days</label>
-            <div id="scheduleDays">
-                <label><input type="checkbox" value="Monday"> Monday</label>
-                <label><input type="checkbox" value="Tuesday"> Tuesday</label>
-                <label><input type="checkbox" value="Wednesday"> Wednesday</label>
-                <label><input type="checkbox" value="Thursday"> Thursday</label>
-                <label><input type="checkbox" value="Friday"> Friday</label>
-                <label><input type="checkbox" value="Saturday"> Saturday</label>
-                <label><input type="checkbox" value="Sunday"> Sunday</label>
-            </div>
+            <fieldset class="day-picker">
+                <legend>Weekly Class Days</legend>
+                <div id="scheduleDays" class="day-options">
+                    <label><span>Monday</span><input type="checkbox" value="Monday"></label>
+                    <label><span>Tuesday</span><input type="checkbox" value="Tuesday"></label>
+                    <label><span>Wednesday</span><input type="checkbox" value="Wednesday"></label>
+                    <label><span>Thursday</span><input type="checkbox" value="Thursday"></label>
+                    <label><span>Friday</span><input type="checkbox" value="Friday"></label>
+                    <label><span>Saturday</span><input type="checkbox" value="Saturday"></label>
+                    <label><span>Sunday</span><input type="checkbox" value="Sunday"></label>
+                </div>
+            </fieldset>
             <button id="addSubjectBtn">Create Subject</button><p id="subjectMessage"></p>
         </section>
         <section class="panel">
@@ -64,14 +128,50 @@ async function loadSubjects() {
     const data = await apiFetch("/api/subjects");
     const select = document.getElementById("studentSubject");
     select.innerHTML = '<option value="">No subject</option>';
-    const selectedIds = new Set(
-        Array.from(select.selectedOptions).map(option => Number(option.value)).filter(Boolean)
-    );
+    window.availableSubjects = data.subjects || [];
     (data.subjects || []).forEach(subject => {
         select.insertAdjacentHTML("beforeend",
             `<option value="${subject.class_id}">${escapeHtml(subject.class_code)} - ${escapeHtml(subject.class_name)}</option>`);
     });
+    updateClashingSubjectOptions();
 }
+
+function updateClashingSubjectOptions() {
+    const select = document.getElementById("studentSubject");
+    const selectedIds = new Set(
+        Array.from(select.selectedOptions)
+            .map(option => Number(option.value))
+            .filter(Boolean)
+    );
+    const subjects = window.availableSubjects || [];
+
+    Array.from(select.options).forEach(option => {
+        if (!option.value) return;
+        const subjectId = Number(option.value);
+        const clashes = subjects.some(subject => {
+            if (Number(subject.class_id) === subjectId) return false;
+            if (!selectedIds.has(Number(subject.class_id))) return false;
+            if (!subject.schedule_start || !subject.schedule_end) return false;
+            const selected = subjects.find(item =>
+                Number(item.class_id) === subjectId
+            );
+            if (!selected || !selected.schedule_start || !selected.schedule_end) return false;
+            const commonDay = (selected.schedule_days || [])
+                .some(day => (subject.schedule_days || []).includes(day));
+            return commonDay
+                && selected.schedule_start < subject.schedule_end
+                && subject.schedule_start < selected.schedule_end;
+        });
+        option.disabled = clashes && !selectedIds.has(subjectId);
+        option.className = option.disabled ? "clashing-subject" : "";
+    });
+}
+
+document.addEventListener("change", event => {
+    if (event.target && event.target.id === "studentSubject") {
+        updateClashingSubjectOptions();
+    }
+});
 
 async function loadStudents() {
     const data = await apiFetch("/api/students");
@@ -81,21 +181,20 @@ async function loadStudents() {
         return;
     }
 
-    async function loadProgrammes() {
-        const data = await apiFetch("/api/programmes");
-        const select = document.getElementById("programme");
-        select.innerHTML = '<option value="">No programme / Select later</option>';
-        (data.programmes || []).forEach(programme => {
-            select.insertAdjacentHTML("beforeend",
-                `<option value="${programme.programme_id}">${escapeHtml(programme.programme_name)}</option>`);
-        });
-    }
     body.innerHTML = data.students.map(student => {
         const registered = Number(student.face_registered) === 1;
+        const classIds = String(student.class_ids || "")
+            .split(",")
+            .filter(Boolean)
+            .join(",");
         return `<tr><td>${escapeHtml(student.student_id)}</td><td>${escapeHtml(student.student_name)}</td>
-            <td>${escapeHtml(student.programme || "-")}</td><td>${escapeHtml(student.classes || "Not enrolled")}</td>
+            <td>${escapeHtml(student.programme_name || "-")}</td><td>${escapeHtml(student.classes || "Not enrolled")}</td>
             <td>${registered ? "Registered" : "Not registered"}</td>
-            <td>${registered ? "" : `<button type="button" onclick="startFaceRegistration('${escapeHtml(student.student_id)}')">Register Face</button>`}</td></tr>`;
+            <td><div class="student-action-stack">
+                <button type="button" onclick="editStudent('${escapeHtml(student.student_id)}','${escapeHtml(student.student_name)}','${escapeHtml(student.programme_id || "")}',[${classIds}])">Edit</button>
+                <button type="button" class="delete-btn" onclick="deleteStudent('${escapeHtml(student.student_id)}')">Delete</button>
+                ${registered ? "" : `<button type="button" onclick="startFaceRegistration('${escapeHtml(student.student_id)}')">Register Face</button>`}
+            </div></td></tr>`;
     }).join("");
 }
 
@@ -157,6 +256,47 @@ async function startFaceRegistration(studentId) {
                 alert(status.error);
             }
         }, 1000);
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function loadProgrammes() {
+    const data = await apiFetch("/api/programmes");
+    const select = document.getElementById("programme");
+    select.innerHTML = '<option value="">No programme / Select later</option>';
+    (data.programmes || []).forEach(programme => {
+        select.insertAdjacentHTML("beforeend",
+            `<option value="${programme.programme_id}">${escapeHtml(programme.programme_name)}</option>`);
+    });
+}
+
+async function editStudent(studentId, studentName, programmeId, classIds = []) {
+    const name = prompt("Student name:", studentName);
+    if (name === null) return;
+    try {
+        await apiFetch(`/api/students/${encodeURIComponent(studentId)}`, {
+            method: "PUT",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({
+                student_name: name.trim(),
+                programme_id: programmeId || null,
+                class_ids: classIds
+            })
+        });
+        await loadStudents();
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function deleteStudent(studentId) {
+    if (!confirm(`Delete student "${studentId}"?`)) return;
+    try {
+        await apiFetch(`/api/students/${encodeURIComponent(studentId)}`, {
+            method: "DELETE"
+        });
+        await loadStudents();
     } catch (error) {
         alert(error.message);
     }

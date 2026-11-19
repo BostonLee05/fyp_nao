@@ -110,6 +110,79 @@
     align-items:center;
     gap:6px;
 }
+.day-picker {
+    border:0;
+    padding:0;
+    margin:4px 0 14px;
+}
+.day-picker legend {
+    width:100%;
+    margin-bottom:10px;
+    font-weight:700;
+}
+.schedule-days {
+    display:grid;
+    grid-template-columns:repeat(7,minmax(64px,1fr));
+    gap:8px;
+}
+.schedule-days label {
+    display:grid;
+    grid-template-rows:auto 32px;
+    justify-items:center;
+    align-items:center;
+    gap:6px;
+    min-width:0;
+    padding:10px 4px 6px;
+    border:1px solid #e2e8f0;
+    border-radius:10px;
+    background:#f8fafc;
+    font-size:12px;
+    font-weight:600;
+    cursor:pointer;
+}
+.schedule-days label:has(input:checked) {
+    border-color:#2563eb;
+    background:#eff6ff;
+    color:#1d4ed8;
+}
+.schedule-days input {
+    width:18px;
+    height:18px;
+    accent-color:#2563eb;
+    cursor:pointer;
+}
+.student-action-stack {
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    min-width:112px;
+}
+.student-action-stack .action-btn {
+    width:100%;
+}
+.subjects-page .dashboard-grid {
+    margin-bottom:28px;
+}
+.subjects-page > .panel,
+.subjects-page .dashboard-grid > .panel {
+    margin:0;
+}
+.subjects-page > .panel {
+    margin-top:28px;
+}
+.subjects-page .panel {
+    padding:24px;
+}
+.subjects-page .programme-create {
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin-top:4px;
+}
+.subjects-page .programme-create button {
+    width:auto;
+    align-self:flex-start;
+}
 .subject-option-disabled {
     color:#94a3b8;
 }
@@ -138,16 +211,18 @@
 <input id="scheduleStart" type="time">
 <label for="scheduleEnd">Weekly End Time</label>
 <input id="scheduleEnd" type="time">
-<label>Weekly Class Days</label>
-<div id="scheduleDays" class="schedule-days">
-    <label><input type="checkbox" value="Monday"> Monday</label>
-    <label><input type="checkbox" value="Tuesday"> Tuesday</label>
-    <label><input type="checkbox" value="Wednesday"> Wednesday</label>
-    <label><input type="checkbox" value="Thursday"> Thursday</label>
-    <label><input type="checkbox" value="Friday"> Friday</label>
-    <label><input type="checkbox" value="Saturday"> Saturday</label>
-    <label><input type="checkbox" value="Sunday"> Sunday</label>
-</div>
+<fieldset class="day-picker">
+    <legend>Weekly Class Days</legend>
+    <div id="scheduleDays" class="schedule-days">
+        <label><span>Monday</span><input type="checkbox" value="Monday"></label>
+        <label><span>Tuesday</span><input type="checkbox" value="Tuesday"></label>
+        <label><span>Wednesday</span><input type="checkbox" value="Wednesday"></label>
+        <label><span>Thursday</span><input type="checkbox" value="Thursday"></label>
+        <label><span>Friday</span><input type="checkbox" value="Friday"></label>
+        <label><span>Saturday</span><input type="checkbox" value="Saturday"></label>
+        <label><span>Sunday</span><input type="checkbox" value="Sunday"></label>
+    </div>
+</fieldset>
 <button id="addSubjectBtn">Create Subject</button>
 <button id="cancelSubjectEditBtn" class="cancel-btn" type="button" style="display:none">Cancel Edit</button>
 <p id="subjectMessage" class="form-message" aria-live="polite"></p>
@@ -348,6 +423,25 @@ function showFormMessage(element, message, type = "success", countdownSeconds = 
 
 async function loadSubjects(){try{const r=await fetch(subjectsUrl+"?t="+Date.now(),{cache:"no-store"}),d=await r.json();if(!r.ok||!d.success)throw Error(d.message||"Unable to load subjects.");const b=document.getElementById("subjectsBody");b.innerHTML="";studentSubject.innerHTML='<option value="">No subject / Enroll later</option>';availableSubjects=d.subjects||[];if(!availableSubjects.length){b.innerHTML='<tr><td colspan="5" class="table-empty">No subjects registered yet.</td></tr>';updateSubjectOptions();return}availableSubjects.forEach(s=>{const schedule=s.schedule_start&&s.schedule_end?`${escapeHtml((s.schedule_days||[]).join(", "))||"Weekly"}: ${escapeHtml(s.schedule_start)}-${escapeHtml(s.schedule_end)}`:"No weekly schedule";const row=document.createElement("tr");row.innerHTML=`<td>${escapeHtml(s.class_code)}</td><td>${escapeHtml(s.class_name)}</td><td>${escapeHtml(s.semester||"-")}</td><td>${schedule}</td><td><div class="action-buttons"><button type="button" class="action-btn edit-btn" onclick="editSubject(${Number(s.class_id)},'${escapeHtml(s.class_code)}','${escapeHtml(s.class_name)}','${escapeHtml(s.semester||"")}','${escapeHtml(s.description||"")}','${escapeHtml(s.schedule_start||"")}','${escapeHtml(s.schedule_end||"")}',${JSON.stringify(s.schedule_days||[]).replaceAll("'","&#39;")})"><i class="fa-solid fa-pen"></i> Edit</button><button type="button" class="action-btn delete-btn" onclick="deleteSubject(${Number(s.class_id)},'${escapeHtml(s.class_code)}')"><i class="fa-solid fa-trash"></i> Delete</button></div></td>`;b.appendChild(row);const o=document.createElement("option");o.value=s.class_id;o.textContent=`${s.class_code} - ${s.class_name}`;studentSubject.appendChild(o)});updateSubjectOptions()}catch(e){console.error(e);showFormMessage(subjectMessage,"Failed to load subjects.","error",0)}}
 
+function updateSubjectOptions(){
+    const selectedIds=new Set(Array.from(studentSubject.selectedOptions).map(option=>Number(option.value)).filter(Boolean));
+    Array.from(studentSubject.options).forEach(option=>{
+        if(!option.value)return;
+        const candidate=availableSubjects.find(subject=>Number(subject.class_id)===Number(option.value));
+        if(!candidate)return;
+        let clashes=false;
+        availableSubjects.forEach(selected=>{
+            if(!selectedIds.has(Number(selected.class_id))||Number(selected.class_id)===Number(option.value))return;
+            if(!candidate.schedule_start||!candidate.schedule_end||!selected.schedule_start||!selected.schedule_end)return;
+            const commonDay=(candidate.schedule_days||[]).some(day=>(selected.schedule_days||[]).includes(day));
+            if(commonDay&&candidate.schedule_start<selected.schedule_end&&selected.schedule_start<candidate.schedule_end)clashes=true;
+        });
+        option.disabled=clashes&&!selectedIds.has(Number(option.value));
+        option.textContent=option.disabled?`${candidate.class_code} - ${candidate.class_name} (clashes)`:`${candidate.class_code} - ${candidate.class_name}`;
+    });
+}
+studentSubject.addEventListener("change",updateSubjectOptions);
+
 addSubjectBtn.addEventListener("click", async () => {
     const code = subjectCode.value.trim();
     const name = subjectName.value.trim();
@@ -429,13 +523,13 @@ function resetSubjectForm(){
 cancelSubjectEditBtn.addEventListener("click",()=>{resetSubjectForm();subjectMessage.textContent=""});
 async function deleteSubject(id,code){if(!confirm(`Delete subject "${code}"?\n\nIts student enrollments and related attendance sessions may also be removed.`))return;try{const r=await fetch(`${subjectsUrl}/${id}`,{method:"DELETE"}),d=await r.json();if(!r.ok||!d.success){showFormMessage(subjectMessage,d.message||"Unable to delete subject.","error",0);return}if(Number(editingSubjectId)===Number(id))resetSubjectForm();showFormMessage(subjectMessage,"Subject deleted successfully.","success",3);await loadSubjects();await loadStudents()}catch(e){console.error(e);showFormMessage(subjectMessage,"Unable to connect to the server.","error",0)}}
 
-studentForm.addEventListener("submit",async e=>{e.preventDefault();const id=studentId.value.trim(),name=studentName.value.trim();if(!id||!name){showFormMessage(studentMessage,"Student ID and student name are required.","error",0);return}registerStudentBtn.disabled=true;try{const editing=editingStudentId!==null;const classIds=Array.from(studentSubject.selectedOptions).map(o=>Number(o.value));const r=await fetch(editing?`${studentsUrl}/${encodeURIComponent(editingStudentId)}`:studentsUrl,{method:editing?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({student_id:id,student_name:name,programme:programme.value.trim(),class_ids:classIds,class_id:classIds[0]||""})}),d=await r.json();if(!r.ok||!d.success){showFormMessage(studentMessage,d.message||"Unable to save student.","error",0);return}showFormMessage(studentMessage,editing?"Student updated successfully.":"Student registered successfully.","success",3);resetStudentForm();await loadStudents()}catch(e){console.error(e);showFormMessage(studentMessage,"Unable to connect to the server.","error",0)}finally{registerStudentBtn.disabled=false}});
-function editStudent(id,name,prog,classIds){editingStudentId=id;studentId.value=id;studentName.value=name;programme.value=prog||"";Array.from(studentSubject.options).forEach(o=>o.selected=(classIds||[]).includes(Number(o.value)));studentId.disabled=true;registerStudentBtn.textContent="Update Student";cancelStudentEditBtn.style.display="inline-block";studentMessage.textContent="Editing student details. Select all subjects this student is enrolled in.";document.getElementById("studentPanel").classList.add("form-editing");studentName.focus()}
+studentForm.addEventListener("submit",async e=>{e.preventDefault();const id=studentId.value.trim(),name=studentName.value.trim();if(!id||!name){showFormMessage(studentMessage,"Student ID and student name are required.","error",0);return}registerStudentBtn.disabled=true;try{const editing=editingStudentId!==null;const classIds=Array.from(studentSubject.selectedOptions).map(o=>Number(o.value));const r=await fetch(editing?`${studentsUrl}/${encodeURIComponent(editingStudentId)}`:studentsUrl,{method:editing?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({student_id:id,student_name:name,programme_id:programme.value||null,class_ids:classIds,class_id:classIds[0]||""})}),d=await r.json();if(!r.ok||!d.success){showFormMessage(studentMessage,d.message||"Unable to save student.","error",0);return}showFormMessage(studentMessage,editing?"Student updated successfully.":"Student registered successfully.","success",3);resetStudentForm();await loadStudents()}catch(e){console.error(e);showFormMessage(studentMessage,"Unable to connect to the server.","error",0)}finally{registerStudentBtn.disabled=false}});
+function editStudent(id,name,programmeId,classIds){editingStudentId=id;studentId.value=id;studentName.value=name;programme.value=programmeId||"";Array.from(studentSubject.options).forEach(o=>o.selected=(classIds||[]).includes(Number(o.value)));studentId.disabled=true;registerStudentBtn.textContent="Update Student";cancelStudentEditBtn.style.display="inline-block";showFormMessage(studentMessage,"Editing student details. Select all subjects this student is enrolled in.","error",0);document.getElementById("studentPanel").classList.add("form-editing");studentName.focus()}
 function resetStudentForm(){editingStudentId=null;studentForm.reset();studentId.disabled=false;registerStudentBtn.textContent="Register Student";cancelStudentEditBtn.style.display="none";document.getElementById("studentPanel").classList.remove("form-editing")}
 cancelStudentEditBtn.addEventListener("click",()=>{resetStudentForm();studentMessage.textContent=""});
 async function deleteStudent(id){if(!confirm(`Delete student "${id}"?\n\nThis will also remove the student's subject enrollments and related attendance records.`))return;try{const r=await fetch(`${studentsUrl}/${encodeURIComponent(id)}`,{method:"DELETE"}),d=await r.json();if(!r.ok||!d.success){showFormMessage(studentMessage,d.message||"Unable to delete student.","error",0);return}if(String(editingStudentId)===String(id))resetStudentForm();showFormMessage(studentMessage,"Student deleted successfully.","success",3);await loadStudents()}catch(e){console.error(e);showFormMessage(studentMessage,"Unable to connect to the server.","error",0)}}
 
-async function loadStudents(){try{const r=await fetch(studentsUrl+"?t="+Date.now(),{cache:"no-store"}),d=await r.json();if(!r.ok||!d.success)throw Error(d.message||"Unable to load students.");const b=document.getElementById("studentsBody");b.innerHTML="";if(!d.students.length){b.innerHTML='<tr><td colspan="7" class="table-empty">No students registered yet.</td></tr>';return}d.students.forEach(s=>{const registered=Number(s.face_registered)===1;const studentId=escapeHtml(s.student_id);const studentName=escapeHtml(s.student_name);const programme=escapeHtml(s.programme||"");const classIds=String(s.class_ids||"").split(",").filter(Boolean).map(Number).join(",");const row=document.createElement("tr");row.innerHTML=`<td>👤</td><td>${studentId}</td><td>${studentName}</td><td>${programme||"-"}</td><td class="student-subjects">${formatSubjects(s.classes||s.subjects)}</td><td class="face-status">${registered?"🟢 Registered":"🔴 Not registered"}</td><td><div class="action-buttons"><button type="button" class="action-btn edit-btn" onclick="editStudent('${studentId}','${studentName}','${programme}',[${classIds}])"><i class="fa-solid fa-pen"></i> Edit</button><button type="button" class="action-btn delete-btn" onclick="deleteStudent('${studentId}')"><i class="fa-solid fa-trash"></i> Delete</button>${registered?"":`<button type="button" class="action-btn face-btn" onclick="startFaceRegistration('${studentId}')"><i class="fa-solid fa-camera"></i> Register Face</button>`}</div></td>`;b.appendChild(row)})}catch(e){console.error(e);document.getElementById("studentsBody").innerHTML='<tr><td colspan="7" class="table-empty">Failed to load students.</td></tr>'}}
+async function loadStudents(){try{const r=await fetch(studentsUrl+"?t="+Date.now(),{cache:"no-store"}),d=await r.json();if(!r.ok||!d.success)throw Error(d.message||"Unable to load students.");const b=document.getElementById("studentsBody");b.innerHTML="";if(!d.students.length){b.innerHTML='<tr><td colspan="7" class="table-empty">No students registered yet.</td></tr>';return}d.students.forEach(s=>{const registered=Number(s.face_registered)===1;const studentId=escapeHtml(s.student_id);const studentName=escapeHtml(s.student_name);const programmeName=escapeHtml(s.programme_name||"");const programmeId=Number(s.programme_id||0);const classIds=String(s.class_ids||"").split(",").filter(Boolean).map(Number).join(",");const row=document.createElement("tr");row.innerHTML=`<td>👤</td><td>${studentId}</td><td>${studentName}</td><td>${programmeName||"-"}</td><td class="student-subjects">${formatSubjects(s.classes||s.subjects)}</td><td class="face-status">${registered?"🟢 Registered":"🔴 Not registered"}</td><td><div class="student-action-stack"><button type="button" class="action-btn edit-btn" onclick="editStudent('${studentId}','${studentName}','${programmeId||""}',[${classIds}])"><i class="fa-solid fa-pen"></i> Edit</button><button type="button" class="action-btn delete-btn" onclick="deleteStudent('${studentId}')"><i class="fa-solid fa-trash"></i> Delete</button>${registered?"":`<button type="button" class="action-btn face-btn" onclick="startFaceRegistration('${studentId}')"><i class="fa-solid fa-camera"></i> Register Face</button>`}</div></td>`;b.appendChild(row)})}catch(e){console.error(e);document.getElementById("studentsBody").innerHTML='<tr><td colspan="7" class="table-empty">Failed to load students.</td></tr>'}}
 
 function formatSubjects(value){if(!value)return "Not enrolled";return value.split(",").map(subject=>escapeHtml(subject.trim())).join("<br>")}
 
@@ -728,6 +822,47 @@ async function cancelFaceRegistration() {
         alert("Unable to connect to the server.");
     }
 }
-async function initializePage(){await loadSubjects();await loadStudents()}initializePage();
+async function loadProgrammes(){
+    try{
+        const r=await fetch(programmesUrl+"?t="+Date.now(),{cache:"no-store"});
+        const d=await r.json();
+        if(!r.ok||!d.success)throw Error(d.message||"Unable to load programmes.");
+        const select=programme;
+        const selected=select.value;
+        select.innerHTML='<option value="">No programme / Select later</option>';
+        (d.programmes||[]).forEach(item=>{
+            const option=document.createElement("option");
+            option.value=item.programme_id;
+            option.textContent=item.programme_name;
+            select.appendChild(option);
+        });
+        if(selected)select.value=selected;
+    }catch(e){
+        console.error(e);
+        showFormMessage(document.getElementById("programmeMessage"),"Unable to load programmes.","error",0);
+    }
+}
+document.getElementById("createProgrammeBtn").addEventListener("click",async()=>{
+    const name=document.getElementById("newProgrammeName").value.trim();
+    const message=document.getElementById("programmeMessage");
+    if(!name){showFormMessage(message,"Programme name is required.","error",0);return}
+    try{
+        const r=await fetch(programmesUrl,{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({programme_name:name})
+        });
+        const d=await r.json();
+        if(!r.ok||!d.success){showFormMessage(message,d.message||"Unable to create programme.","error",0);return}
+        document.getElementById("newProgrammeName").value="";
+        showFormMessage(message,"Programme created successfully.","success",3);
+        await loadProgrammes();
+        programme.value=String(d.programme_id);
+    }catch(e){
+        console.error(e);
+        showFormMessage(message,"Unable to connect to the server.","error",0);
+    }
+});
+async function initializePage(){await loadSubjects();await loadProgrammes();await loadStudents()}initializePage();
 </script>
 {% endblock %}
