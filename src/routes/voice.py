@@ -7,6 +7,13 @@ from flask import Blueprint, jsonify, render_template, request
 from modules.robot_services import robot_services
 
 from modules.voice_state import voice_state
+from database import (
+    add_voice_command,
+    add_voice_wake_phrase,
+    delete_voice_command,
+    get_voice_commands,
+    get_voice_wake_phrases,
+)
 
 
 voice_bp = Blueprint("voice", __name__, url_prefix="/api/voice")
@@ -36,6 +43,64 @@ def voice_history():
         "success": True,
         "history": snapshot["history"],
     })
+
+
+@voice_bp.route("/commands", methods=["GET"])
+def voice_commands():
+    """List database-backed commands and all of their trigger phrases."""
+    try:
+        return jsonify({
+            "success": True,
+            "commands": get_voice_commands(request.args.get("search", "").strip() or None),
+        })
+    except Exception as error:
+        return jsonify({"success": False, "error": str(error)}), 500
+
+
+@voice_bp.route("/commands/<int:command_id>", methods=["DELETE"])
+def remove_voice_command(command_id):
+    try:
+        if not delete_voice_command(command_id):
+            return jsonify({"success": False, "error": "Command not found"}), 404
+        return jsonify({"success": True})
+    except Exception as error:
+        return jsonify({"success": False, "error": str(error)}), 500
+
+
+@voice_bp.route("/commands", methods=["POST"])
+def create_voice_command():
+    """Create/update a command; phrases may contain any number of triggers."""
+    data = request.get_json(silent=True) or {}
+    phrases = data.get("phrases", data.get("triggers", []))
+    if isinstance(phrases, str):
+        phrases = [phrases]
+    try:
+        command_id = add_voice_command(
+            data.get("command_key", ""),
+            data.get("action", "robot"),
+            data.get("response", "Done."),
+            phrases,
+        )
+        return jsonify({"success": True, "command_id": command_id}), 201
+    except ValueError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+    except Exception as error:
+        return jsonify({"success": False, "error": str(error)}), 500
+
+
+@voice_bp.route("/wake-phrases", methods=["GET", "POST"])
+def voice_wake_phrases():
+    if request.method == "GET":
+        return jsonify({"success": True, "phrases": get_voice_wake_phrases()})
+    data = request.get_json(silent=True) or {}
+    phrases = data.get("phrases", data.get("phrase", []))
+    if isinstance(phrases, str):
+        phrases = [phrases]
+    try:
+        ids = [add_voice_wake_phrase(phrase) for phrase in phrases]
+        return jsonify({"success": True, "wake_phrase_ids": ids}), 201
+    except ValueError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
 
 
 @voice_bp.route("/recommendations")
