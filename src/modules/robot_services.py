@@ -1,9 +1,11 @@
+from typing import Any, Optional
+
 from integrated_monitoring import monitor
 from speaker import Speaker
 
 from modules.fall_recovery import FallRecovery
 from modules.gemini_service import GeminiService
-from modules.voice_recognition import VoiceRecognitionService
+from modules.voice_recognition import VoiceRecognition
 from modules.voice_state import voice_state
 from modules.wake_audio import WakeAudio
 
@@ -11,14 +13,14 @@ from modules.wake_audio import WakeAudio
 class RobotServices:
     """Owns robot-adjacent background services used by Flask."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.speaker = None
         self.fall = None
         self.voice_recognition_service = None
         self.wake_audio = None
         self.gemini = None
 
-    def ensure_gemini(self):
+    def ensure_gemini(self) -> GeminiService:
         if self.gemini is None:
             self.gemini = GeminiService()
             print(
@@ -27,7 +29,7 @@ class RobotServices:
             )
         return self.gemini
 
-    def start_for_session(self, session):
+    def start_for_session(self, session: Optional[Any]) -> None:
         self.ensure_gemini()
 
         if not session:
@@ -46,7 +48,7 @@ class RobotServices:
             print(f"[System Warning] Fall Recovery did not start: {e}")
 
         try:
-            self.voice_recognition_service = VoiceRecognitionService(
+            self.voice_recognition_service = VoiceRecognition(
                 session,
                 self.speaker,
                 gemini_service=self.gemini,
@@ -68,16 +70,27 @@ class RobotServices:
                 )
                 self.wake_audio.start()
             except Exception as e:
+                if self.wake_audio:
+                    try:
+                        self.wake_audio.stop()
+                    except Exception:
+                        pass
                 self.wake_audio = None
                 voice_state.set_status("Error", f"Wake audio did not start: {e}")
                 print(f"[System Warning] Wake Audio did not start: {e}")
 
-    def stop_robot_services(self):
+    def stop_robot_services(self) -> None:
         if self.wake_audio:
             try:
                 self.wake_audio.stop()
             except Exception as e:
                 print(f"[System Warning] Wake Audio did not stop cleanly: {e}")
+
+        if self.voice_recognition_service:
+            try:
+                self.voice_recognition_service.stop()
+            except Exception as e:
+                print(f"[System Warning] Voice Recognition did not stop cleanly: {e}")
 
         if self.fall:
             try:

@@ -1,13 +1,16 @@
 import os
 import re
+from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
 load_dotenv()
 
-class GeminiService(object):
-    def __init__(self, api_key=None, system_instruction=None):
+class GeminiService:
+    def __init__(
+        self, api_key: Optional[str] = None, system_instruction: Optional[str] = None
+    ) -> None:
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
 
         if not self.api_key:
@@ -33,7 +36,7 @@ class GeminiService(object):
                 )
             )
 
-    def ask(self, prompt, image=None):
+    def ask(self, prompt: str, image: Optional[bytes] = None) -> str:
         if not self.chat:
             return "My Gemini API key is missing."
 
@@ -50,7 +53,7 @@ class GeminiService(object):
             print(f"[Gemini Error] {e}")
             return "Sorry, I ran into an error trying to process that."
 
-    def generate_sql(self, question, schema):
+    def generate_sql(self, question: str, schema: List[Dict[str, Any]]) -> Optional[str]:
         """Generate one read-only query for the supplied public schema."""
         if not self.client:
             return None
@@ -81,7 +84,7 @@ class GeminiService(object):
             print(f"[Gemini SQL Error] {e}")
             return None
 
-    def text_to_speech(self, text, voice_name="Puck"):
+    def text_to_speech(self, text: str, voice_name: str = "Puck") -> Optional[bytes]:
         """Generates audio bytes for input text using Gemini API audio modal output."""
         if not self.client:
             return None

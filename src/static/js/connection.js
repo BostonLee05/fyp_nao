@@ -43,6 +43,17 @@ const voiceStatusDot = document.getElementById("voiceStatusDot");
 const latestVoiceCommand = document.getElementById("latestVoiceCommand");
 const latestVoiceResult = document.getElementById("latestVoiceResult");
 const voiceHistory = document.getElementById("voiceHistory");
+const voiceCommands = document.getElementById("voiceCommands");
+const voiceCommandModal = document.getElementById("voiceCommandModal");
+const openVoiceCommandModal = document.getElementById("openVoiceCommandModal");
+const closeVoiceCommandModal = document.getElementById("closeVoiceCommandModal");
+const cancelVoiceCommandModal = document.getElementById("cancelVoiceCommandModal");
+const voiceCommandForm = document.getElementById("voiceCommandForm");
+const voiceCommandKey = document.getElementById("voiceCommandKey");
+const voiceCommandResponse = document.getElementById("voiceCommandResponse");
+const voiceCommandPhraseTokens = document.getElementById("voiceCommandPhraseTokens");
+const voiceCommandPhraseEntry = document.getElementById("voiceCommandPhraseEntry");
+let voiceCommandPhrases = [];
 const searchRecommendationToast = document.getElementById("searchRecommendationToast");
 const searchRecommendationList = document.getElementById("searchRecommendationList");
 const searchToastClose = document.getElementById("searchToastClose");
@@ -537,6 +548,234 @@ function renderVoiceHistory(history) {
 
 }
 
+function renderVoiceCommands(commands) {
+
+    if (!voiceCommands) return;
+
+    if (!commands || commands.length === 0) {
+        voiceCommands.innerHTML =
+            '<div class="voice-history-empty">No predefined commands configured.</div>';
+        return;
+    }
+
+    voiceCommands.innerHTML = commands.map((command) => {
+        const key = escapeHtml(command.command_key || "Unnamed command");
+        const response = escapeHtml(command.response || "");
+        const triggers = (command.triggers || []) /*
+            .map((trigger) => `“${escapeHtml(trigger)}”`)
+            .join(", ");
+
+        */
+        const triggerText = triggers
+            .map((trigger) => '"' + escapeHtml(trigger) + '"')
+            .join(", ");
+        return `
+            <div class="voice-command-item">
+                <div>
+                    <strong>${key}</strong>
+                    <p>${response}</p>
+                    <small>Trigger phrases: ${triggerText || "None"}</small>
+                </div>
+                <button class="voice-command-delete" type="button"
+                        data-command-id="${escapeHtml(command.command_id)}">
+                    Delete
+                </button>
+            </div>
+        `;
+    }).join("");
+
+}
+
+function setVoiceCommandModalOpen(isOpen) {
+    if (!voiceCommandModal) return;
+
+    voiceCommandModal.classList.toggle("hidden", !isOpen);
+    document.body.classList.toggle("voice-command-modal-open", isOpen);
+
+    if (isOpen && voiceCommandKey) {
+        voiceCommandKey.focus();
+    }
+}
+
+function renderVoiceCommandPhraseTokens() {
+    if (!voiceCommandPhraseTokens) return;
+
+    voiceCommandPhraseTokens.innerHTML = voiceCommandPhrases.map((phrase, index) => `
+        <button class="voice-command-token" type="button" data-token-index="${index}"
+                title="Remove ${escapeHtml(phrase)}">
+            <span>${escapeHtml(phrase)}</span>
+            <span aria-hidden="true">&times;</span>
+        </button>
+    `).join("");
+}
+
+function addVoiceCommandPhrase(value) {
+    const phrase = value.trim();
+    if (!phrase) return;
+
+    const normalized = phrase.toLowerCase().replace(/\s+/g, " ");
+    if (!voiceCommandPhrases.some((item) => item.toLowerCase() === normalized)) {
+        voiceCommandPhrases.push(phrase);
+        renderVoiceCommandPhraseTokens();
+    }
+}
+
+function commitVoiceCommandPhraseInput() {
+    if (!voiceCommandPhraseEntry) return;
+
+    voiceCommandPhraseEntry.value
+        .split(",")
+        .forEach(addVoiceCommandPhrase);
+    voiceCommandPhraseEntry.value = "";
+}
+
+function resetVoiceCommandPhraseInput() {
+    voiceCommandPhrases = [];
+    if (voiceCommandPhraseEntry) voiceCommandPhraseEntry.value = "";
+    renderVoiceCommandPhraseTokens();
+}
+
+async function saveVoiceCommand(event) {
+    event.preventDefault();
+
+    commitVoiceCommandPhraseInput();
+    if (voiceCommandPhrases.length === 0) {
+        alert("Add at least one trigger phrase.");
+        voiceCommandPhraseEntry.focus();
+        return;
+    }
+
+    try {
+        const response = await fetch("/api/voice/commands", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                command_key: voiceCommandKey.value.trim(),
+                response: voiceCommandResponse.value.trim(),
+                phrases: voiceCommandPhrases,
+            }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || "Could not save voice command");
+        }
+
+        renderVoiceCommands(result.commands);
+        voiceCommandForm.reset();
+        resetVoiceCommandPhraseInput();
+        setVoiceCommandModalOpen(false);
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function deleteVoiceCommand(commandId) {
+    if (!confirm("Delete this predefined voice command?")) return;
+
+    try {
+        const response = await fetch(
+            `/api/voice/commands/${encodeURIComponent(commandId)}`,
+            { method: "DELETE" }
+        );
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || "Could not delete voice command");
+        }
+
+        renderVoiceCommands(result.commands);
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+if (voiceCommandForm) {
+    voiceCommandForm.addEventListener("submit", saveVoiceCommand);
+}
+
+if (voiceCommandPhraseEntry) {
+    voiceCommandPhraseEntry.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === ",") {
+            event.preventDefault();
+            commitVoiceCommandPhraseInput();
+        }
+    });
+    voiceCommandPhraseEntry.addEventListener("blur", commitVoiceCommandPhraseInput);
+}
+
+if (voiceCommandPhraseTokens) {
+    voiceCommandPhraseTokens.addEventListener("click", (event) => {
+        const token = event.target.closest("[data-token-index]");
+        if (!token) return;
+
+        voiceCommandPhrases.splice(Number(token.dataset.tokenIndex), 1);
+        renderVoiceCommandPhraseTokens();
+    });
+}
+
+if (openVoiceCommandModal) {
+    openVoiceCommandModal.addEventListener("click", () => {
+        resetVoiceCommandPhraseInput();
+        setVoiceCommandModalOpen(true);
+    });
+}
+
+if (closeVoiceCommandModal) {
+    closeVoiceCommandModal.addEventListener("click", () => {
+        setVoiceCommandModalOpen(false);
+    });
+}
+
+if (cancelVoiceCommandModal) {
+    cancelVoiceCommandModal.addEventListener("click", () => {
+        voiceCommandForm.reset();
+        resetVoiceCommandPhraseInput();
+        setVoiceCommandModalOpen(false);
+    });
+}
+
+if (voiceCommandModal) {
+    voiceCommandModal.addEventListener("click", (event) => {
+        if (event.target === voiceCommandModal) {
+            setVoiceCommandModalOpen(false);
+        }
+    });
+}
+
+document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && voiceCommandModal &&
+        !voiceCommandModal.classList.contains("hidden")) {
+        setVoiceCommandModalOpen(false);
+    }
+});
+
+if (voiceCommands) {
+    voiceCommands.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-command-id]");
+        if (button) deleteVoiceCommand(button.dataset.commandId);
+    });
+}
+
+async function fetchVoiceCommands() {
+
+    if (!voiceCommands) return;
+
+    try {
+        const response = await fetch(`/api/voice/commands?t=${Date.now()}`, {
+            cache: "no-store",
+        });
+        const result = await response.json();
+
+        if (!response.ok || !result.success)
+            throw new Error(result.message || "Voice commands unavailable");
+
+        renderVoiceCommands(result.commands);
+    } catch (error) {
+        voiceCommands.innerHTML =
+            `<div class="voice-history-empty">${escapeHtml(error.message)}</div>`;
+    }
+
+}
+
 function renderSearchRecommendations(recommendations) {
 
     if (!searchRecommendationToast || !searchRecommendationList) return;
@@ -782,6 +1021,7 @@ document.addEventListener("DOMContentLoaded", () => {
     refreshSession();
 
     fetchVoiceStatus();
+    fetchVoiceCommands();
 
     addLog("Dashboard initialized.");
 

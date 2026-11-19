@@ -35,42 +35,56 @@
 
         <nav>
 
-            <a class="{{ 'active' if request.path == '/' else '' }}" href="/">
+            <a class="{{ 'active' if request.path == '/' else '' }}"
+               href="/"{% if request.path == '/' %} aria-current="page"{% endif %}>
                 <i class="fa-solid fa-house"></i>
                 <span>Dashboard</span>
             </a>
 
-            <a class="{{ 'active' if request.path.startswith('/voice') else '' }}" href="/voice">
+            <a class="{{ 'active' if request.path.startswith('/voice') else '' }}"
+               href="/voice"{% if request.path.startswith('/voice') %} aria-current="page"{% endif %}>
                 <i class="fa-solid fa-microphone-lines"></i>
                 <span>Voice Recognition</span>
             </a>
 
-            <a href="/vision">
+            <a class="{{ 'active' if request.path.startswith('/vision') else '' }}"
+               href="/vision"{% if request.path.startswith('/vision') %} aria-current="page"{% endif %}>
                 <i class="fa-solid fa-camera"></i>
                 <span>Vision Monitoring</span>
             </a>
 
-            <a href="/attendance">
+            <a class="{{ 'active' if request.path.startswith('/attendance') else '' }}"
+               href="/attendance"{% if request.path.startswith('/attendance') %} aria-current="page"{% endif %}>
                 <i class="fa-solid fa-user-check"></i>
                 <span>Attendance</span>
             </a>
 
-            <a href="/behaviour">
+            <a class="{{ 'active' if request.path.startswith('/behaviour') else '' }}"
+               href="/behaviour"{% if request.path.startswith('/behaviour') %} aria-current="page"{% endif %}>
                 <i class="fa-solid fa-eye"></i>
                 <span>Behaviour Analysis</span>
             </a>
 
-            <a href="/subjects">
+            <a class="{{ 'active' if request.path.startswith('/subjects') else '' }}"
+               href="/subjects"{% if request.path.startswith('/subjects') %} aria-current="page"{% endif %}>
                 <i class="fa-solid fa-user-graduate"></i>
-                <span>Subjects &amp; Students</span>
+                <span>Manage Subjects</span>
             </a>
 
-            <a href="/reports">
+            <a class="{{ 'active' if request.path.startswith('/students') else '' }}"
+               href="/students"{% if request.path.startswith('/students') %} aria-current="page"{% endif %}>
+                <i class="fa-solid fa-users"></i>
+                <span>Manage Students</span>
+            </a>
+
+            <a class="{{ 'active' if request.path.startswith('/reports') else '' }}"
+               href="/reports"{% if request.path.startswith('/reports') %} aria-current="page"{% endif %}>
                 <i class="fa-solid fa-chart-line"></i>
                 <span>Reports</span>
             </a>
 
-            <a href="/settings">
+            <a class="{{ 'active' if request.path.startswith('/settings') else '' }}"
+               href="/settings"{% if request.path.startswith('/settings') %} aria-current="page"{% endif %}>
                 <i class="fa-solid fa-gear"></i>
                 <span>Settings</span>
             </a>

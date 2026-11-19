@@ -1,103 +1,193 @@
 import os
 import posixpath
 import time
-import uuid
 import wave
-from pathlib import Path
 import threading
+from pathlib import Path
+from typing import Any, Callable, List, Optional, Tuple
 
 class NAOAudioTransfer:
     """Handles NAO audio capture, download, and local test-audio fallback."""
 
     def __init__(
         self,
-        audio_recorder=None,
-        file_manager=None,
-        remote_path="/home/nao/nao_speech.wav",
-        local_path=None,
-    ):
+        audio_recorder: Optional[Any] = None,
+        file_manager: Optional[Any] = None,
+        remote_path: str = "/home/nao/nao_speech.wav",
+        local_path: Optional[str] = None,
+    ) -> None:
         self.audio_recorder = audio_recorder
         self.file_manager = file_manager
         self.remote_path = remote_path
         self.local_path = local_path
-        self.recording_lock = threading.Lock()
-        self.last_metrics = {}
-        self.recording_id = None
+        self.stop_event = threading.Event()
 
-    def record_from_nao(self, duration, log_performance=True):
+    def stop(self) -> None:
+        """Cancel an active capture and stop the NAO recorder best-effort."""
+        self.stop_event.set()
+        self._stop_recording_if_active()
+
+    def record_from_nao(self, duration: float, log_performance: bool = True) -> Optional[str]:
         """Records audio on NAO and downloads it to the local machine."""
-        if not self.audio_recorder:
+        if self.stop_event.is_set() or not self.audio_recorder:
             print("[NAOAudioTransfer Warning] No ALAudioRecorder available.")
-            return None
-        if not self.recording_lock.acquire(blocking=False):
-            print("[NAOAudioTransfer Warning] Recording already in progress.")
             return None
 
         recording_started_at = time.perf_counter()
-        recording_started_wall = time.time()
-        self.recording_id = "nao-" + uuid.uuid4().hex
+        recording_active = False
         try:
             self.remote_path = self._get_recording_remote_path()
-            if self.local_path:
-                local_dir = os.path.dirname(self.local_path) or "."
-                self.local_path = os.path.join(
-                    local_dir,
-                    "%s.wav" % self.recording_id,
-                )
-            print(
-                "[NAOAudioTransfer] Recording id=%s on NAO: %s"
-                % (self.recording_id, self.remote_path)
-            )
-            self.audio_recorder.startMicrophonesRecording(
-                self.remote_path, "wav", 16000, [1, 1, 1, 1]
-            )
+            print(f"[NAOAudioTransfer] Recording on NAO: {self.remote_path}")
 
-            print(
-                "[NAOAudioTransfer] Recording for %.1f seconds..."
-                % float(duration)
-            )
-            time.sleep(max(0.1, float(duration)))
-
+            # ALSpeechRecognition and ALAudioRecorder share NAO's microphone.
+            # Unsubscribing speech recognition may not release it immediately,
+            # so stop any stale recording before starting this one.
+            self._stop_recording_if_active()
             try:
-                self.audio_recorder.stopMicrophonesRecording()
-            except Exception as stop_error:
-                print(
-                    "[NAOAudioTransfer Warning] stopMicrophonesRecording failed: %s"
-                    % stop_error
+                self.audio_recorder.startMicrophonesRecording(
+                    self.remote_path, "wav", 16000, [1, 1, 1, 1]
                 )
+            except Exception as first_error:
+                if "Already recording" not in str(first_error):
+                    raise
 
-            recording_completed_at = time.perf_counter()
-            self.last_metrics.update({
-                "recording_id": self.recording_id,
-                "recording_start_wall": recording_started_wall,
-                "recording_seconds": recording_completed_at - recording_started_at,
-            })
-            print(
-                "[NAOAudioTransfer] Recording complete in %.3fs"
-                % (recording_completed_at - recording_started_at)
-            )
+                print(
+                    "[NAOAudioTransfer Warning] NAO recorder was already active; "
+                    "stopping it and retrying."
+                )
+                self._stop_recording_if_active()
+                time.sleep(0.2)
+                self.audio_recorder.startMicrophonesRecording(
+                    self.remote_path, "wav", 16000, [1, 1, 1, 1]
+                )
+            recording_active = True
 
-            return self.download(
-                log_performance=log_performance,
-                recording_completed_at=recording_completed_at,
-            )
+            print(f"[NAOAudioTransfer] Recording for {duration} seconds...")
+            deadline = time.monotonic() + max(0.0, float(duration))
+            while not self.stop_event.is_set():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                self.stop_event.wait(min(0.1, remaining))
+
+            if self.stop_event.is_set():
+                return None
+
+            self.audio_recorder.stopMicrophonesRecording()
+            recording_active = False
+            print("[NAOAudioTransfer] NAO recording stopped.")
+
+            return self.download(log_performance=log_performance)
         except Exception as e:
-            print("[NAOAudioTransfer Error] Failed to record from NAO: %s" % e)
+            print(f"[NAOAudioTransfer Error] Failed to record from NAO: {e}")
             return None
         finally:
-            self.recording_lock.release()
+            if recording_active:
+                self._stop_recording_if_active()
             if log_performance:
                 print(
-                    "[Performance] Audio recording: %.3fs"
-                    % (time.perf_counter() - recording_started_at)
+                    f"[Performance] Audio recording: "
+                    f"{time.perf_counter() - recording_started_at:.3f}s"
                 )
 
-    def download(self, log_performance=True, recording_completed_at=None):
+    def _stop_recording_if_active(self) -> None:
+        """Best-effort cleanup for a recorder left active by another service."""
+        try:
+            self.audio_recorder.stopMicrophonesRecording()
+            print("[NAOAudioTransfer] Stopped existing NAO recording.")
+        except Exception:
+            # NAO raises when no recording is active; that is harmless here.
+            pass
+
+    def record_until_silence(
+        self,
+        speech_detector: Callable[[str], bool],
+        chunk_duration: float = 0.25,
+        start_timeout: float = 8,
+        silence_duration: float = 0.75,
+        max_duration: float = 20,
+    ) -> Optional[str]:
+        """Capture short NAO chunks until speech ends or the safety limit hits."""
+        if not self.audio_recorder:
+            print("[NAOAudioTransfer Warning] No ALAudioRecorder available.")
+            return None
+
+        chunks = []
+        capture_started_at = time.perf_counter()
+        pre_roll = []
+        started = False
+        elapsed = 0.0
+        silence = 0.0
+
+        while elapsed < max_duration:
+            audio_path = self.record_from_nao(
+                duration=chunk_duration,
+                log_performance=False,
+            )
+            if not audio_path or not os.path.exists(audio_path):
+                return None
+
+            chunk = self._read_wav_chunk(audio_path)
+            if chunk is None:
+                return None
+
+            has_speech = bool(speech_detector(audio_path))
+            elapsed += chunk_duration
+
+            if not started:
+                pre_roll.append(chunk)
+                pre_roll = pre_roll[-2:]
+                if has_speech:
+                    started = True
+                    chunks.extend(pre_roll)
+                    silence = 0.0
+                elif elapsed >= start_timeout:
+                    print("[NAOAudioTransfer] No speech detected before timeout.")
+                    return None
+                continue
+
+            chunks.append(chunk)
+            if has_speech:
+                silence = 0.0
+            else:
+                silence += chunk_duration
+                if silence >= silence_duration:
+                    break
+
+        if not chunks:
+            return None
+
+        self._write_wav_chunks(chunks)
+        print(
+            f"[NAOAudioTransfer] Speech capture complete ({elapsed:.2f}s observed)."
+        )
+        print(
+            f"[Performance] Audio recording and transfer (speech-end capture): "
+            f"{time.perf_counter() - capture_started_at:.3f}s"
+        )
+        return self.local_path
+
+    @staticmethod
+    def _read_wav_chunk(path: str) -> Optional[Tuple[Any, bytes]]:
+        try:
+            with wave.open(path, "rb") as wav_file:
+                params = wav_file.getparams()
+                frames = wav_file.readframes(wav_file.getnframes())
+            return params, frames
+        except Exception as e:
+            print(f"[NAOAudioTransfer Warning] Could not read audio chunk: {e}")
+            return None
+
+    def _write_wav_chunks(self, chunks: List[Tuple[Any, bytes]]) -> None:
+        params = chunks[0][0]
+        with wave.open(self.local_path, "wb") as wav_file:
+            wav_file.setnchannels(params.nchannels)
+            wav_file.setsampwidth(params.sampwidth)
+            wav_file.setframerate(params.framerate)
+            wav_file.writeframes(b"".join(frames for _, frames in chunks))
+
+    def download(self, log_performance: bool = True) -> Optional[str]:
         transfer_started_at = time.perf_counter()
-        transfer_started_wall = time.time()
-        self.last_metrics.update({
-            "transfer_start_wall": transfer_started_wall,
-        })
         if not self.file_manager:
             print("[NAOAudioTransfer Warning] No ALFileManager available.")
             if log_performance:
@@ -109,46 +199,13 @@ class NAOAudioTransfer:
 
         try:
             Path(self.local_path).parent.mkdir(parents=True, exist_ok=True)
-            temp_path = self.local_path + ".transfer-" + uuid.uuid4().hex + ".tmp"
-            original_local_path = self.local_path
-            self.local_path = temp_path
-            try:
-                self._download_with_file_manager()
-            finally:
-                self.local_path = original_local_path
+            if os.path.exists(self.local_path):
+                os.remove(self.local_path)
 
-            if os.path.exists(temp_path):
-                integrity = self.validate_wav(temp_path)
-                if not integrity["valid"]:
-                    os.remove(temp_path)
-                    print(
-                        "[NAOAudioTransfer Warning] Invalid WAV transfer: %s"
-                        % integrity["error"]
-                    )
-                    return None
+            self._download_with_file_manager()
 
-                os.replace(temp_path, self.local_path)
-                transfer_completed_at = time.perf_counter()
-                self.last_metrics.update({
-                    "transfer_seconds": transfer_completed_at - transfer_started_at,
-                    "transfer_completion_wall": time.time(),
-                    "transfer_bytes": integrity["bytes"],
-                    "recording_completed_to_transfer_complete_seconds":
-                        (
-                            transfer_completed_at - recording_completed_at
-                            if recording_completed_at is not None
-                            else None
-                        ),
-                })
-                print(
-                    "[NAOAudioTransfer] Downloaded and validated recording id=%s"
-                    " (%d bytes, %.3fs)"
-                    % (
-                        self.recording_id,
-                        integrity["bytes"],
-                        self.last_metrics["transfer_seconds"],
-                    )
-                )
+            if os.path.exists(self.local_path):
+                print(f"[NAOAudioTransfer] Downloaded audio to {self.local_path}")
                 self.cleanup_remote_audio()
                 return self.local_path
 
@@ -168,7 +225,7 @@ class NAOAudioTransfer:
                     f"{time.perf_counter() - transfer_started_at:.3f}s"
                 )
 
-    def _download_with_file_manager(self):
+    def _download_with_file_manager(self) -> None:
         """
         Downloads the remote file using the dynamic qi ALFileManager proxy.
 
@@ -206,14 +263,13 @@ class NAOAudioTransfer:
             + " | ".join(errors)
         )
 
-    def _get_recording_remote_path(self):
+    def _get_recording_remote_path(self) -> str:
         shared_folder = self._get_user_shared_folder_path()
         if shared_folder:
             return posixpath.join(shared_folder, self._remote_file_name())
-        remote_dir = posixpath.dirname(self.remote_path) or "/home/nao"
-        return posixpath.join(remote_dir, self._remote_file_name())
+        return self.remote_path
 
-    def _get_user_shared_folder_path(self):
+    def _get_user_shared_folder_path(self) -> Optional[str]:
         if not self.file_manager:
             return None
 
@@ -226,51 +282,10 @@ class NAOAudioTransfer:
 
         return None
 
-    def _remote_file_name(self):
-        if getattr(self, "recording_id", None):
-            return "%s.wav" % self.recording_id
+    def _remote_file_name(self) -> str:
         return posixpath.basename(self.remote_path)
 
-    def validate_wav(self, path):
-        """Checks basic WAV structure, size, duration, and expected format."""
-        result = {"valid": False, "error": "", "bytes": 0}
-        try:
-            size = os.path.getsize(path)
-            result["bytes"] = size
-            if size < 44:
-                result["error"] = "file is smaller than a WAV header"
-                return result
-
-            with wave.open(path, "rb") as wav_file:
-                channels = wav_file.getnchannels()
-                sample_rate = wav_file.getframerate()
-                sample_width = wav_file.getsampwidth()
-                frame_count = wav_file.getnframes()
-                if channels != 1:
-                    result["error"] = "expected mono WAV; found %d channels" % channels
-                    return result
-                if sample_rate != 16000:
-                    result["error"] = "expected 16000 Hz; found %d Hz" % sample_rate
-                    return result
-                if sample_width != 2:
-                    result["error"] = "expected 16-bit PCM; found %d bytes" % sample_width
-                    return result
-                if frame_count < 160:
-                    result["error"] = "WAV contains less than 10 ms of audio"
-                    return result
-
-                duration = frame_count / float(sample_rate)
-                result["duration_seconds"] = duration
-                result["valid"] = True
-                result["channels"] = channels
-                result["sample_rate"] = sample_rate
-                result["sample_width"] = sample_width
-                return result
-        except Exception as error:
-            result["error"] = str(error)
-            return result
-
-    def _write_result_if_needed(self, result):
+    def _write_result_if_needed(self, result: Any) -> bool:
         if result is None:
             return False
 
@@ -299,7 +314,7 @@ class NAOAudioTransfer:
 
         return False
 
-    def cleanup_remote_audio(self):
+    def cleanup_remote_audio(self) -> None:
         """Removes the remote WAV from NAO after a successful download."""
         if not self.file_manager:
             return
@@ -315,7 +330,7 @@ class NAOAudioTransfer:
         except Exception as e:
             print(f"[NAOAudioTransfer Warning] Could not remove remote audio: {e}")
 
-    def list_file_manager_methods(self):
+    def list_file_manager_methods(self) -> List[str]:
         """Best-effort method listing for diagnostics across qi versions."""
         if not self.file_manager:
             return []
