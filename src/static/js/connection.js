@@ -43,6 +43,7 @@ const voiceStatusDot = document.getElementById("voiceStatusDot");
 const latestVoiceCommand = document.getElementById("latestVoiceCommand");
 const latestVoiceResult = document.getElementById("latestVoiceResult");
 const voiceHistory = document.getElementById("voiceHistory");
+const voiceCommands = document.getElementById("voiceCommands");
 const searchRecommendationToast = document.getElementById("searchRecommendationToast");
 const searchRecommendationList = document.getElementById("searchRecommendationList");
 const searchToastClose = document.getElementById("searchToastClose");
@@ -537,6 +538,63 @@ function renderVoiceHistory(history) {
 
 }
 
+function renderVoiceCommands(commands) {
+
+    if (!voiceCommands) return;
+
+    if (!commands || commands.length === 0) {
+        voiceCommands.innerHTML =
+            '<div class="voice-history-empty">No predefined commands configured.</div>';
+        return;
+    }
+
+    voiceCommands.innerHTML = commands.map((command) => {
+        const key = escapeHtml(command.command_key || "Unnamed command");
+        const action = escapeHtml(command.action || "Robot");
+        const response = escapeHtml(command.response || "");
+        const triggers = (command.triggers || []) /*
+            .map((trigger) => `“${escapeHtml(trigger)}”`)
+            .join(", ");
+
+        */
+        const triggerText = triggers
+            .map((trigger) => '"' + escapeHtml(trigger) + '"')
+            .join(", ");
+        return `
+            <div class="voice-command-item">
+                <div>
+                    <strong>${key}</strong>
+                    <span class="voice-command-action">${action}</span>
+                    <p>${response}</p>
+                    <small>Trigger phrases: ${triggerText || "None"}</small>
+                </div>
+            </div>
+        `;
+    }).join("");
+
+}
+
+async function fetchVoiceCommands() {
+
+    if (!voiceCommands) return;
+
+    try {
+        const response = await fetch(`/api/voice/commands?t=${Date.now()}`, {
+            cache: "no-store",
+        });
+        const result = await response.json();
+
+        if (!response.ok || !result.success)
+            throw new Error(result.message || "Voice commands unavailable");
+
+        renderVoiceCommands(result.commands);
+    } catch (error) {
+        voiceCommands.innerHTML =
+            `<div class="voice-history-empty">${escapeHtml(error.message)}</div>`;
+    }
+
+}
+
 function renderSearchRecommendations(recommendations) {
 
     if (!searchRecommendationToast || !searchRecommendationList) return;
@@ -782,6 +840,7 @@ document.addEventListener("DOMContentLoaded", () => {
     refreshSession();
 
     fetchVoiceStatus();
+    fetchVoiceCommands();
 
     addLog("Dashboard initialized.");
 

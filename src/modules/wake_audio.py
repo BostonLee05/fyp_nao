@@ -1,6 +1,9 @@
 import threading
 import time
 
+from database import get_voice_wake_phrases
+
+
 class WakeAudio:
     """NAOqi wake-word listener using ALSpeechRecognition."""
 
@@ -21,6 +24,11 @@ class WakeAudio:
         self.confidence_threshold = confidence_threshold
         self.cooldown_seconds = cooldown_seconds
         self.state_manager = state_manager
+        try:
+            self.wake_phrases = get_voice_wake_phrases() or list(self.WAKE_PHRASES)
+        except Exception as e:
+            self.wake_phrases = list(self.WAKE_PHRASES)
+            print(f"[WakeAudio Warning] Could not load wake phrases: {e}")
 
         self.memory = self.session.service("ALMemory")
         self.speech_recognition = None
@@ -94,7 +102,7 @@ class WakeAudio:
                 self.speech_recognition.setLanguage("English")
             except Exception as e:
                 print(f"[WakeAudio Warning] Could not set language: {e}")
-            self.speech_recognition.setVocabulary(self.WAKE_PHRASES, False)
+            self.speech_recognition.setVocabulary(self.wake_phrases, False)
         finally:
             try:
                 self.speech_recognition.pause(False)
@@ -129,7 +137,7 @@ class WakeAudio:
         self._maybe_trigger_wake(phrase, 1.0)
 
     def _maybe_trigger_wake(self, phrase, confidence):
-        if phrase not in self.WAKE_PHRASES:
+        if phrase not in self.wake_phrases:
             return
 
         if confidence < self.confidence_threshold:

@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, render_template
 
+from database import get_voice_commands
 from modules.voice_state import voice_state
 
 
@@ -40,3 +41,16 @@ def voice_recommendations():
         "recommendations": snapshot["recommendations"],
         "recommendation_token": snapshot["recommendation_token"],
     })
+
+
+@voice_bp.route("/commands")
+def voice_commands():
+    try:
+        commands = [dict(command) for command in get_voice_commands()]
+        return jsonify({"success": True, "commands": commands})
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "commands": [],
+            "message": f"Could not load predefined commands: {e}",
+        }), 503
