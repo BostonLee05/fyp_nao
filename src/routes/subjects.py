@@ -98,7 +98,17 @@ def _refresh_vision_face_embeddings():
 def subjects():
     return render_template(
         "subjects_students.html",
-        page_title="Subjects & Students"
+        page_title="Manage Subjects",
+        page_mode="subjects"
+    )
+
+
+@subjects_bp.route("/students")
+def students():
+    return render_template(
+        "subjects_students.html",
+        page_title="Manage Students",
+        page_mode="students"
     )
 
 

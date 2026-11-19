@@ -68,7 +68,13 @@
             <a class="{{ 'active' if request.path.startswith('/subjects') else '' }}"
                href="/subjects"{% if request.path.startswith('/subjects') %} aria-current="page"{% endif %}>
                 <i class="fa-solid fa-user-graduate"></i>
-                <span>Subjects &amp; Students</span>
+                <span>Manage Subjects</span>
+            </a>
+
+            <a class="{{ 'active' if request.path.startswith('/students') else '' }}"
+               href="/students"{% if request.path.startswith('/students') %} aria-current="page"{% endif %}>
+                <i class="fa-solid fa-users"></i>
+                <span>Manage Students</span>
             </a>
 
             <a class="{{ 'active' if request.path.startswith('/reports') else '' }}"
