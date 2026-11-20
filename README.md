@@ -116,7 +116,7 @@ remain available.
 Open a second terminal:
 
 ```powershell
-& "C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --url http://localhost:5000
+& "C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --url http://127.0.0.1:5000
 ```
 
 Copy the HTTPS URL printed by Cloudflare. It normally looks like:
@@ -142,7 +142,7 @@ For a stable hostname, use a Cloudflare account and a domain:
 cloudflared tunnel login
 cloudflared tunnel create nao-classroom
 cloudflared tunnel route dns nao-classroom nao-demo.example.com
-cloudflared tunnel run --url http://localhost:5000 nao-classroom
+cloudflared tunnel run --url http://127.0.0.1:5000 nao-classroom
 ```
 
 Replace `nao-demo.example.com` with the approved domain.
@@ -223,7 +223,7 @@ database.
 - Confirm Flask is running.
 - Confirm Cloudflare is running.
 - Confirm the browser is using the newest tunnel URL.
-- Test `http://localhost:5000/api/status` on the laptop.
+- Test `http://127.0.0.1:5000/api/status` on the laptop.
 
 ### CORS error
 
@@ -240,7 +240,7 @@ Update `CORS(app, ...)` in `src/main.py` if the GitHub Pages domain changes.
 Use the absolute executable path:
 
 ```powershell
-& "C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --url http://localhost:5000
+& "C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --url http://127.0.0.1:5000
 ```
 
 ### Supabase connection fails
