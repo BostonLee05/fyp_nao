@@ -156,7 +156,7 @@ The laptop and NAO must be connected to the same network.
 
 # Start the project
 
-Use two PowerShell terminals.
+Use two PowerShell terminals. (Can also be run on Pycharm’s built-in terminal.)
 
 ## Terminal 1: Start Flask
 
