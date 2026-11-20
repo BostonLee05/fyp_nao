@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}NAO Smart Classroom{% endblock %}</title>
 
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- GitHub Pages serves this folder as plain static files.  Do not use
+         Flask's url_for() here: it is not evaluated by GitHub Pages. -->
+    <link rel="stylesheet" href="css/style.css">
 
     <link rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
@@ -243,8 +244,6 @@ window.fetch = async function (...args) {
     }
 };
 </script>
-
-<script src="{{ url_for('static', filename='js/connection.js') }}"></script>
 
 </body>
 </html>
