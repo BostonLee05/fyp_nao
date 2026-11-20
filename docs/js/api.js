@@ -90,6 +90,23 @@ function ensureApiConfigured() {
     });
 }
 
+window.processingOverlay = {
+    show(title = "Loading", message = "Please wait while processing...") {
+        const overlay = document.getElementById("processingOverlay");
+        if (!overlay) return;
+        document.getElementById("processingTitle").textContent = title;
+        document.getElementById("processingMessage").textContent = message;
+        overlay.classList.add("visible");
+        overlay.setAttribute("aria-hidden", "false");
+    },
+    hide() {
+        const overlay = document.getElementById("processingOverlay");
+        if (!overlay) return;
+        overlay.classList.remove("visible");
+        overlay.setAttribute("aria-hidden", "true");
+    }
+};
+
 function renderNav(activePage) {
     const navItems = [
         ["index.html", "house", "Dashboard"],
@@ -110,6 +127,13 @@ function renderNav(activePage) {
     `).join("");
 
     document.body.insertAdjacentHTML("afterbegin", `
+        <div id="processingOverlay" class="processing-overlay" aria-live="polite" aria-hidden="true">
+            <div class="processing-card">
+                <div class="processing-spinner"></div>
+                <strong id="processingTitle">Loading</strong>
+                <span id="processingMessage">Please wait while the page is processing...</span>
+            </div>
+        </div>
         <div class="wrapper">
             <aside class="sidebar">
                 <div class="sidebar-header">
@@ -146,12 +170,49 @@ function renderNav(activePage) {
         }
     });
 
+    document.querySelectorAll(".sidebar nav a").forEach(link => {
+        link.addEventListener("click", () => {
+            if (link.href && link.href !== window.location.href) {
+                window.processingOverlay.show("Opening Page", "Loading the next page...");
+            }
+        });
+    });
+
     setInterval(() => {
         const clock = document.getElementById("clock");
         if (clock) clock.textContent = new Date().toLocaleTimeString();
     }, 1000);
+
+    window.processingOverlay.show("Loading Page", "Preparing the page...");
 }
 
 document.addEventListener("DOMContentLoaded", () => {
     ensureApiConfigured();
 });
+
+window.addEventListener("load", () => {
+    window.processingOverlay.hide();
+});
+
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async function (...args) {
+    const options = args[1] || {};
+    const method = String(options.method || "GET").toUpperCase();
+    let mutationOverlayShown = false;
+
+    if (method !== "GET" && method !== "HEAD") {
+        window.processingOverlay.show(
+            "Processing",
+            "Please wait while changes are being saved..."
+        );
+        mutationOverlayShown = true;
+    }
+
+    try {
+        return await nativeFetch(...args);
+    } finally {
+        if (mutationOverlayShown) {
+            setTimeout(() => window.processingOverlay.hide(), 300);
+        }
+    }
+};

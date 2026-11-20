@@ -7,7 +7,24 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
     <style>
-        .student-grid{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:24px;align-items:start}.student-grid .panel{margin:0}.student-form{display:flex;flex-direction:column;gap:10px}.student-form select{min-height:42px}.records-container{overflow:auto}.records-container table{min-width:760px}.action-row{display:flex;gap:8px;flex-wrap:wrap}.action-row button{border:0;border-radius:8px;padding:9px 11px;cursor:pointer;font-weight:700}.edit-btn{background:#dbeafe;color:#1d4ed8}.delete-btn{background:#fee2e2;color:#b91c1c}.face-btn{background:#dcfce7;color:#15803d}.form-message{min-height:24px;font-weight:600}.form-message.error{color:#b91c1c}.form-message.success{color:#15803d}@media(max-width:900px){.student-grid{grid-template-columns:1fr}}
+        .student-grid{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:24px;align-items:start}.student-grid .panel{margin:0}.student-form{display:flex;flex-direction:column;gap:10px}.student-form select{min-height:42px}.records-container{overflow:auto}.records-container table{min-width:760px}.action-row{display:flex;gap:8px;flex-wrap:wrap}.action-row button{border:0;border-radius:8px;padding:9px 11px;cursor:pointer;font-weight:700}.edit-btn{background:#dbeafe;color:#1d4ed8}.delete-btn{background:#fee2e2;color:#b91c1c}.face-btn{background:#dcfce7;color:#15803d}.form-message{min-height:24px;font-weight:600}.form-message.error{color:#b91c1c}.form-message.success{color:#15803d}
+        .face-modal{position:fixed;inset:0;z-index:1100;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(15,23,42,.55)}
+        .face-modal.hidden{display:none}
+        .face-modal-card{position:relative;width:min(520px,100%);background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(15,23,42,.28);overflow:hidden}
+        .face-modal-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 24px 16px;border-bottom:1px solid #e2e8f0}
+        .face-modal-header h2{margin:0;font-size:20px}
+        .face-modal-close{width:36px;height:36px;border:0;border-radius:8px;background:#f1f5f9;color:#475569;font-size:24px;line-height:1;cursor:pointer}
+        .face-modal-close:hover{background:#fee2e2;color:#b91c1c}
+        .face-modal-body{padding:20px 24px 24px}
+        .face-modal-body>p{margin-bottom:16px;color:#475569;line-height:1.55}
+        .face-registration-status{padding:16px;border:1px solid #e1e6ef;border-radius:10px;background:#f7f9fc}
+        .face-registration-status>div{margin-bottom:10px}
+        .face-registration-status>div:last-child{margin-bottom:0}
+        #faceDirection{font-weight:700;text-transform:uppercase}
+        #faceInstruction{font-weight:600}
+        .face-progress-bar{width:100%;height:12px;margin-top:7px;background:#e5e7eb;border-radius:10px;overflow:hidden}
+        .face-progress-fill{height:100%;width:0;border-radius:10px;transition:width .3s ease;background:#22c55e}
+        @media(max-width:900px){.student-grid{grid-template-columns:1fr}}
     </style>
 </head>
 <body>
@@ -39,31 +56,183 @@
             </table></div>
         </section>
     </div>
+    <div id="faceRegistrationModal" class="face-modal hidden" role="dialog" aria-modal="true" aria-labelledby="faceRegistrationTitle">
+        <section class="face-modal-card">
+            <header class="face-modal-header">
+                <h2 id="faceRegistrationTitle"><i class="fa-solid fa-camera"></i> NAO Face Registration</h2>
+                <button id="closeFaceRegistrationModal" type="button" class="face-modal-close" aria-label="Cancel face registration">&times;</button>
+            </header>
+            <div class="face-modal-body">
+                <p id="faceRegistrationMessage">Select <strong>Register Face</strong> from a student record after saving the student details.</p>
+                <div id="faceRegistrationProgress" class="face-registration-status">
+                    <div><strong>Status:</strong> <span id="faceStatusText">Ready</span></div>
+                    <div><strong>Current Direction:</strong> <span id="faceDirection">-</span></div>
+                    <div><strong>Instruction:</strong> <span id="faceInstruction">Waiting to start registration.</span></div>
+                    <div><strong>Captured:</strong> <span id="faceCaptured">0 / 15</span></div>
+                    <div><strong>Progress:</strong><div class="face-progress-bar"><div id="faceProgressFill" class="face-progress-fill"></div></div></div>
+                </div>
+            </div>
+        </section>
+    </div>
 </template>
 <script src="js/api.js"></script>
 <script>
 renderNav("students.html");
 document.getElementById("staticPageTitle").textContent="Students";
-const $=id=>document.getElementById(id); let editingId=null; let subjects=[];
+const $=id=>document.getElementById(id);
+let editingId=null;
+let subjects=[];
+let activeFaceStudentId=null;
+let faceStatusTimer=null;
+
 function message(text,type="success"){ $("studentMessage").textContent=text; $("studentMessage").className=`form-message ${type}`; }
 function selectedSubjects(){return [...$("studentSubject").selectedOptions].map(o=>Number(o.value)).filter(Boolean)}
+
 async function loadLookups(){
     const [p,s]=await Promise.all([apiFetch("/api/programmes"),apiFetch("/api/subjects")]);
     $("studentProgramme").innerHTML='<option value="">No programme / Select later</option>'+(p.programmes||[]).map(x=>`<option value="${x.programme_id}">${escapeHtml(x.programme_name)}</option>`).join("");
-    subjects=s.subjects||[]; $("studentSubject").innerHTML=subjects.map(x=>`<option value="${x.class_id}">${escapeHtml(x.class_code)} - ${escapeHtml(x.class_name)}</option>`).join("");
+    subjects=s.subjects||[];
+    $("studentSubject").innerHTML=subjects.map(x=>`<option value="${x.class_id}">${escapeHtml(x.class_code)} - ${escapeHtml(x.class_name)}</option>`).join("");
 }
+
 async function loadStudents(){
-    try{const data=await apiFetch(`/api/students?t=${Date.now()}`); const rows=data.students||[];
-        $("studentsBody").innerHTML=rows.length?rows.map(x=>{const id=escapeHtml(x.student_id),name=escapeHtml(x.student_name);const ids=String(x.class_ids||"").split(",").filter(Boolean).join(",");const registered=Number(x.face_registered)===1;return `<tr><td>${id}</td><td>${name}</td><td>${escapeHtml(x.programme_name||"-")}</td><td>${escapeHtml(x.classes||"Not enrolled")}</td><td>${registered?"Registered":"Not registered"}</td><td><div class="action-row"><button class="edit-btn" type="button" onclick='editStudent(${JSON.stringify(x)})'>Edit</button><button class="delete-btn" type="button" onclick="deleteStudent('${id}')">Delete</button>${registered?"":`<button class="face-btn" type="button" onclick="startFace('${id}')">Register Face</button>`}</div></td></tr>`}).join(""):'<tr><td colspan="6">No students registered yet.</td></tr>';
+    try{
+        const data=await apiFetch(`/api/students?t=${Date.now()}`);
+        const rows=data.students||[];
+        $("studentsBody").innerHTML=rows.length?rows.map(x=>{
+            const id=escapeHtml(x.student_id),registered=Number(x.face_registered)===1;
+            return `<tr><td>${id}</td><td>${escapeHtml(x.student_name)}</td><td>${escapeHtml(x.programme_name||"-")}</td><td>${escapeHtml(x.classes||"Not enrolled")}</td><td>${registered?"Registered":"Not registered"}</td><td><div class="action-row"><button class="edit-btn" type="button" onclick='editStudent(${JSON.stringify(x).replaceAll("'","&#39;")})'>Edit</button><button class="delete-btn" type="button" onclick="deleteStudent('${id}')">Delete</button>${registered?"":`<button class="face-btn" type="button" onclick="startFace('${id}')">Register Face</button>`}</div></td></tr>`;
+        }).join(""):'<tr><td colspan="6">No students registered yet.</td></tr>';
     }catch(e){$("studentsBody").innerHTML=`<tr><td colspan="6">${escapeHtml(e.message)}</td></tr>`}
 }
-function editStudent(x){editingId=x.student_id;$("studentId").value=x.student_id;$("studentId").disabled=true;$("studentName").value=x.student_name||"";$("studentProgramme").value=x.programme_id||"";const ids=String(x.class_ids||"").split(",");[...$("studentSubject").options].forEach(o=>o.selected=ids.includes(o.value));$("studentFormTitle").textContent="Edit Student";$("saveStudentBtn").textContent="Update Student";$("cancelStudentEditBtn").hidden=false}
-function resetForm(){editingId=null;$("studentForm").reset();$("studentId").disabled=false;$("studentFormTitle").textContent="Register Student";$("saveStudentBtn").textContent="Register Student";$("cancelStudentEditBtn").hidden=true}
-$("studentForm").addEventListener("submit",async e=>{e.preventDefault();try{const edit=Boolean(editingId);await apiFetch(edit?`/api/students/${encodeURIComponent(editingId)}`:"/api/students",{method:edit?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({student_id:$("studentId").value.trim(),student_name:$("studentName").value.trim(),programme_id:$("studentProgramme").value||null,class_ids:selectedSubjects()})});message(edit?"Student updated successfully.":"Student registered successfully.");resetForm();await loadStudents()}catch(e){message(e.message,"error")}});
+
+function editStudent(x){
+    editingId=x.student_id;
+    $("studentId").value=x.student_id;$("studentId").disabled=true;
+    $("studentName").value=x.student_name||"";
+    $("studentProgramme").value=x.programme_id||"";
+    const ids=String(x.class_ids||"").split(",");
+    [...$("studentSubject").options].forEach(o=>o.selected=ids.includes(o.value));
+    $("studentFormTitle").textContent="Edit Student";
+    $("saveStudentBtn").textContent="Update Student";
+    $("cancelStudentEditBtn").hidden=false;
+}
+
+function resetForm(){
+    editingId=null;$("studentForm").reset();$("studentId").disabled=false;
+    $("studentFormTitle").textContent="Register Student";
+    $("saveStudentBtn").textContent="Register Student";
+    $("cancelStudentEditBtn").hidden=true;
+}
+
+$("studentForm").addEventListener("submit",async e=>{
+    e.preventDefault();
+    try{
+        const edit=Boolean(editingId);
+        await apiFetch(edit?`/api/students/${encodeURIComponent(editingId)}`:"/api/students",{
+            method:edit?"PUT":"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({
+                student_id:$("studentId").value.trim(),
+                student_name:$("studentName").value.trim(),
+                programme_id:$("studentProgramme").value||null,
+                class_ids:selectedSubjects()
+            })
+        });
+        message(edit?"Student updated successfully.":"Student registered successfully.");
+        resetForm();await loadStudents();
+    }catch(e){message(e.message,"error")}
+});
 $("cancelStudentEditBtn").addEventListener("click",resetForm);
-async function deleteStudent(id){if(!confirm(`Delete student ${id}?`))return;try{await apiFetch(`/api/students/${encodeURIComponent(id)}`,{method:"DELETE"});await loadStudents()}catch(e){message(e.message,"error")}}
-async function startFace(id){try{await apiFetch(`/api/students/${encodeURIComponent(id)}/face-registration/start`,{method:"POST"});$("faceMessage").textContent=`Face registration started for ${id}. Follow the instructions on the NAO.`;pollFace(id)}catch(e){$("faceMessage").textContent=e.message}}
-function pollFace(id){const timer=setInterval(async()=>{try{const s=await apiFetch(`/api/students/${encodeURIComponent(id)}/face-registration/status?t=${Date.now()}`);const x=s.status||s;if(x.completed||x.cancelled||x.error){clearInterval(timer);$("faceMessage").textContent=x.error|| (x.completed?"Face registration completed successfully.":"Face registration cancelled.")}}catch(e){clearInterval(timer)}},700)}
+
+async function deleteStudent(id){
+    if(!confirm(`Delete student ${id}?`))return;
+    try{await apiFetch(`/api/students/${encodeURIComponent(id)}`,{method:"DELETE"});await loadStudents()}
+    catch(e){message(e.message,"error")}
+}
+
+function setFaceModal(open){$("faceRegistrationModal").classList.toggle("hidden",!open)}
+function setFaceStatus(status,direction,instruction,captured,total){
+    $("faceStatusText").textContent=status||"Ready";
+    $("faceDirection").textContent=direction||"-";
+    $("faceInstruction").textContent=instruction||"Waiting to start registration.";
+    captured=Number(captured||0);total=Number(total||15);
+    $("faceCaptured").textContent=`${captured} / ${total}`;
+    $("faceProgressFill").style.width=`${total>0?Math.min(100,captured/total*100):0}%`;
+}
+
+async function startFace(id){
+    activeFaceStudentId=id;
+    setFaceStatus("Starting","-","NAO is preparing the camera...",0,15);
+    $("faceRegistrationMessage").innerHTML=`Starting face registration for <strong>${escapeHtml(id)}</strong>.`;
+    setFaceModal(true);
+    try{
+        await apiFetch(`/api/students/${encodeURIComponent(id)}/face-registration/start`,{method:"POST"});
+        $("faceRegistrationMessage").innerHTML=`Registering face for <strong>${escapeHtml(id)}</strong>. Follow the NAO instructions.`;
+        pollFace(id);
+    }catch(e){
+        setFaceStatus("Failed","-",e.message,0,15);
+        $("faceRegistrationMessage").textContent=e.message;
+        activeFaceStudentId=null;
+    }
+}
+
+function stopFacePolling(){
+    if(faceStatusTimer){clearInterval(faceStatusTimer);faceStatusTimer=null}
+}
+
+function pollFace(id){
+    stopFacePolling();
+    async function pollOnce(){
+        try{
+            const s=await apiFetch(`/api/students/${encodeURIComponent(id)}/face-registration/status?t=${Date.now()}`);
+            const running=Boolean(s.running),completed=Boolean(s.completed),cancelled=Boolean(s.cancelled);
+            const captured=Number(s.captured ?? s.captured_count ?? 0);
+            const total=Number(s.total ?? s.required ?? 15);
+            const direction=s.current_direction||s.direction||"-";
+            const instruction=s.message||"Waiting for the next instruction.";
+            let status=running?"Capturing":"Ready";
+            if(s.error)status="Error";
+            else if(cancelled)status="Cancelled";
+            else if(completed)status="Completed";
+            setFaceStatus(status,direction,instruction,captured,total);
+
+            if(s.error){
+                $("faceRegistrationMessage").textContent=`Registration failed: ${s.error}`;
+                stopFacePolling();activeFaceStudentId=null;
+            }else if(cancelled){
+                stopFacePolling();activeFaceStudentId=null;setFaceModal(false);
+            }else if(completed){
+                stopFacePolling();activeFaceStudentId=null;
+                $("faceRegistrationMessage").textContent="Face registration completed successfully.";
+                setFaceStatus("Completed","-","Face registration completed successfully.",captured,total);
+                await loadStudents();
+                setTimeout(()=>setFaceModal(false),600);
+            }
+        }catch(e){
+            stopFacePolling();
+            setFaceStatus("Failed","-",e.message,0,15);
+            activeFaceStudentId=null;
+        }
+    }
+    pollOnce();
+    faceStatusTimer=setInterval(pollOnce,700);
+}
+
+$("closeFaceRegistrationModal").addEventListener("click",async()=>{
+    const id=activeFaceStudentId;
+    stopFacePolling();
+    setFaceModal(false);
+    activeFaceStudentId=null;
+    if(id){
+        try{await apiFetch(`/api/students/${encodeURIComponent(id)}/face-registration/cancel`,{method:"POST"})}
+        catch(e){console.warn("Unable to cancel face registration:",e)}
+    }
+});
+document.addEventListener("keydown",event=>{
+    if(event.key==="Escape"&&!$("faceRegistrationModal").classList.contains("hidden"))$("closeFaceRegistrationModal").click();
+});
+
 Promise.all([loadLookups(),loadStudents()]).catch(e=>message(e.message,"error"));
 </script>
 </body>
