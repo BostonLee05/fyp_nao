@@ -1,0 +1,15 @@
+flask
+flask-cors
+python-dotenv
+psycopg2-binary
+waitress
+numpy
+opencv-python
+ultralytics
+insightface
+deep-sort-realtime
+pyttsx3
+requests
+google-genai
+faster-whisper
+torch
