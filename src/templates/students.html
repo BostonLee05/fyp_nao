@@ -643,6 +643,21 @@ function formatSubjects(value){if(!value)return "Not enrolled";return value.spli
 
 let activeFaceStudentId = null;
 
+function formatFaceDirection(direction) {
+    const labels = {
+        front: "Front",
+        left: "Turn Left",
+        right: "Turn Right",
+        up: "Look Up",
+        down: "Look Down"
+    };
+    if (!direction || direction === "-" || direction === "none") {
+        return "-";
+    }
+    return labels[String(direction).toLowerCase()] ||
+        String(direction).toUpperCase();
+}
+
 function setFaceRegistrationUI(status, direction, instruction, captured, total) {
     const statusEl = document.getElementById("faceStatusText");
     const directionEl = document.getElementById("faceDirection");
@@ -652,7 +667,7 @@ function setFaceRegistrationUI(status, direction, instruction, captured, total) 
     const cancelBtn = document.getElementById("cancelFaceRegistrationBtn");
 
     statusEl.textContent = status || "Ready";
-    directionEl.textContent = direction ? String(direction).toUpperCase() : "-";
+    directionEl.textContent = formatFaceDirection(direction);
     instructionEl.textContent = instruction || "Waiting to start registration.";
 
     captured = Number(captured || 0);
@@ -827,7 +842,7 @@ function pollFaceRegistration(id) {
 
             setFaceRegistrationUI(
                 displayStatus,
-                formatFaceDirection(direction),
+                direction,
                 instruction,
                 captured,
                 total

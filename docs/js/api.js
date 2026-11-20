@@ -147,6 +147,10 @@ function renderNav(activePage) {
                     <p>NAO Smart Classroom Monitoring System</p></div>
                     <div class="top-right">
                         <div id="clock">--:--:--</div>
+                        <div id="robotStatusPill" class="robot-pill disconnected">
+                            <span id="robotStatusDot" class="dot"></span>
+                            <span id="robotStatusText">Checking Robot</span>
+                        </div>
                         <button id="changeApiBase" type="button">Change Backend</button>
                     </div>
                 </header>
@@ -186,8 +190,37 @@ function renderNav(activePage) {
     window.processingOverlay.show("Loading Page", "Preparing the page...");
 }
 
+async function updateRobotStatus() {
+    const pill = document.getElementById("robotStatusPill");
+    const text = document.getElementById("robotStatusText");
+    if (!pill || !text) return;
+
+    if (!getApiBase()) {
+        pill.classList.remove("connected");
+        pill.classList.add("disconnected");
+        text.textContent = "Robot Offline";
+        return;
+    }
+
+    try {
+        const data = await apiFetch("/api/ping?t=" + Date.now());
+        const status = data.status || data;
+        const connected = Boolean(data.connected ?? status.connected);
+
+        pill.classList.toggle("connected", connected);
+        pill.classList.toggle("disconnected", !connected);
+        text.textContent = connected ? "Robot Connected" : "Robot Offline";
+    } catch (error) {
+        pill.classList.remove("connected");
+        pill.classList.add("disconnected");
+        text.textContent = "Robot Unavailable";
+    }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     ensureApiConfigured();
+    updateRobotStatus();
+    setInterval(updateRobotStatus, 3000);
 });
 
 window.addEventListener("load", () => {

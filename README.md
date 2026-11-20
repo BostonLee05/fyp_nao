@@ -62,10 +62,7 @@ cd C:\Users\Boston\PycharmProjects\fyp_nao
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
-py -m pip install flask flask-cors psycopg2-binary python-dotenv
-py -m pip install ultralytics insightface deep-sort-realtime
-py -m pip install numpy opencv-python pyttsx3 requests google-genai
-py -m pip install faster-whisper torch
+py -m pip install -r requirements.txt
 ```
 
 The exact NAOqi and AI packages required for full robot operation depend

@@ -300,16 +300,16 @@ class FaceRegistration:
             )
 
         if direction == "left":
-            return horizontal_ratio > 0.18
+            return horizontal_ratio > 0.14
 
         if direction == "right":
-            return horizontal_ratio < -0.18
+            return horizontal_ratio < -0.14
 
         if direction == "up":
-            return vertical_ratio < 0.28
+            return vertical_ratio < 0.30
 
         if direction == "down":
-            return vertical_ratio > 0.68
+            return vertical_ratio > 0.66
 
         return False
 
@@ -318,7 +318,9 @@ class FaceRegistration:
             video,
             client_name,
             direction,
-            filename
+            filename,
+            speaker=None,
+            session=None
     ):
 
         self._set_status(
@@ -329,7 +331,9 @@ class FaceRegistration:
             )
         )
 
-        deadline = time.time() + 20
+        deadline = time.time() + 60
+        consecutive_correct_frames = 0
+        last_retry_speech = 0.0
 
         while time.time() < deadline:
 
@@ -356,9 +360,27 @@ class FaceRegistration:
                     self._set_status(
                         message=(
                             f"No face detected. "
-                            f"Please show your face."
+                            f"Please show your face for "
+                            f"the {direction} pose."
                         )
                     )
+
+                    consecutive_correct_frames = 0
+                    now = time.time()
+                    if now - last_retry_speech >= 7:
+                        try:
+                            self._speak(
+                                speaker=speaker,
+                                session=session,
+                                text=(
+                                    f"I cannot detect your face. "
+                                    f"Please try the {direction} "
+                                    f"direction again."
+                                )
+                            )
+                        except Exception:
+                            pass
+                        last_retry_speech = now
 
                     time.sleep(0.15)
                     continue
@@ -377,6 +399,35 @@ class FaceRegistration:
                         )
                     )
 
+                    consecutive_correct_frames = 0
+                    now = time.time()
+                    if now - last_retry_speech >= 7:
+                        try:
+                            self._speak(
+                                speaker=speaker,
+                                session=session,
+                                text=(
+                                    f"I cannot detect the "
+                                    f"{direction} side of your face. "
+                                    f"Please try again."
+                                )
+                            )
+                        except Exception:
+                            pass
+                        last_retry_speech = now
+
+                    time.sleep(0.15)
+                    continue
+
+                consecutive_correct_frames += 1
+
+                if consecutive_correct_frames < 3:
+                    self._set_status(
+                        message=(
+                            f"Hold the {direction} pose "
+                            f"for the camera."
+                        )
+                    )
                     time.sleep(0.15)
                     continue
 
@@ -526,7 +577,9 @@ class FaceRegistration:
                         video,
                         client_name,
                         direction,
-                        filename
+                        filename,
+                        speaker,
+                        session
                     )
 
                     if saved is None:

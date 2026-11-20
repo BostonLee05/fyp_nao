@@ -10,7 +10,6 @@
 <body>
 <template id="pageTemplate">
     <div class="stats">
-        <div class="stat"><h4>Robot</h4><h2 id="robotCard">Checking</h2></div>
         <div class="stat"><h4>Camera</h4><h2 id="cameraCard">Checking</h2></div>
         <div class="stat"><h4>Active Session</h4><h2 id="attendanceCard">-</h2></div>
         <div class="stat"><h4>Students</h4><h2 id="studentCard">0</h2></div>
@@ -57,8 +56,6 @@ async function refreshDashboard() {
             apiFetch("/api/vision/status")
         ]);
         const rs = robot.status || robot || {};
-        document.getElementById("robotCard").textContent =
-            rs.connected ? "Connected" : "Offline";
         document.getElementById("sessionStatus").textContent =
             rs.connected ? "Connected" : "Offline";
         document.getElementById("sessionID").textContent =

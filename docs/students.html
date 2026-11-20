@@ -152,9 +152,20 @@ async function deleteStudent(id){
 }
 
 function setFaceModal(open){$("faceRegistrationModal").classList.toggle("hidden",!open)}
+function formatFaceDirection(direction){
+    const labels={
+        front:"Front",
+        left:"Turn Left",
+        right:"Turn Right",
+        up:"Look Up",
+        down:"Look Down"
+    };
+    if(!direction||direction==="-"||direction==="none")return "-";
+    return labels[String(direction).toLowerCase()]||String(direction).toUpperCase();
+}
 function setFaceStatus(status,direction,instruction,captured,total){
     $("faceStatusText").textContent=status||"Ready";
-    $("faceDirection").textContent=direction||"-";
+    $("faceDirection").textContent=formatFaceDirection(direction);
     $("faceInstruction").textContent=instruction||"Waiting to start registration.";
     captured=Number(captured||0);total=Number(total||15);
     $("faceCaptured").textContent=`${captured} / ${total}`;

@@ -20,7 +20,6 @@ const sessionDuration = document.getElementById("sessionDuration");
 
 const statusBox = document.getElementById("status");
 
-const robotCard = document.getElementById("robotCard");
 const cameraCard = document.getElementById("cameraCard");
 const attendanceCard = document.getElementById("attendanceCard");
 const studentCard = document.getElementById("studentCard");
@@ -139,9 +138,6 @@ function addLog(message) {
 
 function setConnectedUI() {
 
-    if (robotCard)
-        robotCard.textContent = "Connected";
-
     if (robotStatusText)
         robotStatusText.textContent = "Robot Connected";
 
@@ -162,9 +158,6 @@ function setConnectedUI() {
 }
 
 function setDisconnectedUI(reason = "Offline") {
-
-    if (robotCard)
-        robotCard.textContent = "Offline";
 
     if (robotStatusText)
         robotStatusText.textContent = "Robot Offline";
