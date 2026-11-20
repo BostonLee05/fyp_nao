@@ -45,6 +45,7 @@ const latestVoiceResult = document.getElementById("latestVoiceResult");
 const voiceHistory = document.getElementById("voiceHistory");
 const voiceCommands = document.getElementById("voiceCommands");
 const voiceCommandModal = document.getElementById("voiceCommandModal");
+const voiceDeleteModal = document.getElementById("voiceDeleteModal");
 const openVoiceCommandModal = document.getElementById("openVoiceCommandModal");
 const closeVoiceCommandModal = document.getElementById("closeVoiceCommandModal");
 const cancelVoiceCommandModal = document.getElementById("cancelVoiceCommandModal");
@@ -54,6 +55,7 @@ const voiceCommandResponse = document.getElementById("voiceCommandResponse");
 const voiceCommandPhraseTokens = document.getElementById("voiceCommandPhraseTokens");
 const voiceCommandPhraseEntry = document.getElementById("voiceCommandPhraseEntry");
 let voiceCommandPhrases = [];
+let pendingVoiceDeleteId = null;
 const searchRecommendationToast = document.getElementById("searchRecommendationToast");
 const searchRecommendationList = document.getElementById("searchRecommendationList");
 const searchToastClose = document.getElementById("searchToastClose");
@@ -597,6 +599,12 @@ function setVoiceCommandModalOpen(isOpen) {
     }
 }
 
+function setVoiceDeleteModalOpen(isOpen) {
+    if (!voiceDeleteModal) return;
+    voiceDeleteModal.classList.toggle("hidden", !isOpen);
+    document.body.classList.toggle("voice-command-modal-open", isOpen);
+}
+
 function renderVoiceCommandPhraseTokens() {
     if (!voiceCommandPhraseTokens) return;
 
@@ -670,7 +678,15 @@ async function saveVoiceCommand(event) {
 }
 
 async function deleteVoiceCommand(commandId) {
-    if (!confirm("Delete this predefined voice command?")) return;
+    pendingVoiceDeleteId = commandId;
+    setVoiceDeleteModalOpen(true);
+}
+
+async function confirmVoiceCommandDelete() {
+    const commandId = pendingVoiceDeleteId;
+    if (!commandId) return;
+    pendingVoiceDeleteId = null;
+    setVoiceDeleteModalOpen(false);
 
     try {
         const response = await fetch(
@@ -741,10 +757,36 @@ if (voiceCommandModal) {
     });
 }
 
+if (voiceDeleteModal) {
+    voiceDeleteModal.addEventListener("click", (event) => {
+        if (event.target === voiceDeleteModal) {
+            pendingVoiceDeleteId = null;
+            setVoiceDeleteModalOpen(false);
+        }
+    });
+}
+
+document.getElementById("closeVoiceDeleteModal")?.addEventListener("click", () => {
+    pendingVoiceDeleteId = null;
+    setVoiceDeleteModalOpen(false);
+});
+
+document.getElementById("cancelVoiceDelete")?.addEventListener("click", () => {
+    pendingVoiceDeleteId = null;
+    setVoiceDeleteModalOpen(false);
+});
+
+document.getElementById("confirmVoiceDelete")?.addEventListener("click", confirmVoiceCommandDelete);
+
 document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && voiceCommandModal &&
         !voiceCommandModal.classList.contains("hidden")) {
         setVoiceCommandModalOpen(false);
+    }
+    if (event.key === "Escape" && voiceDeleteModal &&
+        !voiceDeleteModal.classList.contains("hidden")) {
+        pendingVoiceDeleteId = null;
+        setVoiceDeleteModalOpen(false);
     }
 });
 

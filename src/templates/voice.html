@@ -100,4 +100,20 @@ Voice Recognition
     </div>
 </div>
 
+<div id="voiceDeleteModal" class="delete-confirm-modal hidden" role="dialog"
+     aria-modal="true" aria-labelledby="voiceDeleteModalTitle">
+    <div class="delete-confirm-card">
+        <div class="delete-confirm-header">
+            <h2 id="voiceDeleteModalTitle" class="delete-confirm-title"><i class="fa-solid fa-triangle-exclamation"></i> Delete Command</h2>
+            <button id="closeVoiceDeleteModal" class="delete-confirm-close"
+                    type="button" aria-label="Close delete confirmation">&times;</button>
+        </div>
+        <div class="delete-confirm-body">Are you sure you want to delete this predefined voice command?</div>
+        <div class="delete-confirm-actions">
+            <button id="cancelVoiceDelete" class="delete-confirm-cancel" type="button">Cancel</button>
+            <button id="confirmVoiceDelete" class="delete-confirm-submit" type="button">Delete Command</button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}

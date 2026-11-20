@@ -3,10 +3,12 @@ main.py
 Flask entry point for the NAO Smart Classroom Monitoring System.
 """
 
+import os
 import sys
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from jinja2 import ChoiceLoader, FileSystemLoader
 
 from modules.robot_services import robot_services
 
@@ -25,6 +27,10 @@ from routes.settings import settings_bp
 from routes.voice import voice_bp, voice_page_bp
 
 app = Flask(__name__)
+app.jinja_loader = ChoiceLoader([
+    app.jinja_loader,
+    FileSystemLoader(os.path.join(os.path.dirname(__file__), "..", "docs")),
+])
 
 CORS(app, resources={
     r"/api/*": {
