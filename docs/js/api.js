@@ -138,6 +138,9 @@ function renderNav(activePage) {
             <aside class="sidebar">
                 <div class="sidebar-header">
                     <div class="logo"><i class="fa-solid fa-robot"></i><span>NAO Classroom</span></div>
+                    <button id="toggleBtn" type="button" aria-label="Collapse navigation" title="Collapse navigation">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
                 </div>
                 <nav>${nav}</nav>
             </aside>
@@ -162,6 +165,28 @@ function renderNav(activePage) {
     const content = document.getElementById("pageContent");
     const source = document.querySelector("template#pageTemplate");
     if (source) content.appendChild(source.content.cloneNode(true));
+
+    const sidebar = document.querySelector(".sidebar");
+    const toggleBtn = document.getElementById("toggleBtn");
+    if (sidebar && toggleBtn) {
+        const collapsed = localStorage.getItem("docsSidebarCollapsed") === "true";
+        sidebar.classList.toggle("collapsed", collapsed);
+
+        const updateToggleLabel = () => {
+            const label = sidebar.classList.contains("collapsed")
+                ? "Expand navigation"
+                : "Collapse navigation";
+            toggleBtn.setAttribute("aria-label", label);
+            toggleBtn.setAttribute("title", label);
+        };
+
+        updateToggleLabel();
+        toggleBtn.addEventListener("click", () => {
+            const isCollapsed = sidebar.classList.toggle("collapsed");
+            localStorage.setItem("docsSidebarCollapsed", isCollapsed);
+            updateToggleLabel();
+        });
+    }
 
     document.getElementById("changeApiBase").addEventListener("click", () => {
         const value = prompt("Enter the Flask HTTPS tunnel URL:", getApiBase());
