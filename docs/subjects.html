@@ -16,7 +16,13 @@
         .page-modal{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px}
         .page-modal.hidden{display:none}
         .modal-card,.page-modal .dashboard-grid{width:min(900px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:14px;padding:24px;box-shadow:0 20px 50px rgba(15,23,42,.22)}
-        .page-modal .dashboard-grid{display:block;background:transparent;border-radius:0;padding:0;box-shadow:none}
+        .page-modal .dashboard-grid{display:block;max-height:none;overflow:visible;background:transparent;border-radius:0;padding:0;box-shadow:none}
+        #subjectModal #subjectPanel{max-height:90vh!important;overflow:hidden!important;border-radius:20px}
+        .subject-form-scroll{max-height:calc(90vh - 100px);overflow-y:scroll;overflow-x:hidden;padding-right:4px;scrollbar-gutter:stable;scrollbar-width:auto;scrollbar-color:#94a3b8 #f1f5f9}
+        .subject-form-scroll::-webkit-scrollbar{width:8px}
+        .subject-form-scroll::-webkit-scrollbar-track{background:#f1f5f9;border-radius:999px}
+        .subject-form-scroll::-webkit-scrollbar-thumb{background:#94a3b8;border:2px solid #fff;border-radius:999px}
+        .subject-form-scroll::-webkit-scrollbar-thumb:hover{background:#64748b}
         #subjectPanel:hover{transform:none}
         .modal-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:12px;margin-bottom:4px;border-bottom:1px solid #e2e8f0}
         .modal-heading h2{flex:1;min-width:0;margin:0}
@@ -32,7 +38,9 @@
         .schedule-days label{display:grid!important;grid-template-rows:auto 32px;justify-items:center;align-items:center;gap:6px!important;min-width:0;padding:10px 4px 6px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;font-size:12px!important;font-weight:600!important;cursor:pointer}
         .schedule-days label:has(input:checked){border-color:#2563eb;background:#eff6ff;color:#1d4ed8}
         .schedule-days input{width:18px!important;height:18px!important;padding:0!important;accent-color:#2563eb;cursor:pointer}
-        .cancel-btn{background:#eee!important;color:#444!important;margin-left:6px}
+        .cancel-btn{background:#eee!important;color:#444!important;margin-left:0}
+        .subject-form-actions{display:flex;gap:10px;align-items:center}
+        .subject-form-actions button{width:auto;flex:1}
         .form-message{min-height:24px;margin:8px 0 0!important;font-weight:600;color:#475569}
         .form-message.success{color:#15803d}
         .form-message.error{color:#dc2626}
@@ -85,6 +93,7 @@
             <div class="dashboard-grid">
                 <section class="panel" id="subjectPanel">
                     <div class="modal-heading"><h2 id="subjectModalTitle"><i class="fa-solid fa-book"></i> Add Subject</h2><button id="closeSubjectModal" type="button" class="modal-close" aria-label="Close">&times;</button></div>
+                    <div class="subject-form-scroll">
                     <label for="subjectCode">Subject Code</label><input id="subjectCode" type="text" placeholder="BMIT2073">
                     <label for="subjectName">Subject Name</label><input id="subjectName" type="text" placeholder="Testing Class">
                     <label for="semester">Semester</label><input id="semester" type="text" placeholder="2026 Semester 2">
@@ -97,9 +106,12 @@
                         <label><span>Fri</span><input type="checkbox" value="Friday"></label><label><span>Sat</span><input type="checkbox" value="Saturday"></label>
                         <label><span>Sun</span><input type="checkbox" value="Sunday"></label>
                     </div></fieldset>
-                    <button id="addSubjectBtn" type="button">Create Subject</button>
-                    <button id="cancelSubjectEditBtn" class="cancel-btn" type="button" style="display:none">Cancel Edit</button>
+                    <div class="subject-form-actions">
+                        <button id="addSubjectBtn" type="button">Create Subject</button>
+                        <button id="cancelSubjectEditBtn" class="cancel-btn" type="button" style="display:none">Cancel Edit</button>
+                    </div>
                     <p id="subjectMessage" class="form-message" aria-live="polite"></p>
+                    </div>
                 </section>
             </div>
         </div>
@@ -209,7 +221,7 @@ function editSubject(subject){
 
 $("openSubjectModal").addEventListener("click",()=>{resetSubjectForm();setModal("subjectModal",true)});
 $("closeSubjectModal").addEventListener("click",()=>setModal("subjectModal",false));
-$("cancelSubjectEditBtn").addEventListener("click",()=>{resetSubjectForm();$("subjectMessage").textContent=""});
+$("cancelSubjectEditBtn").addEventListener("click",()=>{resetSubjectForm();$("subjectMessage").textContent="";setModal("subjectModal",false)});
 $("closeClassDetails").addEventListener("click",()=>setModal("classDetailsModal",false));$("classDetailsDone").addEventListener("click",()=>setModal("classDetailsModal",false));
 $("classDetailsModal").addEventListener("click",event=>{if(event.target.id==="classDetailsModal")setModal("classDetailsModal",false)});
 $("closeSubjectDelete").addEventListener("click",()=>setModal("subjectDeleteModal",false));$("cancelSubjectDelete").addEventListener("click",()=>setModal("subjectDeleteModal",false));

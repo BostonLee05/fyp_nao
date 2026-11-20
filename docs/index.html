@@ -23,8 +23,8 @@
             </div>
             <div class="timetable-scroll">
                 <table class="weekly-timetable">
-                    <thead><tr><th>Time</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th></tr></thead>
-                    <tbody id="dashboardTimetableBody"><tr><td colspan="6" class="table-empty">Loading timetable</td></tr></tbody>
+                    <thead><tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead>
+                    <tbody id="dashboardTimetableBody"><tr><td colspan="7" class="table-empty">Loading timetable</td></tr></tbody>
                 </table>
             </div>
         </section>
@@ -96,32 +96,35 @@ function dashboardTimeToMinutes(value) {
 
 function renderDashboardTimetable(subjects) {
     const body = document.getElementById("dashboardTimetableBody");
-    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-    body.innerHTML = "";
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const row = document.createElement("tr");
 
-    for (let hour = 8; hour <= 18; hour++) {
-        const row = document.createElement("tr");
-        row.innerHTML = `<th>${String(hour).padStart(2, "0")}:00</th>`;
+    days.forEach(day => {
+        const cell = document.createElement("td");
+        const daySubjects = subjects
+            .filter(subject => (subject.schedule_days || []).includes(day))
+            .sort((a, b) => dashboardTimeToMinutes(a.schedule_start) - dashboardTimeToMinutes(b.schedule_start));
 
-        days.forEach(day => {
-            const cell = document.createElement("td");
-            subjects
-                .filter(subject =>
-                    (subject.schedule_days || []).includes(day) &&
-                    dashboardTimeToMinutes(subject.schedule_start) <= hour * 60 &&
-                    dashboardTimeToMinutes(subject.schedule_end) > hour * 60
-                )
-                .forEach(subject => {
-                    const entry = document.createElement("span");
-                    entry.className = "timetable-entry";
-                    entry.textContent = subject.class_code || subject.class_name || "Class";
-                    entry.title = subject.class_name || "";
-                    cell.appendChild(entry);
-                });
-            row.appendChild(cell);
-        });
-        body.appendChild(row);
-    }
+        if (!daySubjects.length) {
+            cell.textContent = "—";
+            cell.className = "timetable-empty";
+        } else {
+            daySubjects.forEach(subject => {
+                const entry = document.createElement("span");
+                entry.className = "timetable-entry";
+                const code = subject.class_code || subject.class_name || "Class";
+                const time = subject.schedule_start && subject.schedule_end
+                    ? `${subject.schedule_start}–${subject.schedule_end}`
+                    : "Time not set";
+                entry.textContent = `${code} · ${time}`;
+                entry.title = subject.class_name || code;
+                cell.appendChild(entry);
+            });
+        }
+        row.appendChild(cell);
+    });
+
+    body.replaceChildren(row);
 }
 
 async function refreshDashboardTimetable() {
@@ -131,7 +134,7 @@ async function refreshDashboardTimetable() {
         renderDashboardTimetable(data.subjects || []);
     } catch (error) {
         document.getElementById("dashboardTimetableBody").innerHTML =
-            `<tr><td colspan="6" class="table-empty">${escapeHtml(error.message)}</td></tr>`;
+            `<tr><td colspan="7" class="table-empty">${escapeHtml(error.message)}</td></tr>`;
     }
 }
 
