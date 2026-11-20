@@ -39,7 +39,7 @@ class VoiceRecognition:
         r"\b(?:find me|find|search for|search|give me|show me)\s+"
         r"(?P<kind>videos?|websites?|sites?|images?|pictures?|photos?|"
         r"news|articles?|web\s*pages?|webpages?)\s+"
-        r"(?:about|on|for)\s+"
+        r"(?:about|on|for)\s+" 
         r"(?P<query>.+)",
         re.IGNORECASE,
     )
