@@ -331,7 +331,7 @@ class FaceRegistration:
             )
         )
 
-        deadline = time.time() + 60
+        deadline = time.time() + 30
         consecutive_correct_frames = 0
         last_retry_speech = 0.0
 
@@ -504,7 +504,7 @@ class FaceRegistration:
                 0,
                 1,
                 11,
-                10
+                15
             )
 
             print(

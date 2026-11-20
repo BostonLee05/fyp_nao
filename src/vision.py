@@ -77,8 +77,8 @@ class VisionSystem:
 
         self.PHONE_PERSON_MARGIN = 40
 
-        self.YOLO_PROCESS_EVERY_N_FRAMES = 1
-        self.FACE_PROCESS_EVERY_N_FRAMES = 1
+        self.YOLO_PROCESS_EVERY_N_FRAMES = 3
+        self.FACE_PROCESS_EVERY_N_FRAMES = 3
 
         # -------------------------------
         # Face Recognition

@@ -9,7 +9,7 @@ ROBOT_PORT = 9559
 # Camera
 # -----------------------------
 CAMERA_ID = 0
-CAMERA_FPS = 30
+CAMERA_FPS = 15
 
 # -----------------------------
 # Face Recognition

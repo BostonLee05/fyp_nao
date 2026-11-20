@@ -57,6 +57,11 @@ class IntegratedMonitoring:
         self._raw_frame = None
         self._current_frame = None
         self._current_jpeg = None
+        self._processed_frame = None
+        self._ai_processing = False
+        self._ai_thread = None
+        self._last_ai_submit = 0.0
+        self._preview_submit_interval = 1.0 / 12.0
         self._status = {
             "running": False,
             "connected": False,
@@ -119,7 +124,21 @@ class IntegratedMonitoring:
             self._raw_frame = None
             self._current_frame = None
             self._current_jpeg = None
+            self._processed_frame = None
             self._status["camera_ready"] = False
+
+    def _run_ai_processor(self, processor, frame):
+        try:
+            processed = processor(frame)
+            if processed is not None:
+                with self._lock:
+                    self._processed_frame = processed.copy()
+        except Exception as exc:
+            with self._lock:
+                self._status["last_error"] = str(exc)
+        finally:
+            with self._lock:
+                self._ai_processing = False
 
     def _unsubscribe_camera(self) -> None:
         if self._video is not None and self._client_name is not None:
@@ -171,12 +190,31 @@ class IntegratedMonitoring:
 
                 display_frame = frame
 
-                if processor is not None:
-                    processed = processor(frame.copy())
-                    if processed is not None:
-                        display_frame = processed
+                if (
+                    processor is not None
+                    and not self._ai_processing
+                    and time.time() - self._last_ai_submit
+                    >= self._preview_submit_interval
+                ):
+                    self._ai_processing = True
+                    self._last_ai_submit = time.time()
+                    ai_thread = threading.Thread(
+                        target=self._run_ai_processor,
+                        args=(processor, frame.copy()),
+                        daemon=True,
+                        name="VisionAIProcessor",
+                    )
+                    ai_thread.start()
 
-                ok, jpeg = cv2.imencode(".jpg", display_frame)
+                with self._lock:
+                    if self._processed_frame is not None:
+                        display_frame = self._processed_frame
+
+                ok, jpeg = cv2.imencode(
+                    ".jpg",
+                    display_frame,
+                    [int(cv2.IMWRITE_JPEG_QUALITY), 70],
+                )
 
                 if ok:
                     with self._lock:
@@ -243,6 +281,7 @@ class IntegratedMonitoring:
             return self._running
 
     def mjpeg_stream(self):
+        last_sent = 0.0
         while True:
             if not self.is_running():
                 time.sleep(0.1)
@@ -252,6 +291,12 @@ class IntegratedMonitoring:
             if jpeg is None:
                 time.sleep(0.02)
                 continue
+
+            now = time.time()
+            if now - last_sent < 1.0 / 12.0:
+                time.sleep(0.01)
+                continue
+            last_sent = now
 
             yield (
                 b"--frame\r\n"

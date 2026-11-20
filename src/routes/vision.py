@@ -28,8 +28,6 @@ def vision():
 @vision_bp.route("/api/vision/start", methods=["POST"])
 def start_vision():
     try:
-        vision_system._ensure_models_loaded() #Temporary DELETE IT
-
         monitor.set_frame_processor(_process_frame)
         monitor.start()
         return jsonify({
