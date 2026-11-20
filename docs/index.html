@@ -10,12 +10,24 @@
 <body>
 <template id="pageTemplate">
     <div class="stats">
+        <div class="stat"><h4>Robot</h4><h2 id="robotCard">Checking</h2></div>
         <div class="stat"><h4>Camera</h4><h2 id="cameraCard">Checking</h2></div>
-        <div class="stat"><h4>Voice</h4><h2 id="voiceCard">Checking</h2></div>
         <div class="stat"><h4>Active Session</h4><h2 id="attendanceCard">-</h2></div>
         <div class="stat"><h4>Students</h4><h2 id="studentCard">0</h2></div>
     </div>
-    <div class="dashboard">
+    <div class="dashboard dashboard-overview">
+        <section class="panel dashboard-timetable">
+            <div class="panel-heading-row">
+                <h2><i class="fa-solid fa-calendar-week"></i> This Week</h2>
+                <a class="panel-link" href="subjects.html">Full timetable</a>
+            </div>
+            <div class="timetable-scroll">
+                <table class="weekly-timetable">
+                    <thead><tr><th>Time</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th></tr></thead>
+                    <tbody id="dashboardTimetableBody"><tr><td colspan="6" class="table-empty">Loading timetable</td></tr></tbody>
+                </table>
+            </div>
+        </section>
         <section class="panel session-panel">
             <h2><i class="fa-solid fa-robot"></i> Robot Session</h2>
             <table class="info-table">
@@ -51,6 +63,8 @@ async function refreshDashboard() {
             apiFetch("/api/vision/status")
         ]);
         const rs = robot.status || robot || {};
+        document.getElementById("robotCard").textContent =
+            rs.connected ? "Ready" : "Not Ready";
         document.getElementById("sessionStatus").textContent =
             rs.connected ? "Connected" : "Offline";
         document.getElementById("sessionID").textContent =
@@ -67,12 +81,62 @@ async function refreshDashboard() {
             vision.status && vision.status.running ? "Running" : "Idle";
     } catch (error) {
         console.error(error);
+        document.getElementById("robotCard").textContent = "Unavailable";
         document.getElementById("sessionStatus").textContent = "Unavailable";
     }
 }
 
 refreshDashboard();
 setInterval(refreshDashboard, 3000);
+
+function dashboardTimeToMinutes(value) {
+    const [hours, minutes] = String(value || "").split(":").map(Number);
+    return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : null;
+}
+
+function renderDashboardTimetable(subjects) {
+    const body = document.getElementById("dashboardTimetableBody");
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+    body.innerHTML = "";
+
+    for (let hour = 8; hour <= 18; hour++) {
+        const row = document.createElement("tr");
+        row.innerHTML = `<th>${String(hour).padStart(2, "0")}:00</th>`;
+
+        days.forEach(day => {
+            const cell = document.createElement("td");
+            subjects
+                .filter(subject =>
+                    (subject.schedule_days || []).includes(day) &&
+                    dashboardTimeToMinutes(subject.schedule_start) <= hour * 60 &&
+                    dashboardTimeToMinutes(subject.schedule_end) > hour * 60
+                )
+                .forEach(subject => {
+                    const entry = document.createElement("span");
+                    entry.className = "timetable-entry";
+                    entry.textContent = subject.class_code || subject.class_name || "Class";
+                    entry.title = subject.class_name || "";
+                    cell.appendChild(entry);
+                });
+            row.appendChild(cell);
+        });
+        body.appendChild(row);
+    }
+}
+
+async function refreshDashboardTimetable() {
+    if (!getApiBase()) return;
+    try {
+        const data = await apiFetch(`/api/subjects?t=${Date.now()}`);
+        renderDashboardTimetable(data.subjects || []);
+    } catch (error) {
+        document.getElementById("dashboardTimetableBody").innerHTML =
+            `<tr><td colspan="6" class="table-empty">${escapeHtml(error.message)}</td></tr>`;
+    }
+}
+
+refreshDashboardTimetable();
+setInterval(refreshDashboardTimetable, 60000);
 
 async function connectRobot() {
     const ip = document.getElementById("robotIpInput").value.trim();

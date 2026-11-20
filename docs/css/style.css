@@ -134,7 +134,7 @@ ul{
 
     flex:1;
 
-    margin-left:270px;
+    margin-left:292px;
 
     display:flex;
 
@@ -267,7 +267,7 @@ p{
 
     top:0;
 
-    width:270px;
+    width:292px;
 
     height:100vh;
 
@@ -303,13 +303,19 @@ p{
 
 .sidebar-header{
 
+    position:relative;
+
     display:flex;
 
     align-items:center;
 
-    justify-content:space-between;
+    justify-content:center;
 
-    padding:28px 24px;
+    gap:12px;
+
+    min-height:92px;
+
+    padding:18px 20px;
 
     border-bottom:1px solid rgba(255,255,255,.08);
 
@@ -327,21 +333,31 @@ p{
 
     font-size:22px;
 
-    font-weight:700;
+    font-weight:600;
 
     white-space:nowrap;
 
 }
 
+.logo-copy{
+
+    font-size:20px;
+    font-weight:600;
+    line-height:1.15;
+
+}
 
 
-.logo i{
+
+.logo-mark-button{
 
     width:48px;
 
     height:48px;
 
     border-radius:50%;
+
+    border:0;
 
     display:flex;
 
@@ -350,6 +366,16 @@ p{
     justify-content:center;
 
     background:rgba(255,255,255,.08);
+
+    color:white;
+
+    cursor:default;
+
+    font-size:22px;
+
+}
+
+.logo-mark-button i{
 
     font-size:22px;
 
@@ -363,21 +389,31 @@ p{
 
 #toggleBtn{
 
-    width:42px;
+    width:23px;
 
-    height:42px;
+    height:23px;
+
+    flex:0 0 23px;
 
     border:none;
 
-    border-radius:12px;
+    border-radius:8px;
 
-    background:rgba(255,255,255,.08);
+    background:transparent;
 
-    color:white;
+    color:#cbd5e1;
 
     cursor:pointer;
 
-    transition:.25s;
+    padding:0;
+
+    display:inline-flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    transition:background-color .2s ease, color .2s ease, transform .2s ease;
 
 }
 
@@ -385,13 +421,34 @@ p{
 
 #toggleBtn:hover{
 
-    background:var(--primary);
+    background:rgba(255,255,255,.1);
 
-    transform:rotate(90deg);
+    color:white;
+
+    transform:scale(1.04);
+
+}
+
+#toggleBtn:focus-visible{
+
+    outline:3px solid rgba(147,197,253,.9);
+
+    outline-offset:2px;
 
 }
 
 
+
+.panel-toggle-icon{
+    width:34px;
+    height:34px;
+    display:block;
+    fill:none;
+    stroke:currentColor;
+    stroke-width:2;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+}
 
 /* ===========================
    Navigation
@@ -405,9 +462,9 @@ p{
 
     flex-direction:column;
 
-    padding:18px;
+    padding:14px;
 
-    gap:8px;
+    gap:5px;
 
 }
 
@@ -429,7 +486,7 @@ p{
 
     color:#dbe4f3;
 
-    font-weight:500;
+    font-weight:600;
 
 }
 
@@ -503,6 +560,18 @@ p{
 
 }
 
+.sidebar.collapsed .logo-copy{
+
+    display:none;
+
+}
+
+.sidebar.collapsed .logo-mark-button{
+
+    cursor:pointer;
+
+}
+
 
 
 .sidebar.collapsed .sidebar-header{
@@ -515,9 +584,7 @@ p{
 
 .sidebar.collapsed #toggleBtn{
 
-    position:absolute;
-
-    bottom:25px;
+    display:none;
 
 }
 
@@ -581,6 +648,8 @@ p{
 
     gap:25px;
 
+    flex-wrap:nowrap;
+
 }
 
 
@@ -605,6 +674,12 @@ p{
 
     border:1px solid var(--border);
 
+    min-width:128px;
+
+    white-space:nowrap;
+
+    text-align:center;
+
 }
 
 
@@ -628,6 +703,22 @@ p{
     font-weight:600;
 
     transition:.3s;
+
+    white-space:nowrap;
+
+    min-height:50px;
+
+}
+
+#changeApiBase{
+
+    width:auto;
+
+    min-width:220px;
+
+    white-space:nowrap;
+
+    padding:15px 24px;
 
 }
 
@@ -852,6 +943,131 @@ p{
 
 }
 
+.panel-heading-row{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:space-between;
+
+    gap:12px;
+
+}
+
+.panel-heading-row h2{
+
+    margin-bottom:18px;
+
+}
+
+.panel-link{
+
+    color:var(--primary);
+
+    font-size:13px;
+
+    font-weight:700;
+
+    white-space:nowrap;
+
+}
+
+.dashboard-timetable{
+
+    min-width:0;
+
+}
+
+.dashboard-timetable .timetable-scroll{
+
+    overflow:auto;
+
+}
+
+.dashboard-timetable .weekly-timetable{
+
+    width:100%;
+
+    min-width:600px;
+
+    border-collapse:collapse;
+
+    table-layout:fixed;
+
+}
+
+.dashboard-timetable .weekly-timetable th,
+.dashboard-timetable .weekly-timetable td{
+
+    border:1px solid #dbe3ef;
+
+    padding:4px;
+
+    height:34px;
+
+    vertical-align:top;
+
+}
+
+.dashboard-timetable .weekly-timetable thead th{
+
+    background:#f1f5f9;
+
+    color:#334155;
+
+    font-size:12px;
+
+    text-align:center;
+
+}
+
+.dashboard-timetable .weekly-timetable tbody th{
+
+    width:48px;
+
+    background:#f8fafc;
+
+    color:#64748b;
+
+    font-size:11px;
+
+    font-weight:600;
+
+}
+
+.dashboard-timetable .timetable-entry{
+
+    display:block;
+
+    width:100%;
+
+    box-sizing:border-box;
+
+    margin:0;
+
+    padding:4px;
+
+    overflow:hidden;
+
+    border:1px solid #93c5fd;
+
+    border-radius:4px;
+
+    background:#dbeafe;
+
+    color:#1e40af;
+
+    font-size:10px;
+
+    font-weight:700;
+
+    text-overflow:ellipsis;
+
+    white-space:nowrap;
+
+}
+
 
 
 /* ==========================================================
@@ -869,6 +1085,14 @@ p{
     box-shadow:var(--shadow);
 
     transition:.3s;
+
+}
+
+.settings-page{
+
+    display:grid;
+
+    gap:20px;
 
 }
 
@@ -2828,7 +3052,7 @@ body.voice-command-modal-open{
 
     .main{
 
-        margin-left:85px;
+    margin-left:85px;
 
     }
 
@@ -2906,7 +3130,7 @@ body.voice-command-modal-open{
 
     .sidebar{
 
-        left:-270px;
+        left:-292px;
 
     }
 
@@ -2980,6 +3204,101 @@ body.voice-command-modal-open{
 
 @keyframes processing-spin {
     to { transform: rotate(360deg); }
+}
+
+.api-base-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(15, 23, 42, 0.58);
+}
+
+.api-base-modal.hidden {
+    display: none;
+}
+
+.api-base-card {
+    width: min(520px, 100%);
+    padding: 24px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: var(--white);
+    box-shadow: 0 20px 55px rgba(15, 23, 42, 0.24);
+}
+
+.api-base-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 8px;
+}
+
+.api-base-header h2 {
+    padding: 0;
+    margin: 0 0 6px;
+    font-size: 22px;
+}
+
+.api-base-header p {
+    color: var(--text-light);
+    line-height: 1.5;
+}
+
+.api-base-close,
+.api-base-actions button {
+    width: auto;
+}
+
+.api-base-close {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+    padding: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text);
+    font-size: 22px;
+}
+
+.api-base-close:hover {
+    background: #e2e8f0;
+}
+
+.api-base-error {
+    min-height: 22px;
+    margin-top: 8px;
+    color: var(--danger);
+    font-size: 13px;
+}
+
+.api-base-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.api-base-actions button {
+    padding: 12px 18px;
+}
+
+.api-base-cancel {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+.api-base-save {
+    background: var(--primary);
+    color: #fff;
+}
+
+.api-base-save:hover {
+    background: var(--primary-dark);
 }
 
 

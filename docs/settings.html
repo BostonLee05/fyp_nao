@@ -9,6 +9,7 @@
 </head>
 <body>
 <template id="pageTemplate">
+<div class="settings-page">
     <div class="panel">
         <h2><i class="fa-solid fa-server"></i> Flask Backend</h2>
         <label>Backend HTTPS URL</label>
@@ -16,12 +17,31 @@
         <button id="saveBackendBtn">Save Backend URL</button>
         <p id="backendStatus"></p>
     </div>
+    <div class="panel">
+        <h2><i class="fa-solid fa-robot"></i> Robot Session</h2>
+        <table class="info-table">
+            <tr><td>Status</td><td id="settingsSessionStatus">Checking</td></tr>
+            <tr><td>Session</td><td id="settingsSessionId">-</td></tr>
+            <tr><td>Remaining</td><td id="settingsRemainingTime">-</td></tr>
+            <tr><td>Last Reason</td><td id="settingsDisconnectReason">-</td></tr>
+        </table>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
+            <label for="settingsRobotIp">NAO IP Address</label>
+            <input id="settingsRobotIp" type="text" placeholder="192.168.200.137">
+            <button id="settingsRobotConnectBtn" type="button">Connect Robot</button>
+            <button id="settingsRobotDisconnectBtn" type="button" style="background:#fee2e2;color:#b91c1c">Disconnect Robot</button>
+            <p id="settingsRobotMessage" style="min-height:24px;font-weight:600"></p>
+        </div>
+    </div>
+    </div>
 </template>
 <script src="js/api.js"></script>
 <script>
 renderNav("settings.html");
 document.getElementById("staticPageTitle").textContent = "Settings";
 document.getElementById("backendUrl").value = getApiBase();
+document.getElementById("settingsRobotIp").value =
+    localStorage.getItem("nao_robot_ip") || "192.168.200.137";
 
 document.getElementById("saveBackendBtn").addEventListener("click", async () => {
     try {
@@ -33,6 +53,68 @@ document.getElementById("saveBackendBtn").addEventListener("click", async () => 
         document.getElementById("backendStatus").textContent = error.message;
     }
 });
+
+async function refreshRobotSession() {
+    if (!getApiBase()) return;
+    try {
+        const robot = await apiFetch("/api/ping");
+        const status = robot.status || robot || {};
+        document.getElementById("settingsSessionStatus").textContent =
+            status.connected ? "Connected" : "Offline";
+        document.getElementById("settingsSessionId").textContent =
+            status.session_id || "-";
+        document.getElementById("settingsRemainingTime").textContent =
+            status.remaining || "-";
+        document.getElementById("settingsDisconnectReason").textContent =
+            status.last_disconnect_reason || status.disconnect_reason || "-";
+    } catch (error) {
+        document.getElementById("settingsSessionStatus").textContent = "Unavailable";
+    }
+}
+
+async function connectRobotFromSettings() {
+    const ip = document.getElementById("settingsRobotIp").value.trim();
+    const message = document.getElementById("settingsRobotMessage");
+    if (!ip) {
+        message.textContent = "Enter the NAO IP address.";
+        message.style.color = "#b91c1c";
+        return;
+    }
+    localStorage.setItem("nao_robot_ip", ip);
+    message.textContent = "Connecting...";
+    message.style.color = "#475569";
+    try {
+        const result = await apiFetch("/api/connect", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ip: ip, port: 9559, duration: null})
+        });
+        message.textContent = result.message || "Robot connected.";
+        message.style.color = "#15803d";
+        await refreshRobotSession();
+    } catch (error) {
+        message.textContent = error.message;
+        message.style.color = "#b91c1c";
+    }
+}
+
+async function disconnectRobotFromSettings() {
+    const message = document.getElementById("settingsRobotMessage");
+    try {
+        await apiFetch("/api/disconnect", {method: "POST"});
+        message.textContent = "Robot disconnected.";
+        message.style.color = "#b91c1c";
+        await refreshRobotSession();
+    } catch (error) {
+        message.textContent = error.message;
+        message.style.color = "#b91c1c";
+    }
+}
+
+document.getElementById("settingsRobotConnectBtn").addEventListener("click", connectRobotFromSettings);
+document.getElementById("settingsRobotDisconnectBtn").addEventListener("click", disconnectRobotFromSettings);
+refreshRobotSession();
+setInterval(refreshRobotSession, 3000);
 </script>
 </body>
 </html>

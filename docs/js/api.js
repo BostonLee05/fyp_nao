@@ -63,31 +63,13 @@ function escapeHtml(value) {
 function ensureApiConfigured() {
     if (getApiBase()) return;
 
-    const overlay = document.createElement("div");
-    overlay.style.cssText =
-        "position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.75);" +
-        "display:flex;align-items:center;justify-content:center;padding:20px";
-    overlay.innerHTML = `
-        <div class="panel" style="max-width:520px;width:100%;margin:0">
-            <h2>Connect to the Flask Backend</h2>
-            <p>Enter the HTTPS Cloudflare Tunnel URL displayed on the lab laptop.</p>
-            <label>Backend URL</label>
-            <input id="apiBaseInput" type="url"
-                   placeholder="https://example.trycloudflare.com"
-                   style="width:100%;margin-bottom:12px">
-            <p id="apiBaseError" style="color:#b00020"></p>
-            <button id="apiBaseSave" type="button">Save and Connect</button>
-        </div>`;
-    document.body.appendChild(overlay);
+    const modal = document.getElementById("apiBaseModal");
+    const input = document.getElementById("apiBaseInput");
+    if (!modal || !input) return;
 
-    document.getElementById("apiBaseSave").addEventListener("click", () => {
-        try {
-            setApiBase(document.getElementById("apiBaseInput").value);
-            location.reload();
-        } catch (error) {
-            document.getElementById("apiBaseError").textContent = error.message;
-        }
-    });
+    input.value = getApiBase();
+    modal.classList.remove("hidden");
+    input.focus();
 }
 
 window.processingOverlay = {
@@ -134,12 +116,41 @@ function renderNav(activePage) {
                 <span id="processingMessage">Please wait while the page is processing...</span>
             </div>
         </div>
+        <div id="apiBaseModal" class="api-base-modal hidden" role="dialog" aria-modal="true" aria-labelledby="apiBaseTitle">
+            <div class="api-base-card">
+                <div class="api-base-header">
+                    <div>
+                        <h2 id="apiBaseTitle">Connect to Flask Backend</h2>
+                        <p>Enter the HTTPS Cloudflare Tunnel URL for the Flask backend.</p>
+                    </div>
+                    <button id="apiBaseClose" class="api-base-close" type="button" aria-label="Close">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <label for="apiBaseInput">Backend URL</label>
+                <input id="apiBaseInput" type="url" placeholder="https://example.trycloudflare.com" autocomplete="url">
+                <p id="apiBaseError" class="api-base-error" aria-live="polite"></p>
+                <div class="api-base-actions">
+                    <button id="apiBaseCancel" class="api-base-cancel" type="button">Cancel</button>
+                    <button id="apiBaseSave" class="api-base-save" type="button">Save and Connect</button>
+                </div>
+            </div>
+        </div>
         <div class="wrapper">
             <aside class="sidebar">
                 <div class="sidebar-header">
-                    <div class="logo"><i class="fa-solid fa-robot"></i><span>NAO Classroom</span></div>
+                    <div class="logo">
+                        <button id="logoToggleBtn" class="logo-mark-button" type="button" aria-label="Expand navigation" title="Expand navigation">
+                            <i class="fa-solid fa-robot"></i>
+                        </button>
+                        <span class="logo-copy">NAO Classroom</span>
+                    </div>
                     <button id="toggleBtn" type="button" aria-label="Collapse navigation" title="Collapse navigation">
-                        <i class="fa-solid fa-bars"></i>
+                        <svg class="panel-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                            <path d="m9 15-3-3 3-3"></path>
+                            <path d="M14 8v8"></path>
+                        </svg>
                     </button>
                 </div>
                 <nav>${nav}</nav>
@@ -166,36 +177,73 @@ function renderNav(activePage) {
     const source = document.querySelector("template#pageTemplate");
     if (source) content.appendChild(source.content.cloneNode(true));
 
-    const sidebar = document.querySelector(".sidebar");
-    const toggleBtn = document.getElementById("toggleBtn");
-    if (sidebar && toggleBtn) {
-        const collapsed = localStorage.getItem("docsSidebarCollapsed") === "true";
-        sidebar.classList.toggle("collapsed", collapsed);
+        const sidebar = document.querySelector(".sidebar");
+        const toggleBtn = document.getElementById("toggleBtn");
+        const logoToggleBtn = document.getElementById("logoToggleBtn");
+        if (sidebar && toggleBtn) {
+            const collapsed = localStorage.getItem("docsSidebarCollapsed") === "true";
+            sidebar.classList.toggle("collapsed", collapsed);
 
-        const updateToggleLabel = () => {
-            const label = sidebar.classList.contains("collapsed")
-                ? "Expand navigation"
-                : "Collapse navigation";
-            toggleBtn.setAttribute("aria-label", label);
-            toggleBtn.setAttribute("title", label);
-        };
+            const updateToggleLabel = () => {
+                const isCollapsed = sidebar.classList.contains("collapsed");
+                const label = isCollapsed ? "Expand navigation" : "Collapse navigation";
+                toggleBtn.setAttribute("aria-label", label);
+                toggleBtn.setAttribute("title", label);
+                toggleBtn.style.display = isCollapsed ? "none" : "flex";
+                if (logoToggleBtn) {
+                    logoToggleBtn.setAttribute("aria-label", label);
+                    logoToggleBtn.setAttribute("title", label);
+                }
+                toggleBtn.innerHTML = `<svg class="panel-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                       <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                       <path d="m9 15-3-3 3-3"></path>
+                       <path d="M14 8v8"></path>
+                   </svg>`;
+            };
 
-        updateToggleLabel();
-        toggleBtn.addEventListener("click", () => {
-            const isCollapsed = sidebar.classList.toggle("collapsed");
-            localStorage.setItem("docsSidebarCollapsed", isCollapsed);
             updateToggleLabel();
-        });
-    }
+            const toggleSidebar = () => {
+                const isCollapsed = sidebar.classList.toggle("collapsed");
+                localStorage.setItem("docsSidebarCollapsed", isCollapsed);
+                updateToggleLabel();
+            };
+            toggleBtn.addEventListener("click", toggleSidebar);
+            logoToggleBtn?.addEventListener("click", () => {
+                if (sidebar.classList.contains("collapsed")) toggleSidebar();
+            });
+        }
+
+    const apiBaseModal = document.getElementById("apiBaseModal");
+    const apiBaseInput = document.getElementById("apiBaseInput");
+    const apiBaseError = document.getElementById("apiBaseError");
+
+    const closeApiBaseModal = () => {
+        apiBaseModal.classList.add("hidden");
+        apiBaseError.textContent = "";
+    };
 
     document.getElementById("changeApiBase").addEventListener("click", () => {
-        const value = prompt("Enter the Flask HTTPS tunnel URL:", getApiBase());
-        if (value === null) return;
+        apiBaseInput.value = getApiBase();
+        apiBaseError.textContent = "";
+        apiBaseModal.classList.remove("hidden");
+        apiBaseInput.focus();
+    });
+
+    document.getElementById("apiBaseClose").addEventListener("click", closeApiBaseModal);
+    document.getElementById("apiBaseCancel").addEventListener("click", closeApiBaseModal);
+    apiBaseModal.addEventListener("click", (event) => {
+        if (event.target === apiBaseModal) closeApiBaseModal();
+    });
+    apiBaseInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") document.getElementById("apiBaseSave").click();
+        if (event.key === "Escape") closeApiBaseModal();
+    });
+    document.getElementById("apiBaseSave").addEventListener("click", () => {
         try {
-            setApiBase(value);
+            setApiBase(apiBaseInput.value);
             location.reload();
         } catch (error) {
-            alert(error.message);
+            apiBaseError.textContent = error.message;
         }
     });
 
