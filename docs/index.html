@@ -11,16 +11,11 @@
 <template id="pageTemplate">
     <div class="stats">
         <div class="stat"><h4>Camera</h4><h2 id="cameraCard">Checking</h2></div>
+        <div class="stat"><h4>Voice</h4><h2 id="voiceCard">Checking</h2></div>
         <div class="stat"><h4>Active Session</h4><h2 id="attendanceCard">-</h2></div>
         <div class="stat"><h4>Students</h4><h2 id="studentCard">0</h2></div>
     </div>
     <div class="dashboard">
-        <section class="panel camera-panel">
-            <h2><i class="fa-solid fa-video"></i> Live Camera Preview</h2>
-            <div class="camera-placeholder" style="padding:0;overflow:hidden">
-                <img id="dashboardStream" alt="NAO camera stream" style="width:100%;display:block">
-            </div>
-        </section>
         <section class="panel session-panel">
             <h2><i class="fa-solid fa-robot"></i> Robot Session</h2>
             <table class="info-table">
