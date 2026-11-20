@@ -1,0 +1,1020 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<style>
+.subjects-page .panel{height:auto!important;min-height:0!important;overflow:visible!important}
+.subjects-page .dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;align-items:start}
+.subjects-page > .panel{margin-top:28px}
+.subjects-page form{display:flex;flex-direction:column;gap:10px}
+.subjects-page h2,.subjects-page h3{margin-bottom:16px}
+.subjects-page hr{margin:24px 0;border:0;border-top:1px solid #e2e8f0}
+.subjects-page small{display:block;color:#64748b;line-height:1.5;margin-top:-3px}
+.subjects-page table th,.subjects-page table td{vertical-align:top;padding:12px 10px}
+.subjects-page .student-subjects{line-height:1.7;white-space:normal}
+.records-container{width:100%;overflow-x:auto}
+.records-container table{width:100%;min-width:650px}
+.action-buttons{display:flex;gap:6px;justify-content:center;align-items:center;flex-wrap:wrap}
+.action-btn{border:0;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13px}
+.action-btn:disabled{opacity:.6;cursor:not-allowed}
+.edit-btn{background:#e8f0ff;color:#2563eb}.delete-btn{background:#ffe8e8;color:#dc2626}
+.face-btn{background:#eaf8ee;color:#15803d}.cancel-btn{background:#eee;color:#444;margin-left:6px}
+.table-empty{text-align:center;padding:14px}.face-status{white-space:nowrap}
+
+.face-registration-status {
+    margin-top: 12px;
+    padding: 16px;
+    border-radius: 10px;
+    background: #f7f9fc;
+    border: 1px solid #e1e6ef;
+}
+
+.face-registration-status > div {
+    margin-bottom: 9px;
+}
+
+.face-registration-status > div:last-child {
+    margin-bottom: 0;
+}
+
+#faceDirection {
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+#faceInstruction {
+    font-weight: 600;
+}
+
+.face-progress-bar {
+    width: 100%;
+    height: 12px;
+    margin-top: 7px;
+    background: #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.face-progress-fill {
+    height: 100%;
+    width: 0;
+    border-radius: 10px;
+    transition: width 0.3s ease;
+    background: #22c55e;
+}
+
+.face-registration-actions {
+    margin-top: 12px;
+}
+
+.face-registration-actions button {
+    width: 100%;
+}
+.subjects-page .form-message {
+    min-height: 24px;
+    margin: 2px 0 0;
+    padding: 0;
+    line-height: 24px;
+    font-weight: 600;
+    color: #475569;
+    opacity: 1;
+    transition: opacity 0.45s ease, transform 0.45s ease;
+}
+.subjects-page .form-message:empty {
+    visibility: hidden;
+}
+.subjects-page .form-message.success {
+    color: #15803d;
+}
+.subjects-page .form-message.error {
+    color: #dc2626;
+}
+.subjects-page .form-message.fading {
+    opacity: 0;
+    transform: translateY(-3px);
+}
+.subjects-page textarea {
+    resize: vertical;
+    min-height: 88px;
+}
+.schedule-days {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 12px;
+}
+.schedule-days label {
+    display:flex;
+    align-items:center;
+    gap:6px;
+}
+.day-picker {
+    border:0;
+    padding:0;
+    margin:4px 0 14px;
+}
+.day-picker legend {
+    width:100%;
+    margin-bottom:10px;
+    font-weight:700;
+}
+.schedule-days {
+    display:grid;
+    grid-template-columns:repeat(7,minmax(64px,1fr));
+    gap:8px;
+}
+.schedule-days label {
+    display:grid;
+    grid-template-rows:auto 32px;
+    justify-items:center;
+    align-items:center;
+    gap:6px;
+    min-width:0;
+    padding:10px 4px 6px;
+    border:1px solid #e2e8f0;
+    border-radius:10px;
+    background:#f8fafc;
+    font-size:12px;
+    font-weight:600;
+    cursor:pointer;
+}
+.schedule-days label:has(input:checked) {
+    border-color:#2563eb;
+    background:#eff6ff;
+    color:#1d4ed8;
+}
+.schedule-days input {
+    width:18px;
+    height:18px;
+    accent-color:#2563eb;
+    cursor:pointer;
+}
+.student-action-stack {
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    min-width:180px;
+}
+.student-action-stack .action-btn {
+    width:100%;
+}
+.student-action-primary {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+}
+.student-action-primary .action-btn {
+    min-height:38px;
+    font-weight:700;
+}
+.student-action-primary .edit-btn {
+    background:#dbeafe;
+    color:#1d4ed8;
+}
+.student-action-primary .delete-btn {
+    background:#fee2e2;
+    color:#b91c1c;
+}
+.student-action-stack .face-btn {
+    min-height:38px;
+    background:#dcfce7;
+    color:#15803d;
+    font-weight:700;
+}
+.subjects-page .dashboard-grid {
+    margin-bottom:28px;
+}
+.subjects-page > .panel,
+.subjects-page .dashboard-grid > .panel {
+    margin:0;
+}
+.subjects-page > .panel {
+    margin-top:28px;
+}
+.subjects-page .panel {
+    padding:24px;
+}
+.subjects-page .programme-create {
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    margin-top:4px;
+}
+.subjects-page .programme-create button {
+    width:auto;
+    align-self:flex-start;
+}
+.subject-option-disabled {
+    color:#94a3b8;
+}
+.link-button{border:0;background:none;color:#2563eb;padding:0;cursor:pointer;font:inherit;text-align:left}
+.students-page #openStudentModal,.students-page #closeStudentModal{display:none}
+.students-page #studentModal{position:static;display:block!important;background:transparent;padding:0;z-index:auto}
+.students-page #studentModal .modal-card{width:100%;max-height:none;overflow:visible;padding:0;border-radius:0;box-shadow:none}
+.students-page #studentPanel{padding:24px!important}
+.students-page #studentForm{display:flex;flex-direction:column;gap:10px;align-items:stretch}
+.students-page #studentForm label{margin:0}
+.students-page #studentForm input,.students-page #studentForm select{width:100%;box-sizing:border-box}
+.students-page #studentForm .programme-create{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.students-page #studentForm .programme-create button{width:auto;align-self:flex-start;white-space:nowrap}
+.students-page #studentForm small{margin:0}
+.subjects-page #subjectModal .dashboard-grid{padding:28px}
+.subjects-page #subjectPanel > label{display:block;margin:14px 0 6px;color:#334155;font-weight:600}
+.subjects-page #subjectPanel > input,
+.subjects-page #subjectPanel > textarea{width:100%;box-sizing:border-box;padding:14px 16px;border:1px solid var(--border);border-radius:14px;outline:none;background:#fff;font-size:15px;font-family:inherit;transition:.25s}
+.subjects-page #subjectPanel > input:hover,
+.subjects-page #subjectPanel > textarea:hover{border-color:#93c5fd}
+.subjects-page #subjectPanel > input:focus,
+.subjects-page #subjectPanel > textarea:focus{border-color:var(--primary);box-shadow:0 0 0 4px rgba(37,99,235,.12)}
+.subjects-page #subjectPanel > textarea{min-height:110px;resize:vertical;line-height:1.5}
+.subjects-page #subjectPanel .modal-heading{padding-bottom:8px;margin-bottom:4px;border-bottom:1px solid #e2e8f0}
+.subjects-page #subjectPanel .day-picker{margin-top:18px}
+.subjects-page #subjectPanel > button{margin-top:6px}
+.class-now-panel{margin-bottom:14px!important;border-left:4px solid #2563eb!important}.class-now-label{color:#64748b;font-size:13px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}.class-now-panel strong{font-size:20px;color:#0f172a}.add-subject-button{width:auto!important;margin:0 0 18px;padding:9px 14px!important;background:#2563eb;color:white;border:0;border-radius:8px;cursor:pointer;font-weight:700}.page-modal{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px}.page-modal.hidden{display:none}.modal-card,.page-modal .dashboard-grid{width:min(900px,100%);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:24px;box-shadow:0 20px 50px rgba(15,23,42,.22)}.page-modal .dashboard-grid{display:block}.page-modal .panel{box-shadow:none!important;padding:0!important}.modal-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.modal-heading h2{margin:0}.modal-close{border:0;background:transparent;color:#64748b;font-size:28px;cursor:pointer}.timetable-panel{margin-top:18px!important}.timetable-scroll{overflow:auto}.weekly-timetable{width:100%;min-width:800px;border-collapse:collapse;table-layout:fixed}.weekly-timetable th,.weekly-timetable td{border:1px solid #dbe3ef;padding:5px;vertical-align:top;height:46px}.weekly-timetable thead th{background:#f1f5f9;color:#334155;text-align:center}.weekly-timetable tbody th{width:70px;background:#f8fafc;color:#64748b;font-size:12px}.timetable-entry{display:block;width:100%;padding:5px 6px;margin:0 0 3px;border:1px solid #93c5fd;border-radius:5px;background:#dbeafe;color:#1e40af;text-align:left;font-size:11px;cursor:pointer}.timetable-entry:hover{background:#bfdbfe}
+
+@media (max-width: 900px) {
+    .subjects-page .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+</style>
+
+<div class="subjects-page {{ page_mode }}-page">
+{% if page_mode == 'subjects' %}
+<section class="panel class-now-panel">
+    <div class="class-now-label">Class Now</div>
+    <strong id="classNowText">Checking current timetable...</strong>
+</section>
+<button id="openSubjectModal" class="add-subject-button" type="button">
+    <i class="fa-solid fa-plus"></i> Add Subject
+</button>
+<div id="subjectModal" class="page-modal hidden" role="dialog" aria-modal="true" aria-labelledby="subjectModalTitle">
+<div class="dashboard-grid">
+<section class="panel" id="subjectPanel">
+<div class="modal-heading"><h2 id="subjectModalTitle"><i class="fa-solid fa-book"></i> Add Subject</h2><button id="closeSubjectModal" type="button" class="modal-close" aria-label="Close">&times;</button></div>
+<label for="subjectCode">Subject Code</label>
+<input id="subjectCode" type="text" placeholder="BMIT2073">
+<label for="subjectName">Subject Name</label>
+<input id="subjectName" type="text" placeholder="Testing Class">
+<label for="semester">Semester</label>
+<input id="semester" type="text" placeholder="2026 Semester 2">
+<label for="subjectDescription">Subject Description</label>
+<textarea id="subjectDescription" rows="4" placeholder="Describe the subject topics and teaching focus for voice assistance."></textarea>
+<label for="scheduleStart">Weekly Start Time</label>
+<input id="scheduleStart" type="time">
+<label for="scheduleEnd">Weekly End Time</label>
+<input id="scheduleEnd" type="time">
+<fieldset class="day-picker">
+    <legend>Weekly Class Days</legend>
+    <div id="scheduleDays" class="schedule-days">
+        <label><span>Mon</span><input type="checkbox" value="Monday"></label>
+        <label><span>Tue</span><input type="checkbox" value="Tuesday"></label>
+        <label><span>Wed</span><input type="checkbox" value="Wednesday"></label>
+        <label><span>Thu</span><input type="checkbox" value="Thursday"></label>
+        <label><span>Fri</span><input type="checkbox" value="Friday"></label>
+        <label><span>Sat</span><input type="checkbox" value="Saturday"></label>
+        <label><span>Sun</span><input type="checkbox" value="Sunday"></label>
+    </div>
+</fieldset>
+<button id="addSubjectBtn">Create Subject</button>
+<button id="cancelSubjectEditBtn" class="cancel-btn" type="button" style="display:none">Cancel Edit</button>
+<p id="subjectMessage" class="form-message" aria-live="polite"></p>
+</section>
+</div>
+</div>
+
+<section class="panel timetable-panel">
+    <h2><i class="fa-solid fa-calendar-week"></i> Subject Timetable</h2>
+    <div class="timetable-scroll">
+        <table class="weekly-timetable">
+            <thead><tr><th>Time</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead>
+            <tbody id="timetableBody"><tr><td colspan="8" class="table-empty">Loading timetable</td></tr></tbody>
+        </table>
+    </div>
+</section>
+<section class="panel" style="margin-top:18px!important">
+    <h2>Registered Subjects</h2>
+    <div class="records-container"><table class="attendance-table"><thead><tr><th>Code</th><th>Name</th><th>Semester</th><th>Schedule</th><th>Actions</th></tr></thead><tbody id="subjectsBody"><tr><td colspan="5" class="table-empty">Loading subjects</td></tr></tbody></table></div>
+</section>
+{% else %}
+
+<section class="panel" id="studentPanel">
+<button id="openStudentModal" class="add-subject-button" type="button"><i class="fa-solid fa-plus"></i> Add New Student</button>
+<div id="studentModal" class="page-modal hidden" role="dialog" aria-modal="true" aria-labelledby="studentModalTitle">
+<div class="modal-card">
+<div class="modal-heading"><h2 id="studentModalTitle"><i class="fa-solid fa-user-graduate"></i> Register New Student</h2><button id="closeStudentModal" type="button" class="modal-close" aria-label="Close">&times;</button></div>
+<form id="studentForm">
+<label for="studentId">Student ID</label>
+<input id="studentId" name="student_id" type="text" placeholder="S001" required>
+<label for="studentName">Student Name</label>
+<input id="studentName" name="student_name" type="text" placeholder="Lee Yen Hong" required>
+<label for="programme">Programme</label>
+<select id="programme" name="programme_id">
+    <option value="">No programme / Select later</option>
+</select>
+<div class="programme-create">
+    <label for="newProgrammeName">Create New Programme</label>
+    <input id="newProgrammeName" type="text" placeholder="Bachelor of Information Technology">
+    <button id="createProgrammeBtn" type="button">Create Programme</button>
+    <p id="programmeMessage" class="form-message" aria-live="polite"></p>
+</div>
+<label for="studentSubject">Subjects</label>
+<select id="studentSubject" name="class_ids" multiple size="4"></select>
+<small>Hold Ctrl or Command to select multiple subjects. Edit a registered student to change enrollments.</small>
+<button id="registerStudentBtn" type="submit">Register Student</button>
+<button id="cancelStudentEditBtn" class="cancel-btn" type="button" style="display:none">Cancel Edit</button>
+<p id="studentMessage" class="form-message" aria-live="polite"></p>
+</form>
+<hr>
+<h3>NAO Face Registration</h3>
+<p id="faceRegistrationMessage">
+    Select <strong>Register Face</strong> from a student record after saving the student details.
+</p>
+
+<div id="faceRegistrationProgress" class="face-registration-status">
+    <div>
+        <strong>Status:</strong>
+        <span id="faceStatusText">Ready</span>
+    </div>
+
+    <div>
+        <strong>Current Direction:</strong>
+        <span id="faceDirection">-</span>
+    </div>
+
+    <div>
+        <strong>Instruction:</strong>
+        <span id="faceInstruction">Waiting to start registration.</span>
+    </div>
+
+    <div>
+        <strong>Captured:</strong>
+        <span id="faceCaptured">0 / 15</span>
+    </div>
+
+    <div>
+        <strong>Progress:</strong>
+        <div class="face-progress-bar">
+            <div id="faceProgressFill" class="face-progress-fill" style="width:0%;"></div>
+        </div>
+    </div>
+
+    <div class="face-registration-actions">
+        <button
+            id="cancelFaceRegistrationBtn"
+            type="button"
+            class="action-btn delete-btn"
+            style="display:none"
+            onclick="cancelFaceRegistration()">
+            <i class="fa-solid fa-xmark"></i> Cancel Registration
+        </button>
+</div>
+</div>
+ </div>
+ </div>
+</section>
+
+<div class="panel">
+<h2>Registered Students &amp; Enrollments</h2>
+<div class="records-container">
+<table class="attendance-table">
+<thead><tr><th>Photo</th><th>Student ID</th><th>Name</th><th>Programme</th><th>Subjects</th><th>Face</th><th>Actions</th></tr></thead>
+<tbody id="studentsBody"><tr><td colspan="7" class="table-empty">Loading students</td></tr></tbody>
+</table>
+</div>
+</div>
+</div>
+{% endif %}
+
+<script>
+const subjectsUrl="{{ url_for('subjects.list_subjects') }}";
+const studentsUrl="{{ url_for('subjects.list_students') }}";
+const isSubjectsPage={{ "true" if page_mode == "subjects" else "false" }};
+const subjectCode=document.getElementById("subjectCode"),subjectName=document.getElementById("subjectName"),semester=document.getElementById("semester"),subjectDescription=document.getElementById("subjectDescription"),scheduleStart=document.getElementById("scheduleStart"),scheduleEnd=document.getElementById("scheduleEnd"),scheduleDays=document.getElementById("scheduleDays"),addSubjectBtn=document.getElementById("addSubjectBtn"),cancelSubjectEditBtn=document.getElementById("cancelSubjectEditBtn"),subjectMessage=document.getElementById("subjectMessage");
+const studentForm=document.getElementById("studentForm"),studentId=document.getElementById("studentId"),studentName=document.getElementById("studentName"),programme=document.getElementById("programme"),studentSubject=document.getElementById("studentSubject"),registerStudentBtn=document.getElementById("registerStudentBtn"),cancelStudentEditBtn=document.getElementById("cancelStudentEditBtn"),studentMessage=document.getElementById("studentMessage");
+const programmesUrl="/api/programmes";
+let availableSubjects=[];
+let editingSubjectId=null,editingStudentId=null,faceStatusTimer=null;
+let lastFaceCaptureCount=0;
+let lastFaceCaptureEvent=0;
+let faceCaptureAudioContext=null;
+
+function prepareCaptureAudio(){
+    try{
+        const AudioContext=window.AudioContext||window.webkitAudioContext;
+        if(!AudioContext)return;
+        faceCaptureAudioContext=faceCaptureAudioContext||new AudioContext();
+        if(faceCaptureAudioContext.state==="suspended"){
+            faceCaptureAudioContext.resume().catch(()=>{});
+        }
+    }catch(error){
+        console.warn("Capture audio could not be initialized.",error);
+    }
+}
+
+function playCaptureDing(){
+    try{
+        const AudioContext=window.AudioContext||window.webkitAudioContext;
+        if(!AudioContext)return;
+        faceCaptureAudioContext=faceCaptureAudioContext||new AudioContext();
+        const context=faceCaptureAudioContext;
+        if(context.state==="suspended"){
+            context.resume();
+        }
+        const oscillator=context.createOscillator();
+        const gain=context.createGain();
+        oscillator.type="sine";
+        oscillator.frequency.setValueAtTime(880,context.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(1320,context.currentTime+0.08);
+        gain.gain.setValueAtTime(0.0001,context.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.18,context.currentTime+0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001,context.currentTime+0.16);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start();
+        oscillator.stop(context.currentTime+0.17);
+    }catch(error){
+        console.warn("Capture ding could not be played.",error);
+    }
+}
+
+function formatFaceDirection(direction){
+    if(!direction||direction==="-"||direction==="none")return "Waiting";
+    const labels={
+        front:"Front",
+        left:"Turn Left",
+        right:"Turn Right",
+        up:"Look Up",
+        down:"Look Down"
+    };
+    return labels[String(direction).toLowerCase()]||String(direction).toUpperCase();
+}
+function escapeHtml(v){return String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
+
+const formMessageTimers = new WeakMap();
+
+function showFormMessage(element, message, type = "success", countdownSeconds = 3) {
+    if (!element) return;
+
+    const previousTimer = formMessageTimers.get(element);
+    if (previousTimer) clearInterval(previousTimer);
+
+    element.classList.remove("success", "error", "fading");
+    element.classList.add(type);
+    element.style.visibility = "visible";
+
+    if (type !== "success" || countdownSeconds <= 0) {
+        element.textContent = message;
+        return;
+    }
+
+    let remaining = countdownSeconds;
+    element.textContent = `${message} (${remaining}s)`;
+
+    const timer = setInterval(() => {
+        remaining -= 1;
+        if (remaining > 0) {
+            element.textContent = `${message} (${remaining}s)`;
+            return;
+        }
+
+        clearInterval(timer);
+        element.classList.add("fading");
+        setTimeout(() => {
+            element.classList.remove("success", "error", "fading");
+            element.textContent = "";
+        }, 450);
+    }, 1000);
+
+    formMessageTimers.set(element, timer);
+}
+
+function timeToMinutes(value){const [hours,minutes]=String(value||"").split(":").map(Number);return Number.isFinite(hours)&&Number.isFinite(minutes)?hours*60+minutes:null}
+function formatDay(day){return ({Monday:"Mon",Tuesday:"Tue",Wednesday:"Wed",Thursday:"Thu",Friday:"Fri",Saturday:"Sat",Sunday:"Sun"})[day]||day}
+function formatSchedule(subject){const days=(subject.schedule_days||[]).map(formatDay).join(", ");return subject.schedule_start&&subject.schedule_end?`${days||"Weekly"}: ${subject.schedule_start} - ${subject.schedule_end}`:"No weekly schedule"}
+function renderSubjectTimetable(){
+    const body=document.getElementById("timetableBody");
+    if(!body)return;
+    const days=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+    body.innerHTML="";
+    for(let hour=8;hour<=21;hour++){
+        const row=document.createElement("tr");
+        row.innerHTML=`<th>${String(hour).padStart(2,"0")}:00</th>`;
+        days.forEach(day=>{
+            const cell=document.createElement("td");
+            availableSubjects.filter(s=>(s.schedule_days||[]).includes(day)&&timeToMinutes(s.schedule_start)<=hour*60&&timeToMinutes(s.schedule_end)>hour*60).forEach(subject=>{
+                const button=document.createElement("button");
+                button.type="button";button.className="timetable-entry";
+                button.textContent=`${subject.class_code} · ${subject.class_name}`;
+                button.title=`${subject.class_name} | ${formatSchedule(subject)}`;
+                button.addEventListener("click",()=>showSubjectDetails(subject));
+                cell.appendChild(button);
+            });
+            row.appendChild(cell);
+        });
+        body.appendChild(row);
+    }
+}
+function showSubjectDetails(subject){
+    alert(`${subject.class_name} (${subject.class_code})\n${formatSchedule(subject)}\n\n${subject.description||"No description available."}`);
+}
+function renderSubjectList(){
+    const body=document.getElementById("subjectsBody");
+    if(!body)return;
+    body.innerHTML="";
+    if(!availableSubjects.length){body.innerHTML='<tr><td colspan="5" class="table-empty">No subjects registered yet.</td></tr>';return;}
+    availableSubjects.forEach(s=>{
+        const row=document.createElement("tr");
+        row.innerHTML=`<td>${escapeHtml(s.class_code)}</td><td><button type="button" class="link-button subject-detail-link">${escapeHtml(s.class_name)}</button></td><td>${escapeHtml(s.semester||"-")}</td><td>${escapeHtml(formatSchedule(s))}</td><td><div class="action-buttons"><button type="button" class="action-btn edit-btn">Edit</button><button type="button" class="action-btn delete-btn">Delete</button></div></td>`;
+        row.querySelector(".subject-detail-link").addEventListener("click",()=>showSubjectDetails(s));
+        row.querySelector(".edit-btn").addEventListener("click",()=>{editSubject(s.class_id,s.class_code,s.class_name,s.semester,s.description,s.schedule_start,s.schedule_end,s.schedule_days);setPageModal("subjectModal",true)});
+        row.querySelector(".delete-btn").addEventListener("click",()=>deleteSubject(s.class_id,s.class_code));
+        body.appendChild(row);
+    });
+}
+function updateClassNow(){
+    const output=document.getElementById("classNowText");
+    if(!output)return;
+    const now=new Date();
+    const day=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][now.getDay()];
+    const minutes=now.getHours()*60+now.getMinutes();
+    const current=availableSubjects.find(s=>(s.schedule_days||[]).includes(day)&&timeToMinutes(s.schedule_start)<=minutes&&timeToMinutes(s.schedule_end)>minutes);
+    output.textContent=current?`Class Now In: ${current.class_name} | ${current.schedule_start} - ${current.schedule_end}`:"No Class Currently";
+}
+async function loadSubjects(){
+    try{
+        const r=await fetch(subjectsUrl+"?t="+Date.now(),{cache:"no-store"}),d=await r.json();
+        if(!r.ok||!d.success)throw Error(d.message||"Unable to load subjects.");
+        availableSubjects=d.subjects||[];
+        renderSubjectList();
+        if(studentSubject){
+            studentSubject.innerHTML='<option value="">No subject / Enroll later</option>';
+            availableSubjects.forEach(s=>{const o=document.createElement("option");o.value=s.class_id;o.textContent=`${s.class_code} - ${s.class_name}`;studentSubject.appendChild(o)});
+            updateSubjectOptions();
+        }
+        if(isSubjectsPage){renderSubjectTimetable();updateClassNow();}
+    }catch(e){console.error(e);if(subjectMessage)showFormMessage(subjectMessage,"Failed to load subjects.","error",0)}
+}
+
+function updateSubjectOptions(){
+    if(!studentSubject)return;
+    const selectedIds=new Set(Array.from(studentSubject.selectedOptions).map(option=>Number(option.value)).filter(Boolean));
+    Array.from(studentSubject.options).forEach(option=>{
+        if(!option.value)return;
+        const candidate=availableSubjects.find(subject=>Number(subject.class_id)===Number(option.value));
+        if(!candidate)return;
+        let clashes=false;
+        availableSubjects.forEach(selected=>{
+            if(!selectedIds.has(Number(selected.class_id))||Number(selected.class_id)===Number(option.value))return;
+            if(!candidate.schedule_start||!candidate.schedule_end||!selected.schedule_start||!selected.schedule_end)return;
+            const commonDay=(candidate.schedule_days||[]).some(day=>(selected.schedule_days||[]).includes(day));
+            if(commonDay&&candidate.schedule_start<selected.schedule_end&&selected.schedule_start<candidate.schedule_end)clashes=true;
+        });
+        option.disabled=clashes&&!selectedIds.has(Number(option.value));
+        option.textContent=option.disabled?`${candidate.class_code} - ${candidate.class_name} (clashes)`:`${candidate.class_code} - ${candidate.class_name}`;
+    });
+}
+if(studentSubject)studentSubject.addEventListener("change",updateSubjectOptions);
+
+if(addSubjectBtn)addSubjectBtn.addEventListener("click", async () => {
+    const code = subjectCode.value.trim();
+    const name = subjectName.value.trim();
+    const term = semester.value.trim();
+    const days = Array.from(scheduleDays.querySelectorAll("input:checked")).map(input => input.value);
+    if (!code || !name) {
+        showFormMessage(subjectMessage, "Subject code and name are required.", "error", 0);
+        return;
+    }
+    addSubjectBtn.disabled = true;
+    try {
+        const response = await fetch(
+            editingSubjectId !== null ? `${subjectsUrl}/${editingSubjectId}` : subjectsUrl,
+            {
+                method: editingSubjectId !== null ? "PUT" : "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    class_code: code,
+                    class_name: name,
+                    semester: term,
+                    description: subjectDescription.value.trim(),
+                    schedule_start: scheduleStart.value,
+                    schedule_end: scheduleEnd.value,
+                    schedule_days: days
+                })
+            }
+        );
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showFormMessage(subjectMessage, data.message || "Unable to save subject.", "error", 0);
+            return;
+        }
+        showFormMessage(
+            subjectMessage,
+            editingSubjectId !== null ? "Subject updated successfully." : "Subject created successfully.",
+            "success",
+            3
+        );
+        resetSubjectForm();
+        await loadSubjects();
+        await loadStudents();
+    } catch (error) {
+        console.error(error);
+        showFormMessage(subjectMessage, "Unable to connect to the server.", "error", 0);
+    } finally {
+        addSubjectBtn.disabled = false;
+    }
+});
+function editSubject(id,code,name,term,description,start,end,days){
+    editingSubjectId=Number(id);
+    subjectCode.value=code;
+    subjectName.value=name;
+    semester.value=term;
+    subjectDescription.value=description||"";
+    scheduleStart.value=start||"";
+    scheduleEnd.value=end||"";
+    scheduleDays.querySelectorAll("input").forEach(input => {
+        input.checked=(days||[]).includes(input.value);
+    });
+    addSubjectBtn.textContent="Update Subject";
+    cancelSubjectEditBtn.style.display="inline-block";
+    showFormMessage(subjectMessage,"Editing subject.","error",0);
+    document.getElementById("subjectPanel").classList.add("form-editing");
+    subjectCode.focus();
+}
+function resetSubjectForm(){
+    editingSubjectId=null;
+    subjectCode.value="";
+    subjectName.value="";
+    semester.value="";
+    subjectDescription.value="";
+    scheduleStart.value="";
+    scheduleEnd.value="";
+    scheduleDays.querySelectorAll("input").forEach(input => input.checked=false);
+    addSubjectBtn.textContent="Create Subject";
+    cancelSubjectEditBtn.style.display="none";
+    document.getElementById("subjectPanel").classList.remove("form-editing");
+}
+if(cancelSubjectEditBtn)cancelSubjectEditBtn.addEventListener("click",()=>{resetSubjectForm();subjectMessage.textContent=""});
+async function deleteSubject(id,code){if(!confirm(`Delete subject "${code}"?\n\nIts student enrollments and related attendance sessions may also be removed.`))return;try{const r=await fetch(`${subjectsUrl}/${id}`,{method:"DELETE"}),d=await r.json();if(!r.ok||!d.success){showFormMessage(subjectMessage,d.message||"Unable to delete subject.","error",0);return}if(Number(editingSubjectId)===Number(id))resetSubjectForm();showFormMessage(subjectMessage,"Subject deleted successfully.","success",3);await loadSubjects();await loadStudents()}catch(e){console.error(e);showFormMessage(subjectMessage,"Unable to connect to the server.","error",0)}}
+
+if(studentForm){
+studentForm.addEventListener("submit",async e=>{e.preventDefault();const id=studentId.value.trim(),name=studentName.value.trim();if(!id||!name){showFormMessage(studentMessage,"Student ID and student name are required.","error",0);return}registerStudentBtn.disabled=true;try{const editing=editingStudentId!==null;const classIds=Array.from(studentSubject.selectedOptions).map(o=>Number(o.value));const r=await fetch(editing?`${studentsUrl}/${encodeURIComponent(editingStudentId)}`:studentsUrl,{method:editing?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({student_id:id,student_name:name,programme_id:programme.value||null,class_ids:classIds,class_id:classIds[0]||""})}),d=await r.json();if(!r.ok||!d.success){showFormMessage(studentMessage,d.message||"Unable to save student.","error",0);return}showFormMessage(studentMessage,editing?"Student updated successfully.":"Student registered successfully.","success",3);resetStudentForm();await loadStudents()}catch(e){console.error(e);showFormMessage(studentMessage,"Unable to connect to the server.","error",0)}finally{registerStudentBtn.disabled=false}});
+}
+function editStudent(id,name,programmeId,classIds){editingStudentId=id;studentId.value=id;studentName.value=name;programme.value=programmeId||"";Array.from(studentSubject.options).forEach(o=>o.selected=(classIds||[]).includes(Number(o.value)));studentId.disabled=true;registerStudentBtn.textContent="Update Student";cancelStudentEditBtn.style.display="inline-block";showFormMessage(studentMessage,"Editing student details. Select all subjects this student is enrolled in.","error",0);document.getElementById("studentPanel").classList.add("form-editing");studentName.focus()}
+function resetStudentForm(){editingStudentId=null;studentForm.reset();studentId.disabled=false;registerStudentBtn.textContent="Register Student";cancelStudentEditBtn.style.display="none";document.getElementById("studentPanel").classList.remove("form-editing")}
+if(cancelStudentEditBtn)cancelStudentEditBtn.addEventListener("click",()=>{resetStudentForm();studentMessage.textContent=""});
+async function deleteStudent(id){if(!confirm(`Delete student "${id}"?\n\nThis will also remove the student's subject enrollments and related attendance records.`))return;try{const r=await fetch(`${studentsUrl}/${encodeURIComponent(id)}`,{method:"DELETE"}),d=await r.json();if(!r.ok||!d.success){showFormMessage(studentMessage,d.message||"Unable to delete student.","error",0);return}if(String(editingStudentId)===String(id))resetStudentForm();showFormMessage(studentMessage,"Student deleted successfully.","success",3);await loadStudents()}catch(e){console.error(e);showFormMessage(studentMessage,"Unable to connect to the server.","error",0)}}
+
+async function loadStudents(){try{const r=await fetch(studentsUrl+"?t="+Date.now(),{cache:"no-store"}),d=await r.json();if(!r.ok||!d.success)throw Error(d.message||"Unable to load students.");const b=document.getElementById("studentsBody");b.innerHTML="";if(!d.students.length){b.innerHTML='<tr><td colspan="7" class="table-empty">No students registered yet.</td></tr>';return}d.students.forEach(s=>{const registered=Number(s.face_registered)===1;const studentId=escapeHtml(s.student_id);const studentName=escapeHtml(s.student_name);const programmeName=escapeHtml(s.programme_name||"");const programmeId=Number(s.programme_id||0);const classIds=String(s.class_ids||"").split(",").filter(Boolean).map(Number).join(",");const row=document.createElement("tr");row.innerHTML=`<td>👤</td><td>${studentId}</td><td>${studentName}</td><td>${programmeName||"-"}</td><td class="student-subjects">${formatSubjects(s.classes||s.subjects)}</td><td class="face-status">${registered?"🟢 Registered":"🔴 Not registered"}</td><td><div class="student-action-stack"><div class="student-action-primary"><button type="button" class="action-btn edit-btn" onclick="editStudent('${studentId}','${studentName}','${programmeId||""}',[${classIds}])"><i class="fa-solid fa-pen"></i> Edit</button><button type="button" class="action-btn delete-btn" onclick="deleteStudent('${studentId}')"><i class="fa-solid fa-trash"></i> Delete</button></div>${registered?"":`<button type="button" class="action-btn face-btn" onclick="startFaceRegistration('${studentId}')"><i class="fa-solid fa-camera"></i> Register Face</button>`}</div></td>`;b.appendChild(row)})}catch(e){console.error(e);document.getElementById("studentsBody").innerHTML='<tr><td colspan="7" class="table-empty">Failed to load students.</td></tr>'}}
+
+function formatSubjects(value){if(!value)return "Not enrolled";return value.split(",").map(subject=>escapeHtml(subject.trim())).join("<br>")}
+
+let activeFaceStudentId = null;
+
+function setFaceRegistrationUI(status, direction, instruction, captured, total) {
+    const statusEl = document.getElementById("faceStatusText");
+    const directionEl = document.getElementById("faceDirection");
+    const instructionEl = document.getElementById("faceInstruction");
+    const capturedEl = document.getElementById("faceCaptured");
+    const progressEl = document.getElementById("faceProgressFill");
+    const cancelBtn = document.getElementById("cancelFaceRegistrationBtn");
+
+    statusEl.textContent = status || "Ready";
+    directionEl.textContent = direction ? String(direction).toUpperCase() : "-";
+    instructionEl.textContent = instruction || "Waiting to start registration.";
+
+    captured = Number(captured || 0);
+    total = Number(total || 15);
+
+    capturedEl.textContent = `${captured} / ${total}`;
+
+    const percentage = total > 0
+        ? Math.min(100, (captured / total) * 100)
+        : 0;
+
+    progressEl.style.width = `${percentage}%`;
+
+    cancelBtn.style.display =
+        status === "Capturing" || status === "Starting"
+            ? "block"
+            : "none";
+}
+
+async function startFaceRegistration(id) {
+    const msg = document.getElementById("faceRegistrationMessage");
+
+    setPageModal("studentModal", true);
+    activeFaceStudentId = id;
+    lastFaceCaptureCount = 0;
+    lastFaceCaptureEvent = 0;
+    prepareCaptureAudio();
+
+    msg.textContent = `Starting face registration for ${id}...`;
+
+    setFaceRegistrationUI(
+        "Starting",
+        "-",
+        "NAO is preparing the camera...",
+        0,
+        15
+    );
+
+    try {
+        const r = await fetch(
+            `${studentsUrl}/${encodeURIComponent(id)}/face-registration/start`,
+            { method: "POST" }
+        );
+
+        const d = await r.json();
+
+        if (!r.ok || !d.success) {
+            msg.textContent =
+                d.message || "Unable to start face registration.";
+
+            setFaceRegistrationUI(
+                "Failed",
+                "-",
+                d.message || "Unable to start face registration.",
+                0,
+                15
+            );
+
+            activeFaceStudentId = null;
+            return;
+        }
+
+        msg.textContent =
+            "NAO face registration started. Follow the instructions shown below.";
+
+        pollFaceRegistration(id);
+
+    } catch (e) {
+        console.error(e);
+
+        msg.textContent = "Unable to connect to the server.";
+
+        setFaceRegistrationUI(
+            "Failed",
+            "-",
+            "Unable to connect to the server.",
+            0,
+            15
+        );
+
+        activeFaceStudentId = null;
+    }
+}
+
+function pollFaceRegistration(id) {
+    if (faceStatusTimer) {
+        clearInterval(faceStatusTimer);
+    }
+
+    async function pollOnce() {
+        try {
+            const r = await fetch(
+                `${studentsUrl}/${encodeURIComponent(id)}/face-registration/status?t=${Date.now()}`,
+                { cache: "no-store" }
+            );
+
+            const d = await r.json();
+
+            if (!r.ok || !d.success) {
+                return;
+            }
+
+            // The current backend returns the status fields at the
+            // top level, but this also supports a nested "status" object.
+            const s = d.status || d;
+
+            const running = Boolean(s.running);
+            const completed = Boolean(s.completed);
+            const cancelled = Boolean(s.cancelled);
+            const error = s.error;
+
+            const direction =
+                s.current_direction ||
+                s.direction ||
+                "-";
+
+            const instruction =
+                s.message ||
+                "Waiting for the next instruction.";
+
+            const captured =
+                Number(s.captured ?? s.captured_count ?? 0);
+
+            const total =
+                Number(s.total ?? s.required ?? 15);
+
+            const captureEvent =
+                Number(s.capture_event ?? 0);
+
+            if (
+                captureEvent > lastFaceCaptureEvent
+            ) {
+                const missedCaptures =
+                    captureEvent - lastFaceCaptureEvent;
+                for (let i = 0; i < missedCaptures; i++) {
+                    playCaptureDing();
+                }
+                lastFaceCaptureCount = captured;
+                lastFaceCaptureEvent = captureEvent;
+            } else if (
+                captureEvent === 0 &&
+                captured > lastFaceCaptureCount
+            ) {
+                const missedCaptures =
+                    captured - lastFaceCaptureCount;
+                for (let i = 0; i < missedCaptures; i++) {
+                    playCaptureDing();
+                }
+                lastFaceCaptureCount = captured;
+            } else {
+                lastFaceCaptureCount = Math.max(
+                    lastFaceCaptureCount,
+                    captured
+                );
+                lastFaceCaptureEvent = Math.max(
+                    lastFaceCaptureEvent,
+                    captureEvent
+                );
+            }
+
+            let displayStatus = "Ready";
+
+            if (error) {
+                displayStatus = "Error";
+            } else if (cancelled) {
+                displayStatus = "Cancelled";
+            } else if (completed) {
+                displayStatus = "Completed";
+            } else if (running) {
+                displayStatus = "Capturing";
+            }
+
+            setFaceRegistrationUI(
+                displayStatus,
+                formatFaceDirection(direction),
+                instruction,
+                captured,
+                total
+            );
+
+            if (running) {
+                document.getElementById(
+                    "faceRegistrationMessage"
+                ).textContent =
+                    "NAO is registering the face. Follow the direction and instruction shown above.";
+            }
+
+            if (error) {
+                document.getElementById(
+                    "faceRegistrationMessage"
+                ).textContent =
+                    `Registration failed: ${error}`;
+
+                clearInterval(faceStatusTimer);
+                faceStatusTimer = null;
+                activeFaceStudentId = null;
+
+                return;
+            }
+
+            if (cancelled && !running) {
+                document.getElementById(
+                    "faceRegistrationMessage"
+                ).textContent =
+                    "Face registration cancelled.";
+
+                clearInterval(faceStatusTimer);
+                faceStatusTimer = null;
+                activeFaceStudentId = null;
+
+                resetStudentForm();
+                return;
+            }
+
+            if (completed) {
+                document.getElementById(
+                    "faceRegistrationMessage"
+                ).textContent =
+                    "Face registration completed successfully.";
+
+                clearInterval(faceStatusTimer);
+                faceStatusTimer = null;
+                activeFaceStudentId = null;
+
+                setFaceRegistrationUI(
+                    "Completed",
+                    "-",
+                    "Face registration completed successfully.",
+                    captured,
+                    total
+                );
+                resetStudentForm();
+                await loadStudents();
+            }
+
+        } catch (e) {
+            console.error(
+                "[Face Registration] Status polling error:",
+                e
+            );
+        }
+    }
+
+    pollOnce();
+    faceStatusTimer = setInterval(pollOnce, 500);
+}
+
+async function cancelFaceRegistration() {
+    if (!activeFaceStudentId) {
+        return;
+    }
+
+    try {
+        const r = await fetch(
+            `${studentsUrl}/${encodeURIComponent(activeFaceStudentId)}/face-registration/cancel`,
+            { method: "POST" }
+        );
+
+        const d = await r.json();
+
+        if (!r.ok || !d.success) {
+            alert(
+                d.message ||
+                "Unable to cancel face registration."
+            );
+            return;
+        }
+
+        document.getElementById(
+            "faceRegistrationMessage"
+        ).textContent =
+            "Face registration cancellation requested.";
+
+    } catch (e) {
+        console.error(e);
+        alert("Unable to connect to the server.");
+    }
+}
+async function loadProgrammes(){
+    try{
+        const r=await fetch(programmesUrl+"?t="+Date.now(),{cache:"no-store"});
+        const d=await r.json();
+        if(!r.ok||!d.success)throw Error(d.message||"Unable to load programmes.");
+        const select=programme;
+        const selected=select.value;
+        select.innerHTML='<option value="">No programme / Select later</option>';
+        (d.programmes||[]).forEach(item=>{
+            const option=document.createElement("option");
+            option.value=item.programme_id;
+            option.textContent=item.programme_name;
+            select.appendChild(option);
+        });
+        if(selected)select.value=selected;
+    }catch(e){
+        console.error(e);
+        showFormMessage(document.getElementById("programmeMessage"),"Unable to load programmes.","error",0);
+    }
+}
+if(document.getElementById("createProgrammeBtn"))document.getElementById("createProgrammeBtn").addEventListener("click",async()=>{
+    const name=document.getElementById("newProgrammeName").value.trim();
+    const message=document.getElementById("programmeMessage");
+    if(!name){showFormMessage(message,"Programme name is required.","error",0);return}
+    try{
+        const r=await fetch(programmesUrl,{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({programme_name:name})
+        });
+        const d=await r.json();
+        if(!r.ok||!d.success){showFormMessage(message,d.message||"Unable to create programme.","error",0);return}
+        document.getElementById("newProgrammeName").value="";
+        showFormMessage(message,"Programme created successfully.","success",3);
+        await loadProgrammes();
+        programme.value=String(d.programme_id);
+    }catch(e){
+        console.error(e);
+        showFormMessage(message,"Unable to connect to the server.","error",0);
+    }
+});
+function setPageModal(id,isOpen){const modal=document.getElementById(id);if(modal)modal.classList.toggle("hidden",!isOpen)}
+document.getElementById("openSubjectModal")?.addEventListener("click",()=>setPageModal("subjectModal",true));
+document.getElementById("closeSubjectModal")?.addEventListener("click",()=>setPageModal("subjectModal",false));
+document.getElementById("openStudentModal")?.addEventListener("click",()=>setPageModal("studentModal",true));
+document.getElementById("closeStudentModal")?.addEventListener("click",()=>setPageModal("studentModal",false));
+if(isSubjectsPage){
+    loadStudents=async function(){};
+}
+async function initializePage(){
+    await loadSubjects();
+    if(!isSubjectsPage){await loadProgrammes();await loadStudents();}
+}
+initializePage();
+if(isSubjectsPage)setInterval(updateClassNow,30000);
+</script>
+{% endblock %}
