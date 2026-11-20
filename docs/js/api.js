@@ -1,7 +1,8 @@
 const NAO_API_STORAGE_KEY = "nao_api_base";
 
 function getApiBase() {
-    return (localStorage.getItem(NAO_API_STORAGE_KEY) || "").replace(/\/+$/, "");
+    const value = (localStorage.getItem(NAO_API_STORAGE_KEY) || "").replace(/\/+$/, "");
+    return /^https:\/\//i.test(value) ? value : "";
 }
 
 function setApiBase(value) {
@@ -11,8 +12,8 @@ function setApiBase(value) {
         return;
     }
 
-    if (!/^https?:\/\//i.test(value)) {
-        throw new Error("Enter a URL beginning with https://");
+    if (!/^https:\/\//i.test(value)) {
+        throw new Error("Enter the HTTPS Cloudflare Tunnel URL beginning with https://");
     }
 
     localStorage.setItem(NAO_API_STORAGE_KEY, value);
@@ -96,7 +97,8 @@ function renderNav(activePage) {
         ["vision.html", "camera", "Vision Monitoring"],
         ["attendance.html", "user-check", "Attendance"],
         ["behaviour.html", "eye", "Behaviour Analysis"],
-        ["subjects.html", "user-graduate", "Subjects & Students"],
+        ["subjects.html", "book", "Subjects"],
+        ["students.html", "user-graduate", "Students"],
         ["reports.html", "chart-line", "Reports"],
         ["settings.html", "gear", "Settings"],
     ];

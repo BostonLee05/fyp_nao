@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Students</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+    <style>
+        .student-grid{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:24px;align-items:start}.student-grid .panel{margin:0}.student-form{display:flex;flex-direction:column;gap:10px}.student-form select{min-height:42px}.records-container{overflow:auto}.records-container table{min-width:760px}.action-row{display:flex;gap:8px;flex-wrap:wrap}.action-row button{border:0;border-radius:8px;padding:9px 11px;cursor:pointer;font-weight:700}.edit-btn{background:#dbeafe;color:#1d4ed8}.delete-btn{background:#fee2e2;color:#b91c1c}.face-btn{background:#dcfce7;color:#15803d}.form-message{min-height:24px;font-weight:600}.form-message.error{color:#b91c1c}.form-message.success{color:#15803d}@media(max-width:900px){.student-grid{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+<template id="pageTemplate">
+    <div class="student-grid">
+        <section class="panel">
+            <h2 id="studentFormTitle"><i class="fa-solid fa-user-graduate"></i> Register Student</h2>
+            <form id="studentForm" class="student-form">
+                <input id="studentId" type="text" placeholder="Student ID (e.g. S001)" required>
+                <input id="studentName" type="text" placeholder="Student name" required>
+                <label for="studentProgramme">Programme</label>
+                <select id="studentProgramme"><option value="">No programme / Select later</option></select>
+                <label for="studentSubject">Subjects</label>
+                <select id="studentSubject" multiple size="6"></select>
+                <small>Hold Ctrl or Command to select multiple non-clashing subjects.</small>
+                <button id="saveStudentBtn" type="submit">Register Student</button>
+                <button id="cancelStudentEditBtn" type="button" hidden>Cancel Edit</button>
+                <p id="studentMessage" class="form-message" aria-live="polite"></p>
+            </form>
+            <hr>
+            <h3>NAO Face Registration</h3>
+            <p id="faceMessage">Select Register Face after saving a student.</p>
+        </section>
+        <section class="panel">
+            <h2>Registered Students</h2>
+            <div class="records-container"><table class="attendance-table">
+                <thead><tr><th>Student ID</th><th>Name</th><th>Programme</th><th>Subjects</th><th>Face</th><th>Actions</th></tr></thead>
+                <tbody id="studentsBody"><tr><td colspan="6">Loading students...</td></tr></tbody>
+            </table></div>
+        </section>
+    </div>
+</template>
+<script src="js/api.js"></script>
+<script>
+renderNav("students.html");
+document.getElementById("staticPageTitle").textContent="Students";
+const $=id=>document.getElementById(id); let editingId=null; let subjects=[];
+function message(text,type="success"){ $("studentMessage").textContent=text; $("studentMessage").className=`form-message ${type}`; }
+function selectedSubjects(){return [...$("studentSubject").selectedOptions].map(o=>Number(o.value)).filter(Boolean)}
+async function loadLookups(){
+    const [p,s]=await Promise.all([apiFetch("/api/programmes"),apiFetch("/api/subjects")]);
+    $("studentProgramme").innerHTML='<option value="">No programme / Select later</option>'+(p.programmes||[]).map(x=>`<option value="${x.programme_id}">${escapeHtml(x.programme_name)}</option>`).join("");
+    subjects=s.subjects||[]; $("studentSubject").innerHTML=subjects.map(x=>`<option value="${x.class_id}">${escapeHtml(x.class_code)} - ${escapeHtml(x.class_name)}</option>`).join("");
+}
+async function loadStudents(){
+    try{const data=await apiFetch(`/api/students?t=${Date.now()}`); const rows=data.students||[];
+        $("studentsBody").innerHTML=rows.length?rows.map(x=>{const id=escapeHtml(x.student_id),name=escapeHtml(x.student_name);const ids=String(x.class_ids||"").split(",").filter(Boolean).join(",");const registered=Number(x.face_registered)===1;return `<tr><td>${id}</td><td>${name}</td><td>${escapeHtml(x.programme_name||"-")}</td><td>${escapeHtml(x.classes||"Not enrolled")}</td><td>${registered?"Registered":"Not registered"}</td><td><div class="action-row"><button class="edit-btn" type="button" onclick='editStudent(${JSON.stringify(x)})'>Edit</button><button class="delete-btn" type="button" onclick="deleteStudent('${id}')">Delete</button>${registered?"":`<button class="face-btn" type="button" onclick="startFace('${id}')">Register Face</button>`}</div></td></tr>`}).join(""):'<tr><td colspan="6">No students registered yet.</td></tr>';
+    }catch(e){$("studentsBody").innerHTML=`<tr><td colspan="6">${escapeHtml(e.message)}</td></tr>`}
+}
+function editStudent(x){editingId=x.student_id;$("studentId").value=x.student_id;$("studentId").disabled=true;$("studentName").value=x.student_name||"";$("studentProgramme").value=x.programme_id||"";const ids=String(x.class_ids||"").split(",");[...$("studentSubject").options].forEach(o=>o.selected=ids.includes(o.value));$("studentFormTitle").textContent="Edit Student";$("saveStudentBtn").textContent="Update Student";$("cancelStudentEditBtn").hidden=false}
+function resetForm(){editingId=null;$("studentForm").reset();$("studentId").disabled=false;$("studentFormTitle").textContent="Register Student";$("saveStudentBtn").textContent="Register Student";$("cancelStudentEditBtn").hidden=true}
+$("studentForm").addEventListener("submit",async e=>{e.preventDefault();try{const edit=Boolean(editingId);await apiFetch(edit?`/api/students/${encodeURIComponent(editingId)}`:"/api/students",{method:edit?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({student_id:$("studentId").value.trim(),student_name:$("studentName").value.trim(),programme_id:$("studentProgramme").value||null,class_ids:selectedSubjects()})});message(edit?"Student updated successfully.":"Student registered successfully.");resetForm();await loadStudents()}catch(e){message(e.message,"error")}});
+$("cancelStudentEditBtn").addEventListener("click",resetForm);
+async function deleteStudent(id){if(!confirm(`Delete student ${id}?`))return;try{await apiFetch(`/api/students/${encodeURIComponent(id)}`,{method:"DELETE"});await loadStudents()}catch(e){message(e.message,"error")}}
+async function startFace(id){try{await apiFetch(`/api/students/${encodeURIComponent(id)}/face-registration/start`,{method:"POST"});$("faceMessage").textContent=`Face registration started for ${id}. Follow the instructions on the NAO.`;pollFace(id)}catch(e){$("faceMessage").textContent=e.message}}
+function pollFace(id){const timer=setInterval(async()=>{try{const s=await apiFetch(`/api/students/${encodeURIComponent(id)}/face-registration/status?t=${Date.now()}`);const x=s.status||s;if(x.completed||x.cancelled||x.error){clearInterval(timer);$("faceMessage").textContent=x.error|| (x.completed?"Face registration completed successfully.":"Face registration cancelled.")}}catch(e){clearInterval(timer)}},700)}
+Promise.all([loadLookups(),loadStudents()]).catch(e=>message(e.message,"error"));
+</script>
+</body>
+</html>

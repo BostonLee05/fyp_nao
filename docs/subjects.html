@@ -39,6 +39,7 @@
         .form-message{min-height:24px;font-weight:600}
         .form-message.success{color:#15803d}
         .form-message.error{color:#b91c1c}
+        .class-now{margin-bottom:24px;border-left:4px solid #2563eb!important}.class-now strong{font-size:20px}.timetable{margin-top:24px}.timetable-scroll{overflow:auto}.timetable table{width:100%;min-width:820px;border-collapse:collapse}.timetable th,.timetable td{border:1px solid #dbe4f0;padding:10px;vertical-align:top}.timetable th{background:#f1f5f9}.timetable-entry{display:block;margin-bottom:6px;padding:7px;border-radius:7px;background:#dbeafe;color:#1e40af;font-size:12px}
         @media(max-width:900px){.management-grid{grid-template-columns:1fr}.day-options{grid-template-columns:repeat(4,minmax(64px,1fr))}}
     </style>
 
@@ -74,6 +75,8 @@
     </section>
 
     <section id="subjectView" class="management-view">
+        <section class="panel class-now"><h2>Class Now</h2><strong id="classNowText">Checking current timetable...</strong></section>
+        <section class="panel timetable"><h2><i class="fa-solid fa-calendar-week"></i> Semester Timetable</h2><div class="timetable-scroll"><table><thead><tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead><tbody><tr id="timetableRow"><td colspan="7">Loading timetable...</td></tr></tbody></table></div></section>
         <div class="management-grid">
             <section class="panel">
                 <h2 id="subjectFormTitle">Create Subject</h2>
@@ -226,6 +229,18 @@ async function loadSubjects(){
             <button type="button" class="delete-btn" onclick="deleteSubject(${subject.class_id})"><i class="fa-solid fa-trash"></i> Delete</button>
         </div></td></tr>`;
     }).join(""):'<tr><td colspan="5" style="text-align:center">No subjects registered.</td></tr>';
+    renderTimetable(); updateClassNow();
+}
+
+const weekDays=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+function renderTimetable(){
+    const cells=weekDays.map(day=>window.availableSubjects.filter(s=>(s.schedule_days||[]).includes(day)).sort((a,b)=>(a.schedule_start||"").localeCompare(b.schedule_start||"")).map(s=>`<span class="timetable-entry"><strong>${escapeHtml(s.class_code)}</strong> ${escapeHtml(s.class_name)}<br>${escapeHtml(s.semester||"-")} · ${escapeHtml(s.schedule_start||"-")}-${escapeHtml(s.schedule_end||"-")}</span>`).join("")||"-");
+    document.getElementById("timetableRow").innerHTML=cells.map(x=>`<td>${x}</td>`).join("");
+}
+function updateClassNow(){
+    const now=new Date(), day=weekDays[now.getDay()===0?6:now.getDay()-1], time=now.toTimeString().slice(0,5);
+    const current=window.availableSubjects.find(s=>(s.schedule_days||[]).includes(day)&&s.schedule_start&&s.schedule_end&&s.schedule_start<=time&&time<s.schedule_end);
+    document.getElementById("classNowText").textContent=current?`${current.class_code} — ${current.class_name} (${current.schedule_start}-${current.schedule_end})`:`No ongoing class (${day}, ${time})`;
 }
 
 function updateClashingSubjects(){
@@ -365,6 +380,7 @@ Promise.resolve(loadProgrammes())
     .then(loadSubjects)
     .then(loadStudents)
     .catch(error=>alert(error.message));
+setInterval(updateClassNow,30000);
 </script>
 </body>
 </html>
