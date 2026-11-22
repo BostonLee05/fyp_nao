@@ -152,11 +152,7 @@ function renderNav(activePage) {
                         <span class="logo-copy">NAO Classroom</span>
                     </div>
                     <button id="toggleBtn" type="button" aria-label="Collapse navigation" title="Collapse navigation">
-                        <svg class="panel-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
-                            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-                            <path d="m9 15-3-3 3-3"></path>
-                            <path d="M14 8v8"></path>
-                        </svg>
+                        <i class="fa-solid fa-bars" aria-hidden="true"></i>
                     </button>
                 </div>
                 <nav>${nav}</nav>
@@ -221,7 +217,7 @@ function renderNav(activePage) {
                     document.body.classList.remove("sidebar-open");
                     const collapsed = localStorage.getItem("docsSidebarCollapsed") === "true";
                     sidebar.classList.toggle("collapsed", collapsed);
-                    toggleBtn.style.display = collapsed ? "none" : "flex";
+                    toggleBtn.style.display = "flex";
                 }
             };
 
@@ -230,7 +226,7 @@ function renderNav(activePage) {
                 const label = collapsed ? "Expand navigation" : "Collapse navigation";
                 toggleBtn.setAttribute("aria-label", label);
                 toggleBtn.setAttribute("title", label);
-                toggleBtn.style.display = collapsed ? "none" : "flex";
+                toggleBtn.style.display = "flex";
             };
 
             syncInitialSidebar();

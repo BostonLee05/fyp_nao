@@ -384,11 +384,7 @@ p{
 
 
 #toggleBtn:hover{
-
     background:var(--primary);
-
-    transform:rotate(90deg);
-
 }
 
 
@@ -514,11 +510,6 @@ p{
 
 
 .sidebar.collapsed #toggleBtn{
-
-    position:absolute;
-
-    bottom:25px;
-
 }
 
 
@@ -2905,15 +2896,14 @@ body.voice-command-modal-open{
     }
 
     .sidebar{
-
-        left:-270px;
-
+        left:0;
+        transform:translateX(-100%);
+        transition:transform .25s ease;
     }
 
-    .sidebar.show{
-
-        left:0;
-
+    .sidebar.open,
+    .sidebar.collapsed.open{
+        transform:translateX(0);
     }
 
     .topbar{
