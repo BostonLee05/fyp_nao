@@ -498,7 +498,7 @@ p{
 }
 
 .sidebar.collapsed .logo {
-    display:none;
+    display:none !important;
 }
 
 
@@ -507,6 +507,11 @@ p{
 
     justify-content:center;
 
+}
+
+.sidebar.collapsed .logo-mark-button,
+.sidebar.collapsed .logo i {
+    display:none !important;
 }
 
 
