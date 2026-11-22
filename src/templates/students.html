@@ -1013,5 +1013,6 @@ async function initializePage(){
 }
 initializePage();
 if(isSubjectsPage)setInterval(updateClassNow,30000);
+if(!isSubjectsPage)setInterval(async()=>{await loadStudents()},3000);
 </script>
 {% endblock %}

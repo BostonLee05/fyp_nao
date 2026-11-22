@@ -3064,3 +3064,247 @@ body.voice-command-modal-open{
     max-height: 720px;
     object-fit: contain;
 }
+
+/* ==========================================================
+   CONSISTENT COMPONENT SYSTEM
+========================================================== */
+
+.stats {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.mobile-menu-btn {
+    display: none;
+}
+
+.sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 998;
+    background: rgba(15, 23, 42, 0.48);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.sidebar-backdrop.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+button,
+.action-btn,
+.delete-confirm-actions button,
+.voice-command-modal-actions button,
+.api-base-actions button {
+    min-height: 44px;
+    border-radius: 10px;
+    font-family: inherit;
+}
+
+button {
+    width: auto;
+    margin-top: 0;
+    padding: 10px 16px;
+}
+
+.action-row,
+.student-action-primary,
+.student-action-stack,
+.button-group,
+.api-base-actions,
+.delete-confirm-actions,
+.voice-command-modal-actions,
+.vision-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.action-row button,
+.student-action-primary button,
+.button-group button,
+.vision-controls button {
+    width: auto;
+    margin: 0;
+}
+
+.student-action-stack button,
+.face-registration-actions button {
+    width: 100%;
+}
+
+.delete-confirm-actions,
+.voice-command-modal-actions,
+.api-base-actions {
+    justify-content: flex-end;
+}
+
+.delete-confirm-actions button,
+.voice-command-modal-actions button,
+.api-base-actions button {
+    width: auto;
+}
+
+.modal-close,
+.delete-confirm-close,
+.voice-command-modal-close,
+.api-base-close,
+.face-modal-close {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+}
+
+#toggleBtn,
+.mobile-menu-btn,
+.logo-mark-button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+    margin: 0;
+}
+
+.sidebar nav a {
+    min-height: 48px;
+}
+
+@media (max-width: 992px) and (min-width: 577px) {
+    .sidebar {
+        width: 85px;
+    }
+
+    .main {
+        margin-left: 85px;
+    }
+
+    .sidebar.collapsed {
+        width: 85px;
+    }
+
+    .topbar {
+        padding-inline: 22px;
+    }
+}
+
+@media (max-width: 576px) {
+    body.sidebar-open {
+        overflow: hidden;
+    }
+
+    .main,
+    .sidebar.collapsed + .main {
+        margin-left: 0;
+    }
+
+    .sidebar,
+    .sidebar.collapsed {
+        left: 0;
+        width: 270px;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+    }
+
+    .sidebar.open,
+    .sidebar.collapsed.open {
+        transform: translateX(0);
+    }
+
+    .sidebar.open .logo span,
+    .sidebar.open nav a span {
+        display: initial;
+    }
+
+    .sidebar.open nav a {
+        justify-content: flex-start;
+    }
+
+    .mobile-menu-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #eff6ff;
+        color: var(--primary);
+        border: 1px solid #bfdbfe;
+    }
+
+    .topbar {
+        flex-direction: row;
+        align-items: center;
+        min-height: 82px;
+    }
+
+    .topbar > div:first-child p {
+        display: none;
+    }
+
+    .top-right {
+        width: auto;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
+    #clock,
+    .robot-pill {
+        display: none;
+    }
+
+    .stats {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard {
+        grid-template-columns: 1fr;
+    }
+
+    .content {
+        padding: 18px 14px 50px;
+    }
+
+    .button-group,
+    .api-base-actions,
+    .delete-confirm-actions,
+    .voice-command-modal-actions {
+        width: 100%;
+        flex-direction: column-reverse;
+    }
+
+    .button-group button,
+    .api-base-actions button,
+    .delete-confirm-actions button,
+    .voice-command-modal-actions button {
+        width: 100%;
+    }
+
+    .action-row,
+    .student-action-primary {
+        width: 100%;
+    }
+
+    .action-row button,
+    .student-action-primary button {
+        flex: 1 1 90px;
+    }
+
+    .vision-controls {
+        align-items: stretch;
+    }
+
+    .vision-controls button {
+        flex: 1 1 140px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

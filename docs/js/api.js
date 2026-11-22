@@ -90,6 +90,12 @@ window.processingOverlay = {
 };
 
 function renderNav(activePage) {
+    if (!document.querySelector('script[src*="gsap"]')) {
+        const gsapScript = document.createElement("script");
+        gsapScript.src = "https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js";
+        gsapScript.defer = true;
+        document.head.appendChild(gsapScript);
+    }
     const navItems = [
         ["index.html", "house", "Dashboard"],
         ["voice.html", "microphone-lines", "Voice Recognition"],
@@ -161,6 +167,10 @@ function renderNav(activePage) {
                     <p>NAO Smart Classroom Monitoring System</p></div>
                     <div class="top-right">
                         <div id="clock">--:--:--</div>
+                        <button id="mobileMenuBtn" class="mobile-menu-btn" type="button"
+                                aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">
+                            <i class="fa-solid fa-bars"></i>
+                        </button>
                         <div id="robotStatusPill" class="robot-pill disconnected">
                             <span id="robotStatusDot" class="dot"></span>
                             <span id="robotStatusText">Checking Robot</span>
@@ -180,36 +190,76 @@ function renderNav(activePage) {
         const sidebar = document.querySelector(".sidebar");
         const toggleBtn = document.getElementById("toggleBtn");
         const logoToggleBtn = document.getElementById("logoToggleBtn");
+        const mobileMenuBtn = document.getElementById("mobileMenuBtn");
+        const mobileQuery = window.matchMedia("(max-width: 576px)");
+        let sidebarBackdrop = document.querySelector(".sidebar-backdrop");
+
+        if (!sidebarBackdrop) {
+            sidebarBackdrop = document.createElement("div");
+            sidebarBackdrop.className = "sidebar-backdrop";
+            sidebarBackdrop.setAttribute("aria-hidden", "true");
+            document.body.appendChild(sidebarBackdrop);
+        }
+
         if (sidebar && toggleBtn) {
-            const collapsed = localStorage.getItem("docsSidebarCollapsed") === "true";
-            sidebar.classList.toggle("collapsed", collapsed);
+            const setMobileSidebar = (open) => {
+                sidebar.classList.toggle("open", open);
+                sidebarBackdrop.classList.toggle("visible", open);
+                mobileMenuBtn?.setAttribute("aria-expanded", String(open));
+                mobileMenuBtn?.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+                document.body.classList.toggle("sidebar-open", open);
+            };
+
+            const syncInitialSidebar = () => {
+                if (mobileQuery.matches) {
+                    sidebar.classList.remove("collapsed");
+                    setMobileSidebar(false);
+                    toggleBtn.style.display = "flex";
+                } else {
+                    sidebar.classList.remove("open");
+                    sidebarBackdrop.classList.remove("visible");
+                    document.body.classList.remove("sidebar-open");
+                    const collapsed = localStorage.getItem("docsSidebarCollapsed") === "true";
+                    sidebar.classList.toggle("collapsed", collapsed);
+                    toggleBtn.style.display = collapsed ? "none" : "flex";
+                }
+            };
 
             const updateToggleLabel = () => {
-                const isCollapsed = sidebar.classList.contains("collapsed");
-                const label = isCollapsed ? "Expand navigation" : "Collapse navigation";
+                const collapsed = sidebar.classList.contains("collapsed");
+                const label = collapsed ? "Expand navigation" : "Collapse navigation";
                 toggleBtn.setAttribute("aria-label", label);
                 toggleBtn.setAttribute("title", label);
-                toggleBtn.style.display = isCollapsed ? "none" : "flex";
-                if (logoToggleBtn) {
-                    logoToggleBtn.setAttribute("aria-label", label);
-                    logoToggleBtn.setAttribute("title", label);
-                }
-                toggleBtn.innerHTML = `<svg class="panel-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
-                       <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-                       <path d="m9 15-3-3 3-3"></path>
-                       <path d="M14 8v8"></path>
-                   </svg>`;
+                toggleBtn.style.display = collapsed ? "none" : "flex";
             };
 
-            updateToggleLabel();
+            syncInitialSidebar();
+            mobileQuery.addEventListener("change", syncInitialSidebar);
+
             const toggleSidebar = () => {
-                const isCollapsed = sidebar.classList.toggle("collapsed");
-                localStorage.setItem("docsSidebarCollapsed", isCollapsed);
+                if (mobileQuery.matches) {
+                    setMobileSidebar(!sidebar.classList.contains("open"));
+                    return;
+                }
+                const collapsed = sidebar.classList.toggle("collapsed");
+                localStorage.setItem("docsSidebarCollapsed", String(collapsed));
                 updateToggleLabel();
             };
+
             toggleBtn.addEventListener("click", toggleSidebar);
+            mobileMenuBtn?.addEventListener("click", () => setMobileSidebar(!sidebar.classList.contains("open")));
             logoToggleBtn?.addEventListener("click", () => {
                 if (sidebar.classList.contains("collapsed")) toggleSidebar();
+                else if (mobileQuery.matches) setMobileSidebar(true);
+            });
+            sidebarBackdrop.addEventListener("click", () => setMobileSidebar(false));
+            document.querySelectorAll(".sidebar nav a").forEach(link => {
+                link.addEventListener("click", () => {
+                    if (mobileQuery.matches) setMobileSidebar(false);
+                });
+            });
+            document.addEventListener("keydown", event => {
+                if (event.key === "Escape" && mobileQuery.matches) setMobileSidebar(false);
             });
         }
 
@@ -298,6 +348,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
 window.addEventListener("load", () => {
     window.processingOverlay.hide();
+    if (window.gsap) {
+        gsap.from(".content > *", {
+            opacity: 0,
+            y: 14,
+            duration: 0.45,
+            stagger: 0.07,
+            ease: "power2.out"
+        });
+        gsap.from(".stat", {
+            opacity: 0,
+            y: 10,
+            duration: 0.35,
+            stagger: 0.05,
+            ease: "power2.out",
+            delay: 0.08
+        });
+    }
 });
 
 const nativeFetch = window.fetch.bind(window);

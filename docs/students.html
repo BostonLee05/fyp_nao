@@ -264,6 +264,7 @@ document.addEventListener("keydown",event=>{
 });
 
 Promise.all([loadLookups(),loadStudents()]).catch(e=>message(e.message,"error"));
+setInterval(async()=>{await loadStudents()},3000);
 </script>
 </body>
 </html>

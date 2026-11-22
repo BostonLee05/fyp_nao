@@ -10,6 +10,7 @@
 
     <link rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
 </head>
 
 <body>
@@ -108,6 +109,10 @@
             </div>
 
             <div class="top-right">
+                <button id="mobileMenuBtn" class="mobile-menu-btn" type="button"
+                        aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
 
                 <div id="clock">--:--:--</div>
 
@@ -213,6 +218,23 @@ document.querySelectorAll("aside a").forEach(link => {
 
 window.addEventListener("load", () => {
     window.processingOverlay.hide();
+    if (window.gsap) {
+        gsap.from(".content > *", {
+            opacity: 0,
+            y: 14,
+            duration: 0.45,
+            stagger: 0.07,
+            ease: "power2.out"
+        });
+        gsap.from(".stat", {
+            opacity: 0,
+            y: 10,
+            duration: 0.35,
+            stagger: 0.05,
+            ease: "power2.out",
+            delay: 0.08
+        });
+    }
 });
 
 window.processingOverlay.show(
