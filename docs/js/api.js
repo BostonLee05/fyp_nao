@@ -146,9 +146,9 @@ function renderNav(activePage) {
             <aside class="sidebar">
                 <div class="sidebar-header">
                     <div class="logo">
-                        <button id="logoToggleBtn" class="logo-mark-button" type="button" aria-label="Expand navigation" title="Expand navigation">
+                        <span id="logoToggleBtn" class="logo-mark-button" aria-hidden="true">
                             <i class="fa-solid fa-robot"></i>
-                        </button>
+                        </span>
                         <span class="logo-copy">NAO Classroom</span>
                     </div>
                     <button id="toggleBtn" type="button" aria-label="Collapse navigation" title="Collapse navigation">
@@ -185,7 +185,6 @@ function renderNav(activePage) {
 
         const sidebar = document.querySelector(".sidebar");
         const toggleBtn = document.getElementById("toggleBtn");
-        const logoToggleBtn = document.getElementById("logoToggleBtn");
         const mobileMenuBtn = document.getElementById("mobileMenuBtn");
         const mobileQuery = window.matchMedia("(max-width: 576px)");
         let sidebarBackdrop = document.querySelector(".sidebar-backdrop");
@@ -244,10 +243,6 @@ function renderNav(activePage) {
 
             toggleBtn.addEventListener("click", toggleSidebar);
             mobileMenuBtn?.addEventListener("click", () => setMobileSidebar(!sidebar.classList.contains("open")));
-            logoToggleBtn?.addEventListener("click", () => {
-                if (sidebar.classList.contains("collapsed")) toggleSidebar();
-                else if (mobileQuery.matches) setMobileSidebar(true);
-            });
             sidebarBackdrop.addEventListener("click", () => setMobileSidebar(false));
             document.querySelectorAll(".sidebar nav a").forEach(link => {
                 link.addEventListener("click", () => {

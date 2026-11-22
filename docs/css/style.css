@@ -357,7 +357,7 @@ p{
 
     border-radius:50%;
 
-    border:0;
+
 
     display:flex;
 
@@ -547,15 +547,11 @@ p{
 }
 
 .sidebar.collapsed .logo-copy{
-
     display:none;
-
 }
 
-.sidebar.collapsed .logo-mark-button{
-
-    cursor:pointer;
-
+.sidebar.collapsed .logo {
+    display:none;
 }
 
 
@@ -2950,8 +2946,6 @@ body.voice-command-modal-open{
 ========================================================== */
 
 .camera-placeholder{
-
-    cursor:pointer;
 
 }
 
