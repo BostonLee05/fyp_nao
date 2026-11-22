@@ -79,24 +79,47 @@ If PowerShell says the file is missing, use `cd` to enter the project folder fir
 
 ## Step 2: Install Python
 
-Install Python 3.11 or the version specified in the project's virtual environment.
+Use **Python 3.11 (64-bit)** for this project. Python 3.12 may work for
+most packages, but Python 3.13 and newer are not recommended because
+InsightFace and several scientific/AI dependencies may not provide Windows
+wheels or may require a C++ compiler.
 
-Check the installation:
+Install Python 3.11:
 
 ```powershell
-py --version
+winget install -e --id Python.Python.3.11
 ```
 
-Do not continue until this prints a Python version.
+Close and reopen PowerShell, then confirm:
+
+```powershell
+py -3.11 --version
+```
+
+Do not continue until this prints Python 3.11.x.
+
+If Python 3.11 is already installed but `py -3.11` is not recognized,
+use the Python 3.11 installation directory to run:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe" --version
+```
 
 ## Step 3: Create a virtual environment
 
 Run these commands from the project folder:
 
 ```powershell
-py -m venv .venv
+Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue
+py -3.11 -m venv .venv
 .venv\Scripts\python.exe -m pip install --upgrade pip
 .venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Verify the environment is using Python 3.11 before installing dependencies:
+
+```powershell
+.venv\Scripts\python.exe --version
 ```
 
 `requirements.txt` installs the required Python libraries. It does not guarantee
@@ -114,6 +137,34 @@ Keep at least several gigabytes of free disk space available.
 
 The exact NAOqi packages may depend on the installed Python version and the
 lab environment.
+
+## If dependency installation fails
+
+The error involving `scikit-image`, `meson`, or a missing `cl.exe` usually means
+the virtual environment was created with an unsupported Python version. It does
+not indicate that the project code is damaged.
+
+For the reported error, `Python 3.15` is the problem. Recreate the environment
+with Python 3.11:
+
+```powershell
+deactivate 2>$null
+Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue
+py -3.11 -m venv .venv
+.venv\Scripts\python.exe --version
+.venv\Scripts\python.exe -m pip install --upgrade pip
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+If installation is still compiling InsightFace or scikit-image:
+
+1. Install **Visual Studio 2022 Build Tools**.
+2. Select **Desktop development with C++**.
+3. Include **MSVC x64/x86 build tools** and **Windows 10/11 SDK**.
+4. Restart PowerShell and retry the requirements installation.
+
+Do not install Visual Studio if Python 3.11 already provides compatible wheels;
+the build-tools step is only a fallback for source packages.
 
 ## Step 4: Install Cloudflare Tunnel
 
