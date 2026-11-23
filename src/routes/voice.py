@@ -95,7 +95,7 @@ def create_voice_command():
         }), 503
 
 
-@voice_bp.route("/commands/<int:command_id>", methods=["PUT"])
+@voice_bp.route("/commands/<int:command_id>", methods=["POST"])
 def edit_voice_command(command_id):
     payload = request.get_json(silent=True) or {}
     try:

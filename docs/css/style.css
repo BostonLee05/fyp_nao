@@ -2344,34 +2344,33 @@ select,
 
 }
 
-.voice-command-delete{
-
-    background:var(--danger);
-    color:white;
-    min-width:88px;
-    width:88px;
-    height:38px;
-    padding:0 12px;
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    flex:0 0 88px;
-
-}
-
 .voice-command-actions{
     display:flex;
-    gap:8px;
+    gap:6px;
+    justify-content:center;
     flex:0 0 auto;
 }
 
-.voice-command-edit{
-    min-width:70px;
-    width:70px;
-    height:38px;
-    padding:0 12px;
+.voice-command-actions .action-btn{
+    width:auto;
+    min-width:0;
+    height:auto;
+    padding:6px 10px;
+    flex:0 0 auto;
+    border:0;
+    border-radius:6px;
+    cursor:pointer;
+    font-size:13px;
+}
+
+.voice-command-actions .edit-btn{
     background:#dbeafe;
     color:#1d4ed8;
+}
+
+.voice-command-actions .delete-btn{
+    background:#fee2e2;
+    color:#b91c1c;
 }
 
 .voice-command-add{
@@ -3591,6 +3590,80 @@ button {
 
 .api-base-save:hover {
     background: var(--primary-dark);
+}
+
+/* These management pages use static cards; keep them from lifting when hovered. */
+.voice-page .panel:hover,
+.subjects-page .panel:hover,
+.student-grid .panel:hover,
+.settings-page .panel:hover {
+    transform:none;
+    box-shadow:var(--shadow);
+}
+
+@media (max-width:768px) {
+    .voice-page,
+    .subjects-page,
+    .student-grid,
+    .settings-page {
+        gap:14px;
+    }
+
+    .voice-page .panel,
+    .subjects-page .panel,
+    .student-grid .panel,
+    .settings-page .panel {
+        padding:16px;
+        border-radius:16px;
+    }
+
+    .voice-panel-heading {
+        grid-template-columns:1fr;
+        align-items:start;
+    }
+
+    .voice-panel-heading h2 {
+        white-space:normal;
+    }
+
+    .voice-panel-heading .animation-toggle-button {
+        justify-self:start;
+    }
+
+    .voice-command-item {
+        align-items:flex-start;
+        flex-direction:column;
+        gap:10px;
+    }
+
+    .voice-command-actions {
+        width:100%;
+        justify-content:flex-start;
+    }
+
+    .voice-command-actions .action-btn {
+        flex:1 1 0;
+    }
+
+    .subjects-page .timetable-scroll,
+    .subjects-page .records-container,
+    .student-grid .records-container {
+        margin-inline:-4px;
+        padding-inline:4px;
+    }
+
+    .settings-page .panel input,
+    .settings-page .panel select,
+    .settings-page .panel textarea {
+        width:100%;
+        max-width:100%;
+        box-sizing:border-box;
+    }
+
+    .settings-page .panel > button,
+    .settings-page .panel > div button:not(.animation-toggle-button) {
+        width:100%;
+    }
 }
 
 

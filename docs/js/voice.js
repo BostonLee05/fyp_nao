@@ -66,9 +66,9 @@ async function loadCommands() {
                         <p>${escapeHtml(command.response || "")}</p>
                         <small>${escapeHtml((command.triggers || command.phrases || []).join(", "))}</small>
                     </div>
-                    <div class="voice-command-actions">
-                        <button class="voice-command-edit" type="button" data-action="edit" data-id="${command.command_id}">Edit</button>
-                        <button class="voice-command-delete" type="button" data-action="delete" data-id="${command.command_id}">Delete</button>
+                    <div class="action-buttons voice-command-actions">
+                        <button class="action-btn edit-btn" type="button" data-action="edit" data-id="${command.command_id}">Edit</button>
+                        <button class="action-btn delete-btn" type="button" data-action="delete" data-id="${command.command_id}">Delete</button>
                     </div>
                 </div>
             `).join("")
@@ -150,7 +150,7 @@ $("voiceCommandForm").onsubmit = async (event) => {
     try {
         const commandId = voiceState.editingCommandId;
         await apiFetch(commandId ? `/api/voice/commands/${commandId}` : "/api/voice/commands", {
-            method: commandId ? "PUT" : "POST",
+            method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
                 command_key: $("voiceCommandKey").value.trim(),
