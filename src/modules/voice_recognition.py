@@ -289,7 +289,7 @@ class VoiceRecognition:
     def _process_transcript(self, text: str) -> None:
         self._set_status("Processing command")
         if self.speaker:
-            self.speaker.speak("I'm thinking.", animated=False)
+            self.speaker.speak("I'm thinking.")
 
         started_at = time.perf_counter()
         try:
@@ -686,7 +686,7 @@ class VoiceRecognition:
 
         if self._contains_command(normalized_text, compact_text, ["sit down", "sitdown"]):
             response = "Sitting down."
-            self.speaker.speak(response, animated=False)
+            self.speaker.speak(response)
             self._go_to_posture("Sit")
             return {
                 "action": "Robot",
@@ -706,7 +706,7 @@ class VoiceRecognition:
 
         if "rest" in normalized_text:
             response = "Going to rest mode."
-            self.speaker.speak(response, animated=False)
+            self.speaker.speak(response)
             self._rest()
             return {
                 "action": "Robot",
@@ -716,7 +716,7 @@ class VoiceRecognition:
 
         if "crouch" in normalized_text:
             response = "Crouching."
-            self.speaker.speak(response, animated=False)
+            self.speaker.speak(response)
             self._go_to_posture("Crouch")
             return {
                 "action": "Robot",

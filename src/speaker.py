@@ -80,6 +80,24 @@ class Speaker:
         except Exception as e:
             print(f"[Speaker Warning] Could not prepare StandInit pose: {e}")
 
+    def set_animation_enabled(self, enabled):
+        """Change speech animation preference and rest immediately when disabled."""
+        if self.state_manager is not None:
+            self.state_manager.set_animation_enabled(enabled)
+        if not enabled:
+            self.rest()
+
+    def rest(self):
+        """Safely return NAO to its resting posture."""
+        if not self.session:
+            return
+        try:
+            motion = self.session.service("ALMotion")
+            motion.rest()
+            print("[Speaker] NAO returned to rest posture.")
+        except Exception as e:
+            print(f"[Speaker Warning] Could not put NAO into rest posture: {e}")
+
     def _set_speaking(self, speaking):
         if self.state_manager is not None:
             try:
@@ -129,7 +147,13 @@ class Speaker:
                 self._speech_finished()
                 self.speech_queue.task_done()
 
-    def speak(self, text, animated=False):
+    def speak(self, text, animated=None):
+        if animated is None:
+            animated = (
+                self.state_manager.is_animation_enabled()
+                if self.state_manager is not None
+                else False
+            )
         if self.is_virtual:
             self._speech_started()
             self.speech_queue.put(text)

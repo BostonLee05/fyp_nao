@@ -15,6 +15,7 @@ class VoiceState:
         self._latest_action = ""
         self._latest_error = ""
         self._speaking = False
+        self._animation_enabled = True
         self._recommendations = []
         self._recommendation_token = 0
         self._history: Deque[Dict[str, Any]] = deque(maxlen=max_history)
@@ -27,6 +28,14 @@ class VoiceState:
     def set_speaking(self, speaking: bool) -> None:
         with self._lock:
             self._speaking = bool(speaking)
+
+    def set_animation_enabled(self, enabled: bool) -> None:
+        with self._lock:
+            self._animation_enabled = bool(enabled)
+
+    def is_animation_enabled(self) -> bool:
+        with self._lock:
+            return self._animation_enabled
 
     def record_command(
         self,
@@ -71,6 +80,7 @@ class VoiceState:
                 "latest_action": self._latest_action,
                 "latest_error": self._latest_error,
                 "speaking": self._speaking,
+                "animation_enabled": self._animation_enabled,
                 "history": list(self._history),
                 "recommendations": list(self._recommendations),
                 "recommendation_token": self._recommendation_token,

@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, render_template, request
 
 from database import add_voice_command, delete_voice_command, get_voice_commands
 from modules.voice_state import voice_state
+from modules.robot_services import robot_services
 
 
 voice_bp = Blueprint("voice", __name__, url_prefix="/api/voice")
@@ -21,6 +22,20 @@ def voice_status():
     return jsonify({
         "success": True,
         "voice": voice_state.snapshot(),
+    })
+
+
+@voice_bp.route("/animation", methods=["GET", "POST"])
+def voice_animation():
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+        enabled = bool(payload.get("enabled", True))
+        voice_state.set_animation_enabled(enabled)
+        if robot_services.speaker:
+            robot_services.speaker.set_animation_enabled(enabled)
+    return jsonify({
+        "success": True,
+        "enabled": voice_state.is_animation_enabled(),
     })
 
 

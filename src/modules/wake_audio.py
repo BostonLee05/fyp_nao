@@ -5,6 +5,8 @@ from typing import Any, Callable, Optional
 class WakeAudio:
     """NAOqi wake-word listener using ALSpeechRecognition."""
 
+    IDLE_REST_SECONDS = 300.0
+
     WAKE_PHRASES = ["hey nao", "hey now", "hi now", "hello now", "hello nao"]
 
     def __init__(
@@ -38,6 +40,7 @@ class WakeAudio:
         self.last_triggered_at = 0.0
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
+        self.idle_rest_timer = None
 
     def start(self) -> None:
         with self.lock:
@@ -51,6 +54,7 @@ class WakeAudio:
                 self._subscribe_speech_recognition()
                 self.running = True
                 self._set_status("Waiting for wake word")
+                self._schedule_idle_rest()
                 print("[WakeAudio] Listening for wake phrases. Call 'Hey Nao' to wake.")
             except Exception:
                 self.running = False
@@ -63,6 +67,9 @@ class WakeAudio:
         with self.lock:
             self.running = False
             self.stop_event.set()
+            if getattr(self, "idle_rest_timer", None):
+                self.idle_rest_timer.cancel()
+                self.idle_rest_timer = None
 
             self._unsubscribe_speech_recognition()
             self._unsubscribe_all()
@@ -165,6 +172,9 @@ class WakeAudio:
             if now - self.last_triggered_at < self.cooldown_seconds:
                 return
             self.last_triggered_at = now
+            if getattr(self, "idle_rest_timer", None):
+                self.idle_rest_timer.cancel()
+                self.idle_rest_timer = None
 
         threading.Thread(
             target=self._handle_wake_phrase,
@@ -219,12 +229,14 @@ class WakeAudio:
 
         if not self.speech_recognition:
             self._set_status("Ready/listening again")
+            self._schedule_idle_rest()
             print("[WakeAudio] Wake listening resumed.")
             return
 
         try:
             self.speech_recognition.subscribe("WakeAudio")
             self._set_status("Waiting for wake word")
+            self._schedule_idle_rest()
             print("[WakeAudio] Wake listening resumed.")
         except Exception as e:
             self._set_status("Error", str(e))
@@ -233,3 +245,24 @@ class WakeAudio:
     def _set_status(self, status: str, error: str = "") -> None:
         if self.state_manager:
             self.state_manager.set_status(status, error=error)
+
+    def _schedule_idle_rest(self) -> None:
+        if self.stop_event.is_set() or not self.running:
+            return
+        if getattr(self, "idle_rest_timer", None):
+            self.idle_rest_timer.cancel()
+        self.idle_rest_timer = threading.Timer(
+            self.IDLE_REST_SECONDS, self._rest_after_idle
+        )
+        self.idle_rest_timer.daemon = True
+        self.idle_rest_timer.start()
+
+    def _rest_after_idle(self) -> None:
+        if self.stop_event.is_set() or not self.running:
+            return
+        with self.lock:
+            idle_for = time.time() - self.last_triggered_at
+        if idle_for >= self.IDLE_REST_SECONDS:
+            print("[WakeAudio] No wake word heard for several minutes; resting NAO.")
+            if self.speaker:
+                self.speaker.rest()

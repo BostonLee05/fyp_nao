@@ -7,7 +7,7 @@
 <body>
 <template id="pageTemplate">
 <div class="voice-page">
- <section class="panel voice-panel voice-control-panel"><h2><i class="fa-solid fa-microphone-lines"></i> Voice Recognition Status</h2>
+ <section class="panel voice-panel voice-control-panel"><div class="voice-panel-heading"><h2><i class="fa-solid fa-microphone-lines"></i> Voice Recognition Status</h2><button id="voiceAnimationToggle" class="animation-toggle-button is-on" type="button" aria-pressed="true" aria-label="Toggle speech animation"><span data-animation-label>Animation On</span></button><p class="animation-toggle-error" role="alert" aria-live="polite"></p></div>
   <div class="voice-status-row"><span id="voiceStatusDot" class="voice-dot idle"></span><span id="voiceStatusText">Checking...</span></div>
   <div class="voice-current"><div></div><div><h4>Latest Command</h4><p id="latestVoiceCommand">No command recognized yet.</p></div><div><h4>Command Result</h4><p id="latestVoiceResult">Waiting for voice activity.</p></div></div>
  </section>
@@ -17,6 +17,6 @@
 <div id="voiceCommandModal" class="voice-command-modal hidden" role="dialog" aria-modal="true"><div class="voice-command-modal-card"><div class="voice-command-modal-header"><h3>Add Predefined Command</h3><button id="closeVoiceCommandModal" class="voice-command-modal-close" type="button">&times;</button></div><form id="voiceCommandForm" class="voice-command-form"><input id="voiceCommandKey" placeholder="Command key, e.g. greeting" required maxlength="80"><textarea id="voiceCommandResponse" placeholder="Robot response" required rows="4"></textarea><input id="voiceCommandPhraseEntry" placeholder="Type a trigger phrase and press Enter"><div id="voiceCommandPhraseTokens" class="voice-command-token-list"></div><span class="voice-command-form-help">Press Enter or comma after each trigger phrase.</span><div class="voice-command-modal-actions"><button id="cancelVoiceCommandModal" type="button" class="voice-command-cancel">Cancel</button><button type="submit">Save Command</button></div></form></div></div>
 <div id="voiceDeleteModal" class="delete-confirm-modal hidden" role="dialog" aria-modal="true" aria-labelledby="voiceDeleteTitle"><section class="delete-confirm-card"><header class="delete-confirm-header"><h2 id="voiceDeleteTitle" class="delete-confirm-title"><i class="fa-solid fa-triangle-exclamation"></i> Delete Voice Command</h2><button id="closeVoiceDelete" class="delete-confirm-close" type="button" aria-label="Close">&times;</button></header><div class="delete-confirm-body">Are you sure you want to delete <strong id="voiceDeleteName"></strong>?</div><div class="delete-confirm-actions"><button id="cancelVoiceDelete" class="delete-confirm-cancel" type="button">Cancel</button><button id="confirmVoiceDelete" class="delete-confirm-submit" type="button">Delete Command</button></div></section></div>
 </template>
-<script src="js/api.js"></script><script src="js/voice.js"></script>
+<script src="js/api.js"></script><script src="js/voice-animation.js"></script><script src="js/voice.js"></script>
 </body>
 </html>

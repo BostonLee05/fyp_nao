@@ -33,12 +33,18 @@
             <p id="settingsRobotMessage" style="min-height:24px;font-weight:600"></p>
         </div>
     </div>
+    <div class="panel">
+        <div class="voice-panel-heading"><h2><i class="fa-solid fa-wave-square"></i> Voice Speech Animation</h2><button id="settingsVoiceAnimationToggle" class="animation-toggle-button is-on" type="button" aria-pressed="true" aria-label="Toggle speech animation"><span data-animation-label>Animation On</span></button><p class="animation-toggle-error" role="alert" aria-live="polite"></p></div>
+        <p>When off, NAO remains in the rest posture while waiting for the wake word.</p>
+    </div>
     </div>
 </template>
 <script src="js/api.js"></script>
+<script src="js/voice-animation.js"></script>
 <script>
 renderNav("settings.html");
 document.getElementById("staticPageTitle").textContent = "Settings";
+initVoiceAnimationToggle("settingsVoiceAnimationToggle");
 document.getElementById("backendUrl").value = getApiBase();
 document.getElementById("settingsRobotIp").value =
     localStorage.getItem("nao_robot_ip") || "192.168.200.137";

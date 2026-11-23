@@ -44,7 +44,7 @@ async function apiFetch(path, options = {}) {
 
     if (!response.ok) {
         const message = typeof data === "object"
-            ? data.message || "Request failed."
+            ? data.message || "Request failed. Check connection and try again."
             : data || "Request failed.";
         throw new Error(message);
     }
