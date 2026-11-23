@@ -2,7 +2,7 @@ renderNav("voice.html");
 document.getElementById("staticPageTitle").textContent = "Voice Recognition";
 initVoiceAnimationToggle("voiceAnimationToggle");
 
-const voiceState = {phrases: [], pendingDeleteId: null};
+const voiceState = {phrases: [], pendingDeleteId: null, editingCommandId: null};
 const $ = (id) => document.getElementById(id);
 
 function dot(status) {
@@ -64,11 +64,12 @@ async function loadCommands() {
                     <div>
                         <strong>${escapeHtml(command.command_key)}</strong>
                         <p>${escapeHtml(command.response || "")}</p>
-                        <small>${escapeHtml((command.phrases || []).join(", "))}</small>
+                        <small>${escapeHtml((command.triggers || command.phrases || []).join(", "))}</small>
                     </div>
-                    <button class="voice-command-delete" type="button" data-id="${command.command_id}">
-                        Delete
-                    </button>
+                    <div class="voice-command-actions">
+                        <button class="voice-command-edit" type="button" data-action="edit" data-id="${command.command_id}">Edit</button>
+                        <button class="voice-command-delete" type="button" data-action="delete" data-id="${command.command_id}">Delete</button>
+                    </div>
                 </div>
             `).join("")
             : '<div class="voice-history-empty">No predefined commands configured.</div>';
@@ -97,14 +98,35 @@ function closeModal() {
     $("voiceCommandModal").classList.add("hidden");
     $("voiceCommandForm").reset();
     voiceState.phrases = [];
+    voiceState.editingCommandId = null;
+    $("voiceCommandModalTitle").textContent = "Add Predefined Command";
+    $("saveVoiceCommandButton").textContent = "Save Command";
     renderPhraseTokens();
+}
+
+function openAddModal() {
+    closeModal();
+    $("voiceCommandModal").classList.remove("hidden");
+    $("voiceCommandKey").focus();
+}
+
+function openEditModal(command) {
+    voiceState.editingCommandId = command.command_id;
+    voiceState.phrases = [...(command.triggers || command.phrases || [])];
+    $("voiceCommandKey").value = command.command_key || "";
+    $("voiceCommandResponse").value = command.response || "";
+    $("voiceCommandModalTitle").textContent = "Edit Predefined Command";
+    $("saveVoiceCommandButton").textContent = "Update Command";
+    renderPhraseTokens();
+    $("voiceCommandModal").classList.remove("hidden");
+    $("voiceCommandKey").focus();
 }
 
 function setVoiceDeleteModal(open) {
     $("voiceDeleteModal").classList.toggle("hidden", !open);
 }
 
-$("openVoiceCommandModal").onclick = () => $("voiceCommandModal").classList.remove("hidden");
+$("openVoiceCommandModal").onclick = openAddModal;
 $("closeVoiceCommandModal").onclick = closeModal;
 $("cancelVoiceCommandModal").onclick = closeModal;
 
@@ -126,8 +148,9 @@ $("voiceCommandForm").onsubmit = async (event) => {
     event.preventDefault();
     addPhrase();
     try {
-        await apiFetch("/api/voice/commands", {
-            method: "POST",
+        const commandId = voiceState.editingCommandId;
+        await apiFetch(commandId ? `/api/voice/commands/${commandId}` : "/api/voice/commands", {
+            method: commandId ? "PUT" : "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
                 command_key: $("voiceCommandKey").value.trim(),
@@ -145,8 +168,18 @@ $("voiceCommandForm").onsubmit = async (event) => {
 $("voiceCommands").onclick = (event) => {
     const button = event.target.closest("button[data-id]");
     if (!button) return;
+    const command = button.closest(".voice-command-item");
+    if (button.dataset.action === "edit") {
+        openEditModal({
+            command_id: button.dataset.id,
+            command_key: command?.querySelector("strong")?.textContent || "",
+            response: command?.querySelector("p")?.textContent || "",
+            triggers: (command?.querySelector("small")?.textContent || "").split(", ").filter(Boolean),
+        });
+        return;
+    }
     voiceState.pendingDeleteId = button.dataset.id;
-    $("voiceDeleteName").textContent = button.closest(".voice-command-item")
+    $("voiceDeleteName").textContent = command
         ?.querySelector("strong")?.textContent || "this command";
     setVoiceDeleteModal(true);
 };

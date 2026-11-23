@@ -163,6 +163,43 @@ def delete_voice_command(command_id):
     finally:
         connection.close()
 
+def update_voice_command(command_id, command_key, response, phrases):
+    normalized_key = "_".join(str(command_key).lower().strip().split())
+    normalized_response = str(response or "").strip()
+    raw_phrases = [phrases] if isinstance(phrases, str) else (phrases or [])
+    phrase_pairs = [
+        (str(phrase).strip(), " ".join(str(phrase).lower().split()))
+        for phrase in raw_phrases if str(phrase).strip()
+    ]
+    if not normalized_key or not normalized_response or not phrase_pairs:
+        raise ValueError("command_key, response, and at least one phrase are required")
+    connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute("""
+            UPDATE voice_commands
+            SET command_key = %s, response = %s, enabled = TRUE, updated_at = NOW()
+            WHERE command_id = %s
+            RETURNING command_id
+        """, (normalized_key, normalized_response, command_id))
+        if not cursor.fetchone():
+            raise ValueError("Voice command was not found.")
+        cursor.execute("DELETE FROM voice_triggers WHERE command_id = %s", (command_id,))
+        for phrase, normalized in phrase_pairs:
+            cursor.execute("""
+                INSERT INTO voice_triggers (command_id, phrase, normalized_phrase)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (command_id, normalized_phrase)
+                DO UPDATE SET phrase = EXCLUDED.phrase, enabled = TRUE
+            """, (command_id, phrase, normalized))
+        connection.commit()
+        return command_id
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
 
 def list_database_schema():
     connection = get_connection()

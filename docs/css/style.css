@@ -973,7 +973,7 @@ p{
 
     width:100%;
 
-    min-width:0;
+    min-width:800px;
 
     border-collapse:collapse;
 
@@ -986,9 +986,9 @@ p{
 
     border:1px solid #dbe3ef;
 
-    padding:4px;
+    padding:5px;
 
-    min-height:40px;
+    height:46px;
 
     vertical-align:top;
 
@@ -997,10 +997,10 @@ p{
 .dashboard-timetable .weekly-timetable .timetable-time-heading,
 .dashboard-timetable .weekly-timetable .timetable-time-cell{
 
-    width:68px;
+    width:70px;
     background:#f8fafc;
     color:#64748b;
-    font-size:10px;
+    font-size:12px;
     font-weight:800;
     text-align:center;
     white-space:nowrap;
@@ -1035,7 +1035,7 @@ p{
 
     margin:0;
 
-    padding:3px;
+    padding:5px 6px;
 
     overflow:hidden;
 
@@ -1047,7 +1047,7 @@ p{
 
     color:#1e40af;
 
-    font-size:9px;
+    font-size:11px;
 
     font-weight:700;
 
@@ -2357,6 +2357,21 @@ select,
     justify-content:center;
     flex:0 0 88px;
 
+}
+
+.voice-command-actions{
+    display:flex;
+    gap:8px;
+    flex:0 0 auto;
+}
+
+.voice-command-edit{
+    min-width:70px;
+    width:70px;
+    height:38px;
+    padding:0 12px;
+    background:#dbeafe;
+    color:#1d4ed8;
 }
 
 .voice-command-add{

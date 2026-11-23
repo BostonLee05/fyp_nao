@@ -89,6 +89,7 @@ async function refreshDashboard() {
 refreshDashboard();
 setInterval(refreshDashboard, 3000);
 
+/* Legacy compact timetable renderer retained below for reference.
 function dashboardTimeToMinutes(value) {
     const [hours, minutes] = String(value || "").split(":").map(Number);
     return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : null;
@@ -122,7 +123,7 @@ function renderDashboardTimetable(subjects) {
                 subject.schedule_start === slot.start && subject.schedule_end === slot.end
             );
             if (!daySubjects.length) {
-                cell.textContent = "—";
+                cell.textContent = "-";
                 cell.className = "timetable-empty";
             } else {
                 daySubjects.forEach(subject => {
@@ -167,6 +168,51 @@ function renderDashboardTimetable(subjects) {
     if (!rows.length) {
         const row = document.createElement("tr");
         row.innerHTML = '<td colspan="8" class="table-empty">No classes scheduled.</td>';
+        rows.push(row);
+    }
+    body.replaceChildren(...rows);
+}
+*/
+
+// Keep the dashboard timetable in the same hourly format as the full Subjects page.
+function renderDashboardTimetable(subjects) {
+    const body = document.getElementById("dashboardTimetableBody");
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const timeToMinutes = value => {
+        const [hours, minutes] = String(value || "").split(":").map(Number);
+        return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : null;
+    };
+    const rows = [];
+
+    for (let hour = 8; hour <= 21; hour++) {
+        const row = document.createElement("tr");
+        const timeCell = document.createElement("th");
+        timeCell.className = "timetable-time-cell";
+        timeCell.textContent = `${String(hour).padStart(2, "0")}:00`;
+        row.appendChild(timeCell);
+
+        days.forEach(day => {
+            const cell = document.createElement("td");
+            const daySubjects = subjects.filter(subject =>
+                (subject.schedule_days || []).includes(day) &&
+                timeToMinutes(subject.schedule_start) <= hour * 60 &&
+                timeToMinutes(subject.schedule_end) > hour * 60
+            );
+            if (!daySubjects.length) {
+                cell.textContent = "—";
+                cell.className = "timetable-empty";
+            } else {
+                daySubjects.forEach(subject => {
+                    const entry = document.createElement("span");
+                    entry.className = "timetable-entry";
+                    const code = subject.class_code || subject.class_name || "Class";
+                    entry.textContent = `${code} - ${subject.class_name || ""}`.trim();
+                    entry.title = subject.class_name || code;
+                    cell.appendChild(entry);
+                });
+            }
+            row.appendChild(cell);
+        });
         rows.push(row);
     }
     body.replaceChildren(...rows);
