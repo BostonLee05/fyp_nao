@@ -13,8 +13,9 @@
         .class-now-label{color:#64748b;font-size:13px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
         .class-now-panel strong{font-size:20px;color:#0f172a}
         .add-subject-button{width:auto!important;margin:0 0 18px;padding:10px 14px!important;background:#2563eb;color:#fff;border:0;border-radius:8px;cursor:pointer;font-weight:700}
-        .page-modal{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px}
+        .page-modal{position:fixed;inset:0;z-index:10000;background:rgba(15,23,42,.45);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px}
         .page-modal.hidden{display:none}
+        body.subject-modal-open{overflow:hidden}
         .modal-card,.page-modal .dashboard-grid{width:min(900px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:14px;padding:24px;box-shadow:0 20px 50px rgba(15,23,42,.22)}
         .page-modal .dashboard-grid{display:block;max-height:none;overflow:visible;background:transparent;border-radius:0;padding:0;box-shadow:none}
         #subjectModal #subjectPanel{max-height:90vh!important;overflow:hidden!important;border-radius:20px}
@@ -69,7 +70,7 @@
         .class-details-value{color:#0f172a;font-weight:650;line-height:1.45}
         .class-details-description{color:#475569;line-height:1.65;white-space:pre-wrap}
         .class-details-footer{display:flex;justify-content:flex-end;padding:16px 26px;background:#f8fafc;border-top:1px solid #e2e8f0}
-        .delete-confirm-modal{position:fixed;inset:0;z-index:1100;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(15,23,42,.55)}
+        .delete-confirm-modal{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(15,23,42,.55);backdrop-filter:blur(4px)}
         .delete-confirm-modal.hidden{display:none}
         .delete-confirm-card{width:min(460px,100%);background:#fff;border-radius:14px;box-shadow:0 20px 50px rgba(15,23,42,.25);overflow:hidden}
         .delete-confirm-header{display:flex;justify-content:space-between;align-items:center;padding:20px 22px;border-bottom:1px solid #e2e8f0}
@@ -137,12 +138,23 @@
 renderNav("subjects.html");
 document.getElementById("staticPageTitle").textContent="Subjects";
 
+// These overlays must be direct children of body. The shared content area has
+// an entry transform, which would otherwise make position:fixed relative to
+// the content area and leave the navbar outside the overlay.
+["subjectModal","classDetailsModal","subjectDeleteModal"].forEach(id=>{
+    const modal=document.getElementById(id);
+    if(modal)document.body.appendChild(modal);
+});
+
 let availableSubjects=[];
 let editingSubjectId=null;
 let pendingDeleteId=null;
 const $=id=>document.getElementById(id);
 
-function setModal(id,open){$(id)?.classList.toggle("hidden",!open)}
+function setModal(id,open){
+    $(id)?.classList.toggle("hidden",!open);
+    document.body.classList.toggle("subject-modal-open",["subjectModal","classDetailsModal","subjectDeleteModal"].some(modalId=>!$(modalId)?.classList.contains("hidden")));
+}
 function timeToMinutes(value){const [h,m]=String(value||"").split(":").map(Number);return Number.isFinite(h)&&Number.isFinite(m)?h*60+m:null}
 function formatDay(day){return ({Monday:"Mon",Tuesday:"Tue",Wednesday:"Wed",Thursday:"Thu",Friday:"Fri",Saturday:"Sat",Sunday:"Sun"})[day]||day}
 function formatSchedule(subject){const days=(subject.schedule_days||[]).map(formatDay).join(", ");return subject.schedule_start&&subject.schedule_end?`${days||"Weekly"}: ${subject.schedule_start} - ${subject.schedule_end}`:"No weekly schedule"}

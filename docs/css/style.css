@@ -988,9 +988,28 @@ p{
 
     padding:4px;
 
-    height:62px;
+    min-height:40px;
 
     vertical-align:top;
+
+}
+
+.dashboard-timetable .weekly-timetable .timetable-time-heading,
+.dashboard-timetable .weekly-timetable .timetable-time-cell{
+
+    width:68px;
+    background:#f8fafc;
+    color:#64748b;
+    font-size:10px;
+    font-weight:800;
+    text-align:center;
+    white-space:nowrap;
+
+}
+
+.dashboard-timetable .weekly-timetable .timetable-time-cell{
+
+    vertical-align:middle;
 
 }
 

@@ -23,8 +23,8 @@
             </div>
             <div class="timetable-scroll">
                 <table class="weekly-timetable">
-                    <thead><tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead>
-                    <tbody id="dashboardTimetableBody"><tr><td colspan="7" class="table-empty">Loading timetable</td></tr></tbody>
+                    <thead><tr><th class="timetable-time-heading">Time</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr></thead>
+                    <tbody id="dashboardTimetableBody"><tr><td colspan="8" class="table-empty">Loading timetable</td></tr></tbody>
                 </table>
             </div>
         </section>
@@ -97,34 +97,79 @@ function dashboardTimeToMinutes(value) {
 function renderDashboardTimetable(subjects) {
     const body = document.getElementById("dashboardTimetableBody");
     const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-    const row = document.createElement("tr");
+    const scheduled = subjects.filter(subject =>
+        (subject.schedule_days || []).length && subject.schedule_start && subject.schedule_end
+    );
+    const slots = [...new Map(scheduled.map(subject => [
+        `${subject.schedule_start}|${subject.schedule_end}`,
+        {start: subject.schedule_start, end: subject.schedule_end}
+    ])).values()].sort((a, b) => dashboardTimeToMinutes(a.start) - dashboardTimeToMinutes(b.start));
+    const unscheduled = subjects.filter(subject =>
+        (subject.schedule_days || []).length && (!subject.schedule_start || !subject.schedule_end)
+    );
 
-    days.forEach(day => {
-        const cell = document.createElement("td");
-        const daySubjects = subjects
-            .filter(subject => (subject.schedule_days || []).includes(day))
-            .sort((a, b) => dashboardTimeToMinutes(a.schedule_start) - dashboardTimeToMinutes(b.schedule_start));
+    const rows = slots.map(slot => {
+        const row = document.createElement("tr");
+        const timeCell = document.createElement("th");
+        timeCell.className = "timetable-time-cell";
+        timeCell.textContent = `${slot.start}–${slot.end}`;
+        row.appendChild(timeCell);
 
-        if (!daySubjects.length) {
-            cell.textContent = "—";
-            cell.className = "timetable-empty";
-        } else {
-            daySubjects.forEach(subject => {
+        days.forEach(day => {
+            const cell = document.createElement("td");
+            const daySubjects = scheduled.filter(subject =>
+                (subject.schedule_days || []).includes(day) &&
+                subject.schedule_start === slot.start && subject.schedule_end === slot.end
+            );
+            if (!daySubjects.length) {
+                cell.textContent = "—";
+                cell.className = "timetable-empty";
+            } else {
+                daySubjects.forEach(subject => {
+                    const entry = document.createElement("span");
+                    entry.className = "timetable-entry";
+                    const code = subject.class_code || subject.class_name || "Class";
+                    entry.textContent = code;
+                    entry.title = subject.class_name || code;
+                    cell.appendChild(entry);
+                });
+            }
+            row.appendChild(cell);
+        });
+        return row;
+    });
+
+    if (unscheduled.length) {
+        const row = document.createElement("tr");
+        const timeCell = document.createElement("th");
+        timeCell.className = "timetable-time-cell";
+        timeCell.textContent = "Time TBD";
+        row.appendChild(timeCell);
+        days.forEach(day => {
+            const cell = document.createElement("td");
+            unscheduled.filter(subject => (subject.schedule_days || []).includes(day)).forEach(subject => {
                 const entry = document.createElement("span");
                 entry.className = "timetable-entry";
                 const code = subject.class_code || subject.class_name || "Class";
-                const time = subject.schedule_start && subject.schedule_end
-                    ? `${subject.schedule_start}–${subject.schedule_end}`
-                    : "Time not set";
-                entry.textContent = `${code} · ${time}`;
-                entry.title = subject.class_name || code;
+                entry.textContent = code;
+                entry.title = `${subject.class_name || code} (time not set)`;
                 cell.appendChild(entry);
             });
-        }
-        row.appendChild(cell);
-    });
+            if (!cell.childElementCount) {
+                cell.textContent = "—";
+                cell.className = "timetable-empty";
+            }
+            row.appendChild(cell);
+        });
+        rows.push(row);
+    }
 
-    body.replaceChildren(row);
+    if (!rows.length) {
+        const row = document.createElement("tr");
+        row.innerHTML = '<td colspan="8" class="table-empty">No classes scheduled.</td>';
+        rows.push(row);
+    }
+    body.replaceChildren(...rows);
 }
 
 async function refreshDashboardTimetable() {
@@ -134,7 +179,7 @@ async function refreshDashboardTimetable() {
         renderDashboardTimetable(data.subjects || []);
     } catch (error) {
         document.getElementById("dashboardTimetableBody").innerHTML =
-            `<tr><td colspan="7" class="table-empty">${escapeHtml(error.message)}</td></tr>`;
+            `<tr><td colspan="8" class="table-empty">${escapeHtml(error.message)}</td></tr>`;
     }
 }
 
