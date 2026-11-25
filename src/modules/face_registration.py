@@ -149,7 +149,7 @@ class FaceRegistration:
     def _set_status(self, **values):
         with self._lock:
             for key, value in values.items():
-                setattr(self, key, value)
+                setattr(self, f"_{key}", value)
 
     def _is_cancelled(self):
         with self._lock:
@@ -222,7 +222,8 @@ class FaceRegistration:
 
             self._face_analyzer = FaceAnalysis(
                 name="buffalo_l",
-                providers=["CPUExecutionProvider"]
+                providers=["CPUExecutionProvider"],
+                allowed_modules=["detection"]
             )
 
             self._face_analyzer.prepare(
@@ -312,6 +313,48 @@ class FaceRegistration:
             return vertical_ratio > 0.66
 
         return False
+
+    def _save_frame(self, frame, filename, direction):
+        path = os.path.join(self._folder, filename)
+        if not cv2.imwrite(path, frame):
+            raise RuntimeError(f"Failed to save {path}")
+
+        print(
+            f"[FaceRegistration] Correct {direction} pose. "
+            f"Saved: {path}",
+            flush=True
+        )
+        return path
+
+    def _capture_burst_frame(
+            self,
+            video,
+            client_name,
+            direction,
+            filename
+    ):
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            if self._is_cancelled():
+                return None
+
+            image = video.getImageRemote(client_name)
+            if image is None:
+                time.sleep(0.05)
+                continue
+
+            try:
+                frame = self._image_to_bgr(image)
+                return self._save_frame(frame, filename, direction)
+            finally:
+                try:
+                    video.releaseImage(client_name)
+                except Exception:
+                    pass
+
+        raise RuntimeError(
+            f"Could not capture the {direction} pose burst."
+        )
 
     def _capture_direction(
             self,
@@ -431,27 +474,11 @@ class FaceRegistration:
                     time.sleep(0.15)
                     continue
 
-                path = os.path.join(
-                    self._folder,
-                    filename
+                return self._save_frame(
+                    frame,
+                    filename,
+                    direction
                 )
-
-                if not cv2.imwrite(
-                        path,
-                        frame
-                ):
-                    raise RuntimeError(
-                        f"Failed to save {path}"
-                    )
-
-                print(
-                    f"[FaceRegistration] "
-                    f"Correct {direction} pose. "
-                    f"Saved: {path}",
-                    flush=True
-                )
-
-                return path
 
             finally:
 
@@ -573,14 +600,22 @@ class FaceRegistration:
                         f"{direction}_{photo_number}.jpg"
                     )
 
-                    saved = self._capture_direction(
-                        video,
-                        client_name,
-                        direction,
-                        filename,
-                        speaker,
-                        session
-                    )
+                    if photo_number == 1:
+                        saved = self._capture_direction(
+                            video,
+                            client_name,
+                            direction,
+                            filename,
+                            speaker,
+                            session
+                        )
+                    else:
+                        saved = self._capture_burst_frame(
+                            video,
+                            client_name,
+                            direction,
+                            filename
+                        )
 
                     if saved is None:
 
@@ -614,9 +649,6 @@ class FaceRegistration:
                             f"({captured}/{self._total})."
                         )
                     )
-
-                    # Small pause between photos.
-                    time.sleep(0.7)
 
             self._set_status(
                 current_direction=None,
