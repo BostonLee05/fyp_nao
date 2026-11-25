@@ -2,7 +2,12 @@ renderNav("voice.html");
 document.getElementById("staticPageTitle").textContent = "Voice Recognition";
 initVoiceAnimationToggle("voiceAnimationToggle");
 
-const voiceState = {phrases: [], pendingDeleteId: null, editingCommandId: null};
+const voiceState = {
+    phrases: [],
+    pendingDeleteId: null,
+    editingCommandId: null,
+    lastRecommendationToken: 0,
+};
 const $ = (id) => document.getElementById(id);
 
 function dot(status) {
@@ -29,6 +34,35 @@ function renderHistory(items) {
         : '<div class="voice-history-empty">No voice commands yet.</div>';
 }
 
+function renderSearchRecommendations(recommendations) {
+    const toast = $("searchRecommendationToast");
+    const list = $("searchRecommendationList");
+    if (!toast || !list) return;
+
+    if (!recommendations?.length) {
+        list.innerHTML = '<div class="search-toast-empty">No search results found.</div>';
+        toast.classList.remove("hidden");
+        return;
+    }
+
+    list.innerHTML = recommendations.map((item) => {
+        const title = escapeHtml(item.title || "Untitled result");
+        const url = escapeHtml(item.url || "#");
+        const thumbnail = escapeHtml(item.thumbnail || "");
+        return `
+            <a class="search-toast-item" href="${url}" target="_blank" rel="noopener noreferrer">
+                <img class="search-toast-thumbnail" src="${thumbnail}" alt="" loading="lazy" onerror="this.classList.add('thumbnail-failed')">
+                <span class="search-toast-copy">
+                    <span class="search-toast-title">${title}</span>
+                    <span class="search-toast-url">${url}</span>
+                </span>
+            </a>
+        `;
+    }).join("");
+
+    toast.classList.remove("hidden");
+}
+
 async function refreshVoice() {
     try {
         const voiceResponse = await apiFetch(`/api/voice/status?t=${Date.now()}`);
@@ -42,9 +76,17 @@ async function refreshVoice() {
         $("latestVoiceResult").textContent =
             voice.latest_result || voice.latest_error || "Waiting for voice activity.";
         renderHistory(voice.history || []);
+        if (
+            voice.recommendation_token
+            && voice.recommendation_token !== voiceState.lastRecommendationToken
+        ) {
+            voiceState.lastRecommendationToken = voice.recommendation_token;
+            renderSearchRecommendations(voice.recommendations || []);
+        }
     } catch (error) {
         $("voiceStatusText").textContent = "Backend unavailable";
-        $("robotVoiceStatus").textContent = error.message;
+        const robotVoiceStatus = $("robotVoiceStatus");
+        if (robotVoiceStatus) robotVoiceStatus.textContent = error.message;
         dot("Error");
         return;
     }
@@ -52,11 +94,13 @@ async function refreshVoice() {
     // A robot-status failure should not hide a valid voice backend response.
     try {
         const robotResponse = await apiFetch(`/api/ping?t=${Date.now()}`);
-        $("robotVoiceStatus").textContent = robotResponse.connected
+        const robotVoiceStatus = $("robotVoiceStatus");
+        if (robotVoiceStatus) robotVoiceStatus.textContent = robotResponse.connected
             ? "NAO connected · microphone services active"
             : "NAO disconnected · voice services unavailable";
     } catch (error) {
-        $("robotVoiceStatus").textContent = "Robot status unavailable";
+        const robotVoiceStatus = $("robotVoiceStatus");
+        if (robotVoiceStatus) robotVoiceStatus.textContent = "Robot status unavailable";
     }
 }
 
@@ -210,3 +254,7 @@ $("confirmVoiceDelete").onclick = async () => {
 refreshVoice();
 loadCommands();
 setInterval(refreshVoice, 1500);
+
+$("searchToastClose")?.addEventListener("click", () => {
+    $("searchRecommendationToast")?.classList.add("hidden");
+});
