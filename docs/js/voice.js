@@ -31,10 +31,7 @@ function renderHistory(items) {
 
 async function refreshVoice() {
     try {
-        const [voiceResponse, robotResponse] = await Promise.all([
-            apiFetch(`/api/voice/status?t=${Date.now()}`),
-            apiFetch("/api/ping"),
-        ]);
+        const voiceResponse = await apiFetch(`/api/voice/status?t=${Date.now()}`);
         const voice = voiceResponse.voice || {};
         const status = voice.status || "Ready/listening again";
 
@@ -44,14 +41,22 @@ async function refreshVoice() {
             voice.latest_command || "No command recognized yet.";
         $("latestVoiceResult").textContent =
             voice.latest_result || voice.latest_error || "Waiting for voice activity.";
-        $("robotVoiceStatus").textContent = robotResponse.connected
-            ? "NAO connected · microphone services active"
-            : "NAO disconnected · voice services unavailable";
         renderHistory(voice.history || []);
     } catch (error) {
         $("voiceStatusText").textContent = "Backend unavailable";
         $("robotVoiceStatus").textContent = error.message;
         dot("Error");
+        return;
+    }
+
+    // A robot-status failure should not hide a valid voice backend response.
+    try {
+        const robotResponse = await apiFetch(`/api/ping?t=${Date.now()}`);
+        $("robotVoiceStatus").textContent = robotResponse.connected
+            ? "NAO connected · microphone services active"
+            : "NAO disconnected · voice services unavailable";
+    } catch (error) {
+        $("robotVoiceStatus").textContent = "Robot status unavailable";
     }
 }
 

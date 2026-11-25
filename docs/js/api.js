@@ -21,10 +21,18 @@ function setApiBase(value) {
 
 function apiUrl(path) {
     const base = getApiBase();
-    if (!base) {
-        throw new Error("Backend URL is not configured.");
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+    if (base) return `${base}${normalizedPath}`;
+
+    // Flask serves the docs locally as well as through the public static site.
+    // In the local case, the API is on the current origin and does not need a
+    // manually configured HTTPS tunnel URL.
+    if (window.location.protocol !== "file:" && window.location.hostname) {
+        return `${window.location.origin}${normalizedPath}`;
     }
-    return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+
+    throw new Error("Backend URL is not configured.");
 }
 
 async function apiFetch(path, options = {}) {
