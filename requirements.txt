@@ -3,6 +3,7 @@ flask-cors
 python-dotenv
 psycopg2-binary
 waitress
+libqi-windows==4.0.1
 numpy
 opencv-python
 ultralytics
