@@ -34,6 +34,37 @@ load_dotenv()
 class VoiceRecognition:
     SEARCH_RESULT_LIMIT = 3
     DEFAULT_RECORDING_DURATION = 4.0
+
+    NON_MEANINGFUL_TRANSCRIPTS = {
+        "",
+        "uh",
+        "um",
+        "er",
+        "erm",
+        "hmm",
+        "okay",
+        "ok",
+        "please",
+        "can you",
+        "could you",
+        "would you",
+        "i want",
+        "i would like",
+        "tell me",
+    }
+    INCOMPLETE_TRANSCRIPT_ENDINGS = {
+        "a",
+        "an",
+        "and",
+        "for",
+        "from",
+        "in",
+        "of",
+        "on",
+        "the",
+        "to",
+        "with",
+    }
     """ Commands Structure """
     SEARCH_COMMAND_RE = re.compile(
         r"\b(?:find me|find|search for|search|give me|show me)\s+"
@@ -272,19 +303,42 @@ class VoiceRecognition:
         text = self._transcribe(audio_file)
         print(f"[VoiceRecognition] Transcription: '{text}'")
 
-        if text:
+        if self._has_meaningful_transcript(text):
             self._process_transcript(text)
         else:
-            self._record_result(
-                "",
-                {
-                    "action": "Unknown",
-                    "response": "No speech was recognized.",
-                    "status": "Error",
-                },
-            )
-            self._set_status("Ready/listening again")
+            self._handle_unrecognized_transcript(text)
         return text
+
+    @classmethod
+    def _has_meaningful_transcript(cls, text: str) -> bool:
+        """Return whether a transcript contains enough text to process safely."""
+        normalized = " ".join(str(text or "").casefold().split())
+        if not normalized or normalized in cls.NON_MEANINGFUL_TRANSCRIPTS:
+            return False
+
+        words = re.findall(r"[a-z0-9']+", normalized)
+        if not words or all(word in {"uh", "um", "er", "erm", "hmm"} for word in words):
+            return False
+
+        # A transcript ending in a preposition/article is commonly an
+        # interrupted request (for example, "search for" or "tell me about").
+        if len(words) <= 4 and words[-1] in cls.INCOMPLETE_TRANSCRIPT_ENDINGS:
+            return False
+        return True
+
+    def _handle_unrecognized_transcript(self, text: str) -> Dict[str, Any]:
+        """Tell the user the command was not understood and finish the pass."""
+        response = "I did not understand that command."
+        if self.speaker:
+            self.speaker.speak(response)
+        result = {
+            "action": "Unknown",
+            "response": response,
+            "status": "Completed",
+        }
+        self._record_result(text or "", result)
+        self._set_status("Ready/listening again")
+        return result
 
     def _process_transcript(self, text: str) -> None:
         self._set_status("Processing command")
@@ -507,12 +561,8 @@ class VoiceRecognition:
         """Triggers actions when speech is detected."""
         print(f"\n[VoiceRecognition] Heard: \"{text}\"")
 
-        if not text:
-            return {
-                "action": "Unknown",
-                "response": "No command was recognized.",
-                "status": "Error",
-            }
+        if not self._has_meaningful_transcript(text):
+            return self._handle_unrecognized_transcript(text)
 
         # Simple keyword matching stays first so fixed classroom commands are fast
         # and keep working without Gemini.
