@@ -293,8 +293,19 @@ class VoiceRecognition:
             self._log_performance("Audio acquisition", started_at)
 
     def _handle_missing_audio(self) -> str:
-        print("[VoiceRecognition] No audio file available.")
-        self._set_status("Error", "No audio file available.")
+        message = "I could not process the audio. Please try again."
+        print("[VoiceRecognition] No audio file available after recording or transfer.")
+        if self.speaker:
+            self.speaker.speak(message)
+        self._record_result(
+            "",
+            {
+                "action": "Audio Transfer",
+                "response": message,
+                "status": "Error",
+            },
+        )
+        self._set_status("Error", message)
         return ""
 
     def _process_audio_file(self, audio_file: str) -> str:
