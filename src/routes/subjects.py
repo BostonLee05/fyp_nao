@@ -112,6 +112,14 @@ def students():
     )
 
 
+@subjects_bp.route("/programmes")
+def programmes():
+    return render_template(
+        "programmes.html",
+        page_title="Manage Programmes"
+    )
+
+
 # =========================================================
 # SUBJECTS
 # =========================================================

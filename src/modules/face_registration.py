@@ -658,11 +658,17 @@ class FaceRegistration:
             if on_complete:
                 on_complete(self._folder)
 
+            self._set_status(
+                current_direction=None,
+                message="Face registration completed.",
+                completed=True
+            )
+
             try:
                 self._speak(
                     speaker,
                     session,
-                    "Face registration completed successfully."
+                    "Face registered."
                 )
             except Exception as speak_exc:
                 print(
@@ -670,14 +676,6 @@ class FaceRegistration:
                     f"Could not announce completion: {speak_exc}",
                     flush=True
                 )
-
-            self._set_status(
-                running=False,
-                current_direction=None,
-                message="Face registration completed.",
-                completed=True
-            )
-
 
         except Exception as exc:
 

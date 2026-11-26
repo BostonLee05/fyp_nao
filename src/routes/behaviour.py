@@ -31,7 +31,8 @@ def behaviour_status():
             "tracked": len(records),
             "using_phone": sum(
                 1 for record in records
-                if record["behaviour_code"] == "USING_PHONE"
+                if record["phone_detected"]
+                or record["behaviour_code"] == "USING_PHONE"
             ),
             "alerts": sum(
                 1 for record in records

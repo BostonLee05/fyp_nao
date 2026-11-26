@@ -112,6 +112,7 @@ function renderNav(activePage) {
         ["behaviour.html", "eye", "Behaviour Analysis"],
         ["subjects.html", "book", "Subjects"],
         ["students.html", "user-graduate", "Students"],
+        ["programmes.html", "graduation-cap", "Programmes"],
         ["reports.html", "chart-line", "Reports"],
         ["settings.html", "gear", "Settings"],
     ];

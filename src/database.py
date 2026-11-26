@@ -293,14 +293,24 @@ def add_programme(programme_name):
 def delete_programme(programme_id):
     connection = get_connection()
     cursor = connection.cursor()
-    cursor.execute("""
-        DELETE FROM programmes
-        WHERE programme_id = %s
-    """, (programme_id,))
-    connection.commit()
-    deleted = cursor.rowcount > 0
-    connection.close()
-    return deleted
+    try:
+        cursor.execute("""
+            UPDATE students
+            SET programme_id = NULL
+            WHERE programme_id = %s
+        """, (programme_id,))
+        cursor.execute("""
+            DELETE FROM programmes
+            WHERE programme_id = %s
+        """, (programme_id,))
+        deleted = cursor.rowcount > 0
+        connection.commit()
+        return deleted
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def update_programme(programme_id, programme_name):

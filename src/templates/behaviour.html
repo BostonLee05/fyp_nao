@@ -69,12 +69,14 @@ async function refreshBehaviour() {
             const student = record.student_id
                 ? `${escapeHtml(record.student_id)} - ${escapeHtml(record.student_name)}`
                 : `Unknown Track ${escapeHtml(record.track_id)}`;
+            const behaviour = record.behaviour_code === "USING_PHONE"
+                ? "Using Phone" : record.phone_detected ? "Phone Detected" : record.behaviour;
             const status = record.severity === "danger"
                 ? "🔴 Alert"
                 : record.severity === "warning" ? "🟠 Warning" : "🟢 Normal";
             return `<tr>
                 <td>${student}</td>
-                <td>${escapeHtml(record.behaviour)}</td>
+                <td>${escapeHtml(behaviour)}</td>
                 <td>${Number(record.duration || 0).toFixed(1)}s</td>
                 <td>${record.phone_use_count}</td>
                 <td>${Number(record.phone_total_duration || 0).toFixed(1)}s</td>

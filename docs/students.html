@@ -236,8 +236,8 @@ function pollFace(id){
                 stopFacePolling();activeFaceStudentId=null;
                 $("faceRegistrationMessage").textContent="Face registration completed successfully.";
                 setFaceStatus("Completed","-","Face registration completed successfully.",captured,total);
-                await loadStudents();
                 setTimeout(()=>setFaceModal(false),600);
+                await loadStudents();
             }
         }catch(e){
             stopFacePolling();

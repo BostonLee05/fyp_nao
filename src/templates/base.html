@@ -78,6 +78,12 @@
                 <span>Manage Students</span>
             </a>
 
+            <a class="{{ 'active' if request.path.startswith('/programmes') else '' }}"
+               href="/programmes"{% if request.path.startswith('/programmes') %} aria-current="page"{% endif %}>
+                <i class="fa-solid fa-graduation-cap"></i>
+                <span>Manage Programmes</span>
+            </a>
+
             <a class="{{ 'active' if request.path.startswith('/reports') else '' }}"
                href="/reports"{% if request.path.startswith('/reports') %} aria-current="page"{% endif %}>
                 <i class="fa-solid fa-chart-line"></i>

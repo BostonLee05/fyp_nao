@@ -1554,6 +1554,10 @@ class VisionSystem:
             )
             phone_state = self.behaviour_tracker.phone_states.get(track_id)
             phone_total = phone_history["total_duration"]
+            phone_detected = any(
+                assigned_track == track_id
+                for assigned_track in self.phone_assignments.values()
+            )
 
             if phone_state and phone_state["confirmed_since"] is not None:
                 phone_total += max(
@@ -1567,6 +1571,7 @@ class VisionSystem:
                 "student_name": identity.get("name", "Unknown"),
                 "behaviour": self.get_behaviour_display_name(behaviour),
                 "behaviour_code": behaviour,
+                "phone_detected": phone_detected,
                 "duration": round(duration, 1),
                 "phone_use_count": phone_history["count"],
                 "phone_total_duration": round(phone_total, 1),
@@ -1574,7 +1579,8 @@ class VisionSystem:
                     "danger"
                     if behaviour == BEHAVIOUR_USING_PHONE
                     else "warning"
-                    if behaviour in (
+                    if phone_detected
+                    or behaviour in (
                         BEHAVIOUR_DOWN,
                         BEHAVIOUR_FACE_NOT_VISIBLE
                     )
