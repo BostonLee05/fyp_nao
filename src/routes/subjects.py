@@ -26,6 +26,7 @@ from database import (
     add_programme,
     delete_programme,
     update_programme,
+    get_connection,
 )
 
 from nao_api import get_nao_manager
