@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Programmes</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+    <style>
+        .programme-grid{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:24px;align-items:start}
+        .programme-grid .panel{margin:0}
+        .programme-form{display:flex;flex-direction:column;gap:10px}
+        .programme-form button{margin-top:4px}
+        .programme-records{overflow:auto}
+        .programme-records table{width:100%;min-width:520px}
+        .programme-actions{display:flex;gap:8px;flex-wrap:wrap}
+        .programme-actions button{border:0;border-radius:8px;padding:9px 11px;cursor:pointer;font-weight:700}
+        .programme-edit{background:#dbeafe;color:#1d4ed8}
+        .programme-delete{background:#fee2e2;color:#b91c1c}
+        .programme-message{min-height:24px;font-weight:600}
+        .programme-message.error{color:#b91c1c}
+        .programme-message.success{color:#15803d}
+        .programme-empty{text-align:center;color:#64748b}
+        @media(max-width:900px){.programme-grid{grid-template-columns:1fr}}
+    </style>
+</head>
+<body>
+<template id="pageTemplate">
+    <div class="programme-grid">
+        <section class="panel">
+            <h2 id="programmeFormTitle"><i class="fa-solid fa-graduation-cap"></i> Create Programme</h2>
+            <form id="programmeForm" class="programme-form">
+                <label for="programmeName">Programme Name</label>
+                <input id="programmeName" type="text" maxlength="150" placeholder="Bachelor of Information Technology" required>
+                <button id="saveProgrammeBtn" type="submit">Create Programme</button>
+                <button id="cancelProgrammeEditBtn" class="cancel-btn" type="button" hidden>Cancel Edit</button>
+                <p id="programmeMessage" class="programme-message" aria-live="polite"></p>
+            </form>
+        </section>
+        <section class="panel">
+            <h2>Programmes</h2>
+            <div class="programme-records">
+                <table class="attendance-table">
+                    <thead><tr><th>ID</th><th>Programme Name</th><th>Actions</th></tr></thead>
+                    <tbody id="programmesBody"><tr><td class="programme-empty" colspan="3">Loading programmes...</td></tr></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+    <div id="programmeDeleteModal" class="delete-confirm-modal hidden" role="dialog" aria-modal="true" aria-labelledby="programmeDeleteTitle">
+        <section class="delete-confirm-card">
+            <header class="delete-confirm-header">
+                <h2 id="programmeDeleteTitle" class="delete-confirm-title"><i class="fa-solid fa-triangle-exclamation"></i> Delete Programme</h2>
+                <button id="closeProgrammeDelete" class="delete-confirm-close" type="button" aria-label="Close">&times;</button>
+            </header>
+            <div class="delete-confirm-body">Delete <strong id="programmeDeleteName"></strong>? Students assigned to it will remain registered but become unassigned.</div>
+            <div class="delete-confirm-actions">
+                <button id="cancelProgrammeDelete" class="delete-confirm-cancel" type="button">Cancel</button>
+                <button id="confirmProgrammeDelete" class="delete-confirm-submit" type="button">Delete Programme</button>
+            </div>
+        </section>
+    </div>
+</template>
+<script src="js/api.js"></script>
+<script>
+renderNav("programmes.html");
+document.getElementById("staticPageTitle").textContent = "Programmes";
+
+const programmesUrl = "/api/programmes";
+const programmeForm = document.getElementById("programmeForm");
+const programmeName = document.getElementById("programmeName");
+const programmeMessage = document.getElementById("programmeMessage");
+const programmesBody = document.getElementById("programmesBody");
+const saveProgrammeBtn = document.getElementById("saveProgrammeBtn");
+const cancelProgrammeEditBtn = document.getElementById("cancelProgrammeEditBtn");
+const programmeDeleteModal = document.getElementById("programmeDeleteModal");
+let editingProgrammeId = null;
+let pendingDeleteProgrammeId = null;
+
+function showProgrammeMessage(text, type = "") {
+    programmeMessage.textContent = text;
+    programmeMessage.className = `programme-message ${type}`;
+}
+
+async function loadProgrammes() {
+    try {
+        const data = await apiFetch(`${programmesUrl}?t=${Date.now()}`);
+        const programmes = data.programmes || [];
+        programmesBody.innerHTML = programmes.length
+            ? programmes.map(item => `<tr>
+                <td>${Number(item.programme_id)}</td>
+                <td>${escapeHtml(item.programme_name)}</td>
+                <td><div class="programme-actions">
+                    <button class="programme-edit" type="button" data-action="edit"
+                        data-id="${Number(item.programme_id)}" data-name="${escapeHtml(item.programme_name)}">Edit</button>
+                    <button class="programme-delete" type="button" data-action="delete"
+                        data-id="${Number(item.programme_id)}" data-name="${escapeHtml(item.programme_name)}">Delete</button>
+                </div></td>
+            </tr>`).join("")
+            : '<tr><td class="programme-empty" colspan="3">No programmes created yet.</td></tr>';
+    } catch (error) {
+        console.error("Programme loading error:", error);
+        programmesBody.innerHTML = '<tr><td class="programme-empty" colspan="3">Unable to load programmes.</td></tr>';
+    }
+}
+
+function resetProgrammeForm() {
+    editingProgrammeId = null;
+    programmeForm.reset();
+    document.getElementById("programmeFormTitle").innerHTML =
+        '<i class="fa-solid fa-graduation-cap"></i> Create Programme';
+    saveProgrammeBtn.textContent = "Create Programme";
+    cancelProgrammeEditBtn.hidden = true;
+}
+
+programmeForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    const name = programmeName.value.trim();
+    if (!name) {
+        showProgrammeMessage("Programme name is required.", "error");
+        return;
+    }
+    saveProgrammeBtn.disabled = true;
+    try {
+        const editing = editingProgrammeId !== null;
+        const data = await apiFetch(
+            editing ? `${programmesUrl}/${editingProgrammeId}` : programmesUrl,
+            {
+                method: editing ? "PUT" : "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({programme_name: name})
+            }
+        );
+        resetProgrammeForm();
+        showProgrammeMessage(data.message || "Programme saved successfully.", "success");
+        await loadProgrammes();
+    } catch (error) {
+        showProgrammeMessage(error.message || "Unable to save programme.", "error");
+    } finally {
+        saveProgrammeBtn.disabled = false;
+    }
+});
+
+programmesBody.addEventListener("click", event => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+    const id = Number(button.dataset.id);
+    if (button.dataset.action === "edit") {
+        editingProgrammeId = id;
+        programmeName.value = button.dataset.name;
+        document.getElementById("programmeFormTitle").innerHTML =
+            '<i class="fa-solid fa-pen"></i> Edit Programme';
+        saveProgrammeBtn.textContent = "Save Changes";
+        cancelProgrammeEditBtn.hidden = false;
+        showProgrammeMessage("", "");
+        programmeName.focus();
+        return;
+    }
+    pendingDeleteProgrammeId = id;
+    document.getElementById("programmeDeleteName").textContent = button.dataset.name;
+    programmeDeleteModal.classList.remove("hidden");
+});
+
+function closeProgrammeDelete() {
+    pendingDeleteProgrammeId = null;
+    programmeDeleteModal.classList.add("hidden");
+}
+
+document.getElementById("closeProgrammeDelete").addEventListener("click", closeProgrammeDelete);
+document.getElementById("cancelProgrammeDelete").addEventListener("click", closeProgrammeDelete);
+programmeDeleteModal.addEventListener("click", event => {
+    if (event.target === programmeDeleteModal) closeProgrammeDelete();
+});
+document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !programmeDeleteModal.classList.contains("hidden")) {
+        closeProgrammeDelete();
+    }
+});
+cancelProgrammeEditBtn.addEventListener("click", () => {
+    resetProgrammeForm();
+    showProgrammeMessage("", "");
+});
+document.getElementById("confirmProgrammeDelete").addEventListener("click", async () => {
+    if (pendingDeleteProgrammeId === null) return;
+    const id = pendingDeleteProgrammeId;
+    closeProgrammeDelete();
+    try {
+        const data = await apiFetch(`${programmesUrl}/${id}`, {method: "DELETE"});
+        if (editingProgrammeId === id) resetProgrammeForm();
+        showProgrammeMessage(data.message || "Programme deleted successfully.", "success");
+        await loadProgrammes();
+    } catch (error) {
+        showProgrammeMessage(error.message || "Unable to delete programme.", "error");
+    }
+});
+
+loadProgrammes();
+</script>
+</body>
+</html>
