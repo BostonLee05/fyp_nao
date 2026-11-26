@@ -268,13 +268,17 @@ class VoiceRecognition:
 
     def _process_audio_file(self, audio_file: str) -> str:
         print("[VoiceRecognition] Starting transcription...")
-        if self.speaker:
-            self.speaker.speak("I'm thinking.")
         self._set_status("Transcribing")
         text = self._transcribe(audio_file)
         print(f"[VoiceRecognition] Transcription: '{text}'")
 
         if text:
+            # Transcription has finished before NAO speaks this acknowledgement.
+            # Keeping it here prevents the speech from overlapping the
+            # Transcribing state/audio work.
+            self._set_status("Processing command")
+            if self.speaker:
+                self.speaker.speak("I'm thinking.")
             self._process_transcript(text)
         else:
             self._record_result(
