@@ -268,6 +268,8 @@ class VoiceRecognition:
 
     def _process_audio_file(self, audio_file: str) -> str:
         print("[VoiceRecognition] Starting transcription...")
+        if self.speaker:
+            self.speaker.speak("I'm thinking.")
         self._set_status("Transcribing")
         text = self._transcribe(audio_file)
         print(f"[VoiceRecognition] Transcription: '{text}'")
@@ -287,10 +289,6 @@ class VoiceRecognition:
         return text
 
     def _process_transcript(self, text: str) -> None:
-        self._set_status("Processing command")
-        if self.speaker:
-            self.speaker.speak("I'm thinking.")
-
         started_at = time.perf_counter()
         try:
             result = self._on_speech_recognized(text)

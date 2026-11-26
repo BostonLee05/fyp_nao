@@ -151,6 +151,18 @@ function renderNav(activePage) {
                 </div>
             </div>
         </div>
+        <div id="searchRecommendationToast" class="search-toast hidden" aria-live="polite">
+            <div class="search-toast-header">
+                <div>
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <strong>Search Results</strong>
+                </div>
+                <button id="searchToastClose" type="button" aria-label="Close recommendations">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="searchRecommendationList" class="search-toast-list"></div>
+        </div>
         <div class="wrapper">
             <aside class="sidebar">
                 <div class="sidebar-header">
@@ -311,6 +323,50 @@ function renderNav(activePage) {
     }, 1000);
 
     window.processingOverlay.show("Loading Page", "Preparing the page...");
+
+    initRecommendationToast();
+}
+
+let recommendationToastToken = 0;
+
+function renderRecommendationToast(recommendations) {
+    const toast = document.getElementById("searchRecommendationToast");
+    const list = document.getElementById("searchRecommendationList");
+    if (!toast || !list) return;
+
+    list.innerHTML = recommendations?.length
+        ? recommendations.map(item => {
+            const title = escapeHtml(item.title || "Untitled result");
+            const url = escapeHtml(item.url || "#");
+            const thumbnail = escapeHtml(item.thumbnail || "");
+            return `<a class="search-toast-item" href="${url}" target="_blank" rel="noopener noreferrer">
+                <img class="search-toast-thumbnail" src="${thumbnail}" alt="" loading="lazy" onerror="this.classList.add('thumbnail-failed')">
+                <span class="search-toast-copy"><span class="search-toast-title">${title}</span><span class="search-toast-url">${url}</span></span>
+            </a>`;
+        }).join("")
+        : '<div class="search-toast-empty">No search results found.</div>';
+    toast.classList.remove("hidden");
+}
+
+async function pollRecommendations() {
+    try {
+        const response = await apiFetch(`/api/voice/recommendations?t=${Date.now()}`);
+        const token = Number(response.recommendation_token || 0);
+        if (!token || token === recommendationToastToken) return;
+        recommendationToastToken = token;
+        renderRecommendationToast(response.recommendations || []);
+    } catch (_) {
+        // The voice page reports backend errors; other pages should remain quiet.
+    }
+}
+
+function initRecommendationToast() {
+    const close = document.getElementById("searchToastClose");
+    close?.addEventListener("click", () => {
+        document.getElementById("searchRecommendationToast")?.classList.add("hidden");
+    });
+    pollRecommendations();
+    setInterval(pollRecommendations, 1500);
 }
 
 async function updateRobotStatus() {
@@ -357,7 +413,6 @@ window.addEventListener("load", () => {
             ease: "power2.out"
         });
         gsap.from(".stat", {
-            opacity: 0,
             y: 10,
             duration: 0.35,
             stagger: 0.05,
