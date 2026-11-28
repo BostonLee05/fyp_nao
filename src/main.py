@@ -61,7 +61,12 @@ def initialize_robot():
         print("[System Warning] Running server in Web-Only Mode (Robot hardware offline).\n")
 
     # Initialize Gemini Service regardless of robot status.
-    robot_services.ensure_gemini()
+    gemini_service = robot_services.ensure_gemini()
+    if not getattr(gemini_service, "client", None):
+        print(
+            "[Reminder] Gemini API key or service initialization problem detected. "
+            "Check GEMINI_API_KEY in the backend .env file and try again."
+        )
 
     if session:
         robot_services.start_for_session(session)

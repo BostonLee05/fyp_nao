@@ -1,6 +1,7 @@
 import queue
 import sys
 import threading
+import time
 import pyttsx3
 
 
@@ -204,10 +205,15 @@ class Speaker:
                         if animated_available
                         else str(text)
                     )
+                    tts_started_at = time.perf_counter()
                     print(
                         f"[Speaker] Using {'ALAnimatedSpeech' if animated_available else 'ALTextToSpeech'}"
                     )
                     tts.say(speech_text)
+                    print(
+                        f"[Performance] Text-to-speech response (NAO): "
+                        f"{time.perf_counter() - tts_started_at:.3f}s"
+                    )
 
                     print("[Speaker] Speech completed.")
 

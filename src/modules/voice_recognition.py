@@ -290,7 +290,7 @@ class VoiceRecognition:
         try:
             return self.audio_transfer.record_from_nao(capture_duration)
         finally:
-            self._log_performance("Audio acquisition", started_at)
+            self._log_performance("Audio capture + transfer pipeline", started_at)
 
     def _handle_missing_audio(self) -> str:
         message = "I could not process the audio. Please try again."
@@ -605,7 +605,7 @@ class VoiceRecognition:
             try:
                 response = self.gemini_service.ask(prompt, image=image)
             finally:
-                self._log_performance("Gemini response", gemini_started_at)
+                self._log_performance("Response generation (Gemini)", gemini_started_at)
             if response:
                 print(f"[VoiceRecognition] Gemini: \"{response}\"")
                 if self.speaker:

@@ -52,8 +52,6 @@ def initialize_database():
         WHERE status = 'ACTIVE'
     """, (datetime.now().strftime("%H:%M:%S"),))
 
-    # Voice commands are data, not application code.  The seed uses stable
-    # command keys so it is safe to run on every application start.
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS voice_commands (
             command_id BIGSERIAL PRIMARY KEY,
@@ -64,8 +62,7 @@ def initialize_database():
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     """)
-    # The old Action field was descriptive metadata only. Remove it from
-    # existing databases as well as from the current schema.
+
     cursor.execute("ALTER TABLE voice_commands DROP COLUMN IF EXISTS action")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS voice_triggers (

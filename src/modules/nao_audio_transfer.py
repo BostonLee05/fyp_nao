@@ -44,6 +44,7 @@ class NAOAudioTransfer:
             # so stop any stale recording before starting this one.
             self._stop_recording_if_active()
             try:
+                audio_recording_started_at = time.perf_counter()
                 self.audio_recorder.startMicrophonesRecording(
                     self.remote_path, "wav", 16000, [1, 1, 1, 1]
                 )
@@ -75,6 +76,10 @@ class NAOAudioTransfer:
 
             self.audio_recorder.stopMicrophonesRecording()
             recording_active = False
+            print(
+                f"[Performance] Audio recording (NAO): "
+                f"{time.perf_counter() - audio_recording_started_at:.3f}s"
+            )
             print("[NAOAudioTransfer] NAO recording stopped.")
 
             return self.download(log_performance=log_performance)
@@ -86,7 +91,7 @@ class NAOAudioTransfer:
                 self._stop_recording_if_active()
             if log_performance:
                 print(
-                    f"[Performance] Audio recording: "
+                    f"[Performance] Audio recording + transfer pipeline: "
                     f"{time.perf_counter() - recording_started_at:.3f}s"
                 )
 
